@@ -1,3 +1,4 @@
+import { defBBox } from '../cells'
 import { splitToRects } from '../layoutDsl'
 import type { CollageDoc, Layout, LayoutDef } from '../types'
 import { CATALOG_DEFS } from './defs'
@@ -9,12 +10,15 @@ export function buildLayout(def: LayoutDef): Layout {
   let cells
   if (def.split) cells = splitToRects(def.split)
   else if (def.rects) cells = def.rects.map((r) => ({ ...r }))
-  else throw new LayoutDefinitionError(`${def.id} : ni « split » ni « rects »`)
+  else if (def.geo) cells = def.geo.map(defBBox)
+  else throw new LayoutDefinitionError(`${def.id} : ni « split », ni « rects », ni « geo »`)
   if (cells.length !== def.photos) {
     throw new LayoutDefinitionError(`${def.id} : ${cells.length} cases pour ${def.photos} photo(s)`)
   }
   for (const c of cells) {
-    const ok = c.w > 0 && c.h > 0 && c.x >= -1e-9 && c.y >= -1e-9 && c.x + c.w <= 1 + 1e-9 && c.y + c.h <= 1 + 1e-9
+    // Les formes peuvent déborder un peu (courbes, rotation) : tolérance de 5 %.
+    const tol = def.geo ? 0.05 : 1e-9
+    const ok = c.w > 0 && c.h > 0 && c.x >= -tol && c.y >= -tol && c.x + c.w <= 1 + tol && c.y + c.h <= 1 + tol
     if (!ok) throw new LayoutDefinitionError(`${def.id} : case hors du cadre`)
   }
   return { ...def, cells }

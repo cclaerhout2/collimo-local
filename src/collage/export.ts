@@ -1,8 +1,9 @@
-import { cellBoxes, sizeForLongSide } from './geometry'
+import { cellGeometry } from './cells'
+import { sizeForLongSide } from './geometry'
 import { drawOverlay, overlayBox } from './overlays'
 import { isIdentity, paramsForPhoto, vignetteFor } from './color'
 import { processPhoto } from './colorProcessor'
-import { drawPhotoInCell, drawVignette, renderCollage, type Drawable } from './render'
+import { cellStyle, drawDecor, drawPhotoInCell, drawVignette, finishCell, underCell, type Drawable } from './render'
 import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
 
 export type ExportFormat = 'jpeg' | 'png'
@@ -100,36 +101,43 @@ export async function exportCollage(args: {
   const canvas = makeCanvas(width, height)
   const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
   if (!ctx) throw new Error('export impossible : pas de contexte de dessin')
-  renderCollage(ctx, doc, layout, width, height, () => undefined)
-  const boxes = cellBoxes(layout.cells, width, height, doc.borders)
-  const photoCount = Math.min(boxes.length, doc.photos.length)
+  // Même ordre que l'aperçu : fond, chaque case (photo, vignettage, finition), décor, textes et stickers.
+  ctx.fillStyle = doc.background
+  ctx.fillRect(0, 0, width, height)
+  const cells = cellGeometry(layout, width, height, doc.borders)
+  const style = cellStyle(doc, width, height)
+  const photoCount = Math.min(cells.length, doc.photos.length)
   const overlays = doc.overlays ?? []
   const total = photoCount + overlays.length
   for (let i = 0; i < photoCount; i++) {
     const photo = doc.photos[i]
-    const box = boxes[i]
+    const cell = cells[i]
+    const box = cell.box
     // Marge pour le zoom et la rotation : √2 couvre une rotation quelconque.
     const maxSide = Math.ceil(Math.max(box.w, box.h) * Math.max(1, photo.crop.zoom) * Math.SQRT2)
     const img = await args.loadForCell(i, maxSide)
+    underCell(ctx, cell, style)
     try {
       ctx.imageSmoothingQuality = 'high'
       // Réglages et filtre à la résolution d'export, avec le même moteur que l'aperçu.
       const params = paramsForPhoto(doc, i)
-      if (isIdentity(params)) drawPhotoInCell(ctx, img, box, photo.crop)
+      if (isIdentity(params)) drawPhotoInCell(ctx, img, cell, photo.crop)
       else {
         const done = processPhoto(img.source as CanvasImageSource & TexImageSource, img.width, img.height, params)
         try {
-          drawPhotoInCell(ctx, done, box, photo.crop)
+          drawPhotoInCell(ctx, done, cell, photo.crop)
         } finally {
           done.close()
         }
       }
-      drawVignette(ctx, box, vignetteFor(doc, i))
+      drawVignette(ctx, cell, vignetteFor(doc, i))
+      finishCell(ctx, cell, style)
     } finally {
       img.close()
     }
     args.onProgress?.(i + 1, total)
   }
+  drawDecor(ctx, doc, layout, width, height)
   // Textes et stickers par-dessus, dans leur ordre, en pleine résolution.
   for (let k = 0; k < overlays.length; k++) {
     const o = overlays[k]

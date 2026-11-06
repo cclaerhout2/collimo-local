@@ -6,7 +6,12 @@ export interface Rect {
   h: number
 }
 
-export type LayoutFamily = 'grille' | 'bandes' | 'mixte' | 'fond' | 'incrustation'
+import type { CellDef, Decor } from './shapes'
+
+export type LayoutFamily =
+  | 'grille' | 'bandes' | 'mixte' | 'fond' | 'incrustation'
+  // Étape 6 : dispositions en forme
+  | 'coupe' | 'ronds' | 'coeurs' | 'geometrie' | 'puzzle' | 'dechire' | 'illustre'
 
 /**
  * Une disposition du catalogue. Les cases sont décrites soit par une découpe imbriquée (`split`),
@@ -19,10 +24,14 @@ export interface LayoutDef {
   family: LayoutFamily
   split?: string
   rects?: Rect[]
+  /** Cases en forme (polygones, chemins, formes de la bibliothèque), dans l'ordre de remplissage. */
+  geo?: CellDef[]
+  /** Décor sans photo, dessiné par-dessus les cases (perforations, cadre…). */
+  decor?: Decor[]
 }
 
 export interface Layout extends LayoutDef {
-  /** Cases calculées, relatives à la zone de dessin. */
+  /** Boîte englobante de chaque case, relative à la zone de dessin. */
   cells: Rect[]
 }
 
@@ -86,6 +95,9 @@ export interface Borders {
   spacing: number
   margin: number
   radius: number
+  /** Contour autour des cases en forme, épaisseur 0 à 1 (0 = aucun). */
+  outline?: number
+  outlineColor?: string
 }
 
 /** Effet activable avec sa couleur. Les tailles sont relatives à la taille du texte. */

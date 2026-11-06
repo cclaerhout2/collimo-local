@@ -6,7 +6,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { cellBoxes, drawingArea, type CellBox } from '../../collage/geometry'
+import { cellGeometry, type CellGeom } from '../../collage/cells'
+import { drawingArea, type CellBox } from '../../collage/geometry'
 import { panBy, pointerAngle, rotateTo, snapAngle, zoomAt } from '../../collage/gestures'
 import { dividers, moveDivider, type Divider } from '../../collage/layoutDsl'
 import { overlayBox } from '../../collage/overlays'
@@ -57,9 +58,19 @@ type Gesture =
   | { type: 'opinch'; id: string; dist: number; angle: number; o: Overlay }
 
 /** Case sous le point : la dernière dessinée d'abord (une incrustation est au-dessus). */
-export function hitCell(boxes: CellBox[], x: number, y: number): number | null {
-  for (let i = boxes.length - 1; i >= 0; i--) {
-    const b = boxes[i]
+let hitCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
+function insidePath(d: string, evenodd: boolean | undefined, x: number, y: number): boolean {
+  if (typeof Path2D === 'undefined') return true
+  hitCtx ??= (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : document.createElement('canvas')).getContext('2d') as CanvasRenderingContext2D
+  return hitCtx.isPointInPath(new Path2D(d), x, y, evenodd ? 'evenodd' : 'nonzero')
+}
+
+/** Case sous le point : la dernière dessinée d'abord ; les cases en forme suivent leur contour. */
+export function hitCell(cells: (CellGeom | CellBox)[], x: number, y: number): number | null {
+  for (let i = cells.length - 1; i >= 0; i--) {
+    const g = 'box' in cells[i] ? (cells[i] as CellGeom) : { box: cells[i] as CellBox }
+    const b = g.box
+    if (g.path && !(x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h && insidePath(g.path, g.evenodd, x, y))) continue
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return i
   }
   return null
@@ -126,7 +137,8 @@ export function InteractionLayer(props: Props) {
   const gesture = useRef<Gesture>({ type: 'none' })
   const [lifted, setLifted] = useState<{ from: number; over: number | null } | null>(null)
 
-  const boxes = cellBoxes(layout.cells, width, height, doc.borders)
+  const geoms = cellGeometry(layout, width, height, doc.borders)
+  const boxes = geoms.map((g) => g.box)
   const area = drawingArea(width, height, doc.borders)
   const spec = doc.split ?? layout.split
   const allDividers = spec ? dividers(spec) : []
@@ -148,7 +160,7 @@ export function InteractionLayer(props: Props) {
 
   function sizes(i: number) {
     const img = latest.current.imageSize(i)
-    const b = cellBoxes(latest.current.layout.cells, latest.current.width, latest.current.height, latest.current.doc.borders)[i]
+    const b = cellGeometry(latest.current.layout, latest.current.width, latest.current.height, latest.current.doc.borders)[i]?.box
     return img && b ? { img, box: { w: b.w, h: b.h }, b } : null
   }
 
@@ -238,7 +250,7 @@ export function InteractionLayer(props: Props) {
       }
     }
 
-    const cell = hitCell(boxes, p.x, p.y)
+    const cell = hitCell(geoms, p.x, p.y)
     const timer = window.setTimeout(() => {
       const cur = gesture.current
       if (cur.type === 'pending' && cur.cell !== null && doc.photos.length > 1) {
@@ -327,7 +339,7 @@ export function InteractionLayer(props: Props) {
       const pos = d.dir === 'c' ? (p.x - area.outer) / area.areaW : (p.y - area.outer) / area.areaH
       onSplit(moveDivider(cur.spec, d, pos))
     } else if (cur.type === 'swap') {
-      const over = hitCell(boxes, p.x, p.y)
+      const over = hitCell(geoms, p.x, p.y)
       if (over !== cur.over) {
         gesture.current = { ...cur, over }
         setLifted({ from: cur.from, over })
@@ -373,7 +385,7 @@ export function InteractionLayer(props: Props) {
     if (selected === null) return
     const s = sizes(selected)
     const crop = cropOf(selected)
-    if (!s || !crop || hitCell(boxes, p.x, p.y) !== selected) return
+    if (!s || !crop || hitCell(geoms, p.x, p.y) !== selected) return
     const target = crop.zoom < 1.5 ? 2 : 1
     onCrop(selected, zoomAt(crop, s.img, s.box, target, p.x - (s.b.x + s.b.w / 2), p.y - (s.b.y + s.b.h / 2)))
   }
@@ -428,13 +440,13 @@ export function InteractionLayer(props: Props) {
       <svg width={width} height={height} className="interaction-svg" aria-hidden="true">
         {lifted && (
           <>
-            <rect {...rectProps(boxes[lifted.from])} className="lifted" />
-            {lifted.over !== null && lifted.over !== lifted.from && <rect {...rectProps(boxes[lifted.over])} className="drop-target" />}
+            <CellOutline g={geoms[lifted.from]} className="lifted" />
+            {lifted.over !== null && lifted.over !== lifted.from && <CellOutline g={geoms[lifted.over]} className="drop-target" />}
           </>
         )}
         {sel && !lifted && (
           <>
-            <rect {...rectProps(sel)} className="selection" />
+            <CellOutline g={geoms[selected!]} className="selection" />
             <line x1={sel.x + sel.w / 2} y1={rotateY} x2={sel.x + sel.w / 2} y2={sel.y > ROTATE_HANDLE_GAP + 4 ? sel.y : sel.y + ROTATE_HANDLE_GAP} className="rotate-stem" />
             <g data-handle="rotate" className="handle rotate-handle" transform={`translate(${sel.x + sel.w / 2} ${rotateY})`}>
               <circle r={14} />
@@ -453,11 +465,16 @@ export function InteractionLayer(props: Props) {
             })}
           </>
         )}
-        {swapPick && sel && <rect {...rectProps(sel)} className="lifted" />}
+        {swapPick && sel && <CellOutline g={geoms[selected!]} className="lifted" />}
         {selectedOverlay && <OverlaySelection o={overlays.find((x) => x.id === selectedOverlay)} width={width} height={height} />}
       </svg>
     </div>
   )
+}
+
+function CellOutline({ g, className }: { g: CellGeom; className: string }) {
+  if (g.path) return <path d={g.path} fillRule={g.evenodd ? 'evenodd' : 'nonzero'} className={className} />
+  return <rect {...rectProps(g.box)} className={className} />
 }
 
 function rectProps(b: CellBox) {

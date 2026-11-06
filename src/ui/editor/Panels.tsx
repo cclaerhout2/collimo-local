@@ -57,7 +57,7 @@ export function LayoutPanel({ photoCount, value, onChange }: { photoCount: numbe
 
 export function BordersPanel({ value, onChange }: { value: Borders; onChange: (b: Borders) => void }) {
   const { t } = useI18n()
-  const sliders: { key: keyof Borders; label: string }[] = [
+  const sliders: { key: 'spacing' | 'margin' | 'radius'; label: string }[] = [
     { key: 'spacing', label: t('borders.spacing') },
     { key: 'margin', label: t('borders.margin') },
     { key: 'radius', label: t('borders.radius') },
