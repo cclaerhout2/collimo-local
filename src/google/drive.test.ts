@@ -62,8 +62,9 @@ describe('miniatures et photos', () => {
     expect(p.supported).toBe(true)
   })
 
-  it('signale les formats que le navigateur ne décode pas', () => {
-    expect(toPhoto({ id: '1', name: 'a.heic', mimeType: 'image/heic' }).supported).toBe(false)
+  it('accepte les HEIC des iPhone, refuse les formats inconnus', () => {
+    expect(toPhoto({ id: '1', name: 'a.heic', mimeType: 'image/heic' }).supported).toBe(true)
+    expect(toPhoto({ id: '2', name: 'a.tif', mimeType: 'image/tiff' }).supported).toBe(false)
   })
 })
 

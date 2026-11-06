@@ -73,6 +73,14 @@ export interface AuthService {
   signOut(): void
 }
 
+export interface DriveFileInfo {
+  id: string
+  name: string
+  modifiedTime?: string
+  webViewLink?: string
+  thumbnailLink?: string
+}
+
 export interface DriveService {
   currentUser(): Promise<SignedInUser>
   listSharedDrives(): Promise<DriveRef[]>
@@ -82,8 +90,13 @@ export interface DriveService {
   ensureCollimoFolder(folderId: string): Promise<string>
   loadSettings(): Promise<UserSettings | null>
   saveSettings(settings: UserSettings): Promise<void>
-  /** Contenu d'un fichier (repli quand une miniature ne s'affiche pas). */
+  /** Contenu d'un fichier (photos originales, repli des miniatures). */
   fetchFileBlob(id: string): Promise<Blob>
+  /** Fichiers directement dans un dossier (hors sous-dossiers), du plus récent au plus ancien. */
+  listFolderFiles(folderId: string): Promise<DriveFileInfo[]>
+  readJson(id: string): Promise<unknown>
+  /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo). */
+  uploadFile(folderId: string, name: string, data: Blob, mimeType: string): Promise<DriveFileInfo>
 }
 
 export interface FolderPicker {

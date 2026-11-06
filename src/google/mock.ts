@@ -3,7 +3,7 @@
  * Aucune donnée réelle : les « photos » sont des images générées.
  */
 import { COLLIMO_FOLDER_NAME } from '../config'
-import type { DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
+import type { DriveFileInfo, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
 const PALETTE = ['#2dd4a7', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b']
 
@@ -37,7 +37,7 @@ const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
     canAddChildren: true,
     photos: [
       ...Array.from({ length: 23 }, (_, i) => fakePhoto(i, i % 3 === 0)),
-      { id: 'heic-1', name: 'IMG_2000.HEIC', mimeType: 'image/heic', supported: false },
+      { id: 'tiff-1', name: 'SCAN_0001.TIF', mimeType: 'image/tiff', supported: false },
     ],
   },
   equipe: {
@@ -63,9 +63,42 @@ const sharedDrives: DriveRef[] = [
 
 const delay = <T,>(value: T, ms = 350) => new Promise<T>((r) => setTimeout(() => r(value), ms))
 
+/** « Photo originale » simulée : un dégradé numéroté, pour vérifier l'ordre et le cadrage. */
+async function fakeOriginal(id: string): Promise<Blob> {
+  const i = Number(id.replace(/\D/g, '')) || 0
+  const portrait = Object.values(folders).some((f) => f.photos.some((p) => p.id === id && (p.height ?? 0) > (p.width ?? 0)))
+  const [w, h] = portrait ? [1200, 1600] : [1600, 1200]
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createLinearGradient(0, 0, w, h)
+  g.addColorStop(0, PALETTE[i % PALETTE.length])
+  g.addColorStop(1, PALETTE[(i + 3) % PALETTE.length])
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'
+  ctx.beginPath()
+  ctx.arc(w * 0.7, h * 0.3, h * 0.12, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(0,0,0,0.18)'
+  ctx.beginPath()
+  ctx.moveTo(0, h)
+  ctx.lineTo(w * 0.35, h * 0.55)
+  ctx.lineTo(w * 0.6, h * 0.8)
+  ctx.lineTo(w * 0.8, h * 0.6)
+  ctx.lineTo(w, h)
+  ctx.fill()
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.font = `bold ${Math.round(h * 0.22)}px system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(String(i), w / 2, h / 2)
+  return canvas.convertToBlob({ type: 'image/png' })
+}
+
 export function createMockServices(): Services {
   let signedIn = false
   let settings: UserSettings | null = null
+  const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
 
   return {
     auth: {
@@ -96,7 +129,29 @@ export function createMockServices(): Services {
         settings = s
         await delay(null, 150)
       },
-      fetchFileBlob: async () => new Blob(),
+      async fetchFileBlob(id) {
+        const stored = files.get(id)
+        return stored ? stored.data : fakeOriginal(id)
+      },
+      listFolderFiles: (folderId) =>
+        delay(
+          [...files.values()]
+            .filter((f) => f.parent === folderId)
+            .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
+            .map(({ id, name, modifiedTime, webViewLink, thumbnailLink }) => ({ id, name, modifiedTime, webViewLink, thumbnailLink })),
+        ),
+      async readJson(id) {
+        const f = files.get(id)
+        if (!f) throw new Error('file not found')
+        return JSON.parse(await f.data.text())
+      },
+      async uploadFile(folderId, name, data) {
+        const id = `file-${files.size + 1}`
+        const thumbnailLink = data.type.startsWith('image/') ? URL.createObjectURL(data) : undefined
+        const info = { id, name, modifiedTime: new Date().toISOString(), webViewLink: '#demo', thumbnailLink }
+        files.set(id, { ...info, parent: folderId, data })
+        return delay(info, 500)
+      },
     },
     picker: {
       async pickFolder(drive) {

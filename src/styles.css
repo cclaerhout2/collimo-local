@@ -589,3 +589,481 @@ button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Mes collages */
+.projects {
+  margin-bottom: 1.75rem;
+}
+
+.projects h2 {
+  font-size: 1.05rem;
+}
+
+.project-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.25rem;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 132px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+
+.project-card:hover {
+  border-color: var(--accent);
+}
+
+.project-card img,
+.project-noimg {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.project-date {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: left;
+}
+
+/* Éditeur */
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100dvh - 63px);
+}
+
+.editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+}
+
+.editor-status {
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-stage {
+  position: relative;
+  flex: 1;
+  min-height: 200px;
+  padding: 0.5rem 1rem 1rem;
+  display: flex;
+}
+
+.canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+.collage-canvas {
+  display: block;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.round-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.shuffle {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+}
+
+.editor-tools {
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding: 0.6rem 0 max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 0 auto 0.6rem;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tabs button.active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.panel {
+  height: 168px;
+  overflow-y: auto;
+  padding: 0 1rem;
+}
+
+.panel-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.4rem;
+}
+
+.panel-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.ratio-option {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 78px;
+  min-height: 118px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ratio-option.selected {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ratio-shape {
+  display: block;
+  border-radius: 4px;
+  border: 2px solid currentColor;
+  margin-bottom: auto;
+  margin-top: auto;
+}
+
+.ratio-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.ratio-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.layout-option {
+  padding: 3px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.layout-option.selected {
+  border-color: var(--surface);
+}
+
+.layout-icon {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 72px;
+}
+
+.layout-icon-bg {
+  fill: #767676;
+}
+
+.layout-icon-cell {
+  fill: #262626;
+}
+
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 620px;
+  margin: 0 auto;
+  padding-top: 0.35rem;
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) 1fr 2.5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sheet .slider {
+  grid-template-columns: 1fr 2.5rem;
+}
+
+.slider-label {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 0.88rem;
+}
+
+.slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  height: 28px;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 620px;
+  margin: 0 auto;
+  padding-top: 0.35rem;
+}
+
+.swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.swatch.selected {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.swatch-custom {
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}
+
+.swatch-custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+/* Fenêtre d'export */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 700px) {
+  .sheet-backdrop {
+    align-items: center;
+  }
+}
+
+.sheet {
+  width: min(560px, 100%);
+  max-height: 92dvh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 1.4rem 1.4rem max(1.4rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 700px) {
+  .sheet {
+    border-radius: 18px;
+  }
+}
+
+.sheet h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  border: 0;
+  margin: 0 0 1.1rem;
+  padding: 0;
+}
+
+.field legend {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  padding: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.45rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.segmented button.active {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.size-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.size-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.65rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.size-option span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.size-option.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.small {
+  font-size: 0.8rem;
+  margin-top: 0.45rem;
+}
+
+.progress {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.export-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 40dvh;
+  margin: 0 auto 1rem;
+  border-radius: 8px;
+}
+
+.actions-wrap {
+  flex-wrap: wrap;
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+@media (max-width: 480px) {
+  .editor-bar {
+    padding: 0.4rem 0.6rem;
+  }
+
+  .tabs button {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .panel {
+    height: 150px;
+  }
+
+  .slider {
+    grid-template-columns: 7rem 1fr 2.2rem;
+    gap: 0.5rem;
+  }
+
+  .slider-label {
+    font-size: 0.8rem;
+    line-height: 1.2;
+  }
+}

@@ -6,7 +6,17 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 1 — connexion et Drive** (cette branche) :
+**Étape 2 — écran du collage** (branche `etape-2`) :
+
+- format (1:1 par défaut, 4:5, 9:16, 16:9, A4…), disposition, bords (écart, marge, arrondi), couleur de fond ;
+- catalogue des dispositions en rectangles, transcrit depuis les captures de référence (`src/collage/catalog/`) ;
+- bouton « mélanger » ;
+- export JPG ou PNG en Standard (2048 px), HD (5000 px, 4000 px sur iPhone et iPad) ou Maximum, qualité JPG réglable (90 par défaut) ;
+- enregistrement dans le dossier `Collimo` : l'image et son fichier projet `.collimo.json`, sous un nom daté jamais écrasé ;
+- « Mes collages » : rouvrir un collage enregistré ; chaque nouvel enregistrement crée un nouveau collage ;
+- photos HEIC des iPhone décodées dans le navigateur, en pleine résolution.
+
+**Étape 1 — connexion et Drive** :
 
 - connexion Google (SSO de l'entreprise), contrôle du domaine ;
 - choix de Mon Drive ou d'un Drive partagé, puis du dossier de photos (Google Picker) ;
@@ -15,7 +25,6 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 - galerie de miniatures, sélection ordonnée de 1 à 20 photos ;
 - interface en français et en anglais.
 
-L'éditeur de collage arrive à l'étape 2 ; un écran provisoire le remplace.
 
 ## Démarrer en local
 
@@ -28,6 +37,8 @@ npm run dev
 **Mode démo sans compte Google** : `VITE_MOCK=1 npm run dev`. Le Drive est simulé, aucune donnée réelle.
 
 Commandes utiles : `npm test` (tests unitaires), `npm run typecheck`, `npm run build`.
+
+**Planche de recette** : `npm run dev` puis ouvrir `/planche.html?n=5` pour voir toutes les dispositions de 5 photos dans l'ordre du catalogue, à comparer aux captures de référence (branche `captures-reference`). Cette page n'est jamais publiée.
 
 ## Mise en place dans le projet GCP existant
 
@@ -75,7 +86,10 @@ Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur
 - l'ouverture du sélecteur sur Mon Drive et sur un Drive partagé ;
 - la création du dossier `Collimo` dans un Drive partagé ;
 - l'affichage des miniatures (repli automatique sur le fichier si une miniature ne s'affiche pas) ;
-- les photos HEIC d'iPhone : affichées grisées, non sélectionnables pour l'instant.
+- l'export d'un collage dans Mon Drive et dans un Drive partagé (envoi de fichiers de plus de 5 Mo) ;
+- les photos HEIC d'iPhone, sur Safari (décodage natif) et sur Chrome (décodeur chargé à la demande).
+
+Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0. Il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée.
 
 ## Structure
 
@@ -84,6 +98,8 @@ src/
   config.ts            configuration et constantes (autorisations, 20 photos max…)
   google/              connexion (GIS), client Drive, sélecteur Picker, Drive simulé
   i18n/                libellés FR et EN
+  collage/             moteur : modèle, géométrie, rendu, export, projet, catalogue des dispositions
   lib/                 logique pure testée : nommage, sélection, erreurs
-  ui/                  écrans
+  ui/                  écrans (ui/editor : écran du collage)
+  dev/                 planche de recette (développement uniquement)
 ```

@@ -1,5 +1,13 @@
 import { COLLIMO_FOLDER_NAME, SUPPORTED_IMAGE_TYPES } from '../config'
-import { SessionExpiredError, type DriveRef, type DriveService, type FolderInfo, type Photo, type UserSettings } from './types'
+import {
+  SessionExpiredError,
+  type DriveFileInfo,
+  type DriveRef,
+  type DriveService,
+  type FolderInfo,
+  type Photo,
+  type UserSettings,
+} from './types'
 
 const API = 'https://www.googleapis.com/drive/v3'
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3'
@@ -209,6 +217,47 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
 
     fetchFileBlob(id) {
       return call<Blob>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }), {}, 'blob')
+    },
+
+    listFolderFiles(folderId) {
+      return listAll<DriveFileInfo>('/files', 'files', {
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
+        corpora: 'allDrives',
+        q: `${quote(folderId)} in parents and mimeType != '${FOLDER_MIME}' and trashed = false`,
+        orderBy: 'modifiedTime desc',
+        pageSize: '1000',
+        fields: 'nextPageToken, files(id,name,modifiedTime,webViewLink,thumbnailLink)',
+      })
+    },
+
+    readJson(id) {
+      return call<unknown>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }))
+    },
+
+    async uploadFile(folderId, name, data, mimeType) {
+      // 1. Ouverture d'une session d'envoi : Drive renvoie l'adresse où déposer le contenu.
+      const start = await fetchImpl(
+        `${UPLOAD}/files?${new URLSearchParams({ uploadType: 'resumable', supportsAllDrives: 'true', fields: 'id,name,modifiedTime,webViewLink' })}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+            'X-Upload-Content-Type': mimeType,
+            'X-Upload-Content-Length': String(data.size),
+          },
+          body: JSON.stringify({ name, mimeType, parents: [folderId] }),
+        },
+      )
+      if (start.status === 401) throw new SessionExpiredError()
+      const session = start.headers.get('Location')
+      if (!start.ok || !session) throw new DriveApiError(start.status, `envoi refusé (${start.status})`)
+      // 2. Dépôt du contenu en une fois.
+      const done = await fetchImpl(session, { method: 'PUT', headers: { 'Content-Type': mimeType }, body: data })
+      if (done.status === 401) throw new SessionExpiredError()
+      if (!done.ok) throw new DriveApiError(done.status, `envoi interrompu (${done.status})`)
+      return (await done.json()) as DriveFileInfo
     },
   }
 }

@@ -3,6 +3,7 @@ import { MAX_PHOTOS } from '../config'
 import type { Location, Photo, Services } from '../google/types'
 import { useI18n } from '../i18n'
 import { pruneSelection, toggleSelection } from '../lib/selection'
+import { ProjectsList, type ProjectEntry } from './ProjectsList'
 import { Thumbnail } from './Thumbnail'
 
 interface Props {
@@ -11,10 +12,11 @@ interface Props {
   selection: string[]
   onSelectionChange: Dispatch<SetStateAction<string[]>>
   onCreate: (photos: Photo[]) => void
+  onOpenProject: (entry: ProjectEntry) => void
   onError: (e: unknown) => void
 }
 
-export function GalleryScreen({ services, location, selection, onSelectionChange, onCreate, onError }: Props) {
+export function GalleryScreen({ services, location, selection, onSelectionChange, onCreate, onOpenProject, onError }: Props) {
   const { t } = useI18n()
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [limitHint, setLimitHint] = useState(false)
@@ -47,6 +49,7 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
 
   return (
     <main className="screen gallery-screen">
+      <ProjectsList services={services} collimoFolderId={location.collimoFolderId} onOpen={onOpenProject} onError={onError} />
       <div className="gallery-head">
         <div>
           <p className="crumbs">{t('gallery.location', { drive: driveName, folder: location.folder.name })}</p>

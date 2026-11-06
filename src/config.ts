@@ -39,7 +39,12 @@ export const SUPPORTED_IMAGE_TYPES = [
   'image/webp',
   'image/gif',
   'image/avif',
+  'image/heic',
+  'image/heif',
 ] as const
+
+/** Formats HEIC/HEIF des iPhone : décodés par Safari, ou par un module chargé à la demande ailleurs. */
+export const HEIC_TYPES = ['image/heic', 'image/heif'] as const
 
 export function missingConfig(c: AppConfig): string[] {
   if (c.mock) return []

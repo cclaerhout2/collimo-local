@@ -1,12 +1,17 @@
 import { useCallback, useMemo, useState } from 'react'
 import { config, missingConfig } from './config'
+import { defaultLayoutFor } from './collage/catalog'
+import { parseProject, ProjectFormatError } from './collage/project'
+import { DEFAULT_RATIO } from './collage/ratios'
+import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } from './collage/types'
 import { createServices } from './google/services'
 import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { isAllowedEmail, toUiError, type UiError } from './lib/errors'
-import { CollagePlaceholder } from './ui/CollagePlaceholder'
+import { EditorScreen } from './ui/editor/EditorScreen'
 import { ErrorBanner } from './ui/ErrorBanner'
 import { GalleryScreen } from './ui/GalleryScreen'
+import type { ProjectEntry } from './ui/ProjectsList'
 import { Header } from './ui/Header'
 import { SetupScreen } from './ui/SetupScreen'
 import { SignInScreen } from './ui/SignInScreen'
@@ -16,9 +21,21 @@ type Phase =
   | { name: 'loading' }
   | { name: 'setup' }
   | { name: 'gallery' }
-  | { name: 'collage'; photos: Photo[] }
+  | { name: 'editor'; doc: CollageDoc; key: number }
 
 const EMPTY_SETTINGS: UserSettings = { version: 1 }
+
+/** Nouveau collage : carré, première disposition du catalogue, photos dans l'ordre de sélection. */
+export function newCollage(photos: Photo[]): CollageDoc {
+  return {
+    version: 1,
+    ratio: DEFAULT_RATIO,
+    layoutId: defaultLayoutFor(photos.length).id,
+    photos: photos.map((p) => ({ id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } })),
+    borders: { ...DEFAULT_BORDERS },
+    background: DEFAULT_BACKGROUND,
+  }
+}
 
 export default function App() {
   const { t, setLang } = useI18n()
@@ -33,6 +50,18 @@ export default function App() {
   const [busy, setBusy] = useState(false)
 
   const handleError = useCallback((e: unknown) => setError(toUiError(e)), [])
+
+  async function openProject(entry: ProjectEntry) {
+    setError(null)
+    try {
+      const doc = parseProject(await services.drive.readJson(entry.project.id))
+      setPhase({ name: 'editor', doc: { ...doc, createdFrom: entry.baseName }, key: Date.now() })
+    } catch (e) {
+      if (e instanceof ProjectFormatError || e instanceof SyntaxError) {
+        setError({ key: 'projects.invalid', vars: { name: entry.baseName } })
+      } else handleError(e)
+    }
+  }
 
   async function signIn() {
     setBusy(true)
@@ -118,7 +147,7 @@ export default function App() {
       <Header
         user={user}
         onLangChange={changeLang}
-        onChangeLocation={user && phase.name !== 'setup' && phase.name !== 'loading' ? () => setPhase({ name: 'setup' }) : undefined}
+        onChangeLocation={user && phase.name === 'gallery' ? () => setPhase({ name: 'setup' }) : undefined}
         onSignOut={user ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
@@ -150,13 +179,22 @@ export default function App() {
           location={location}
           selection={selection}
           onSelectionChange={setSelection}
-          onCreate={(photos) => setPhase({ name: 'collage', photos })}
+          onCreate={(photos) => setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })}
+          onOpenProject={(entry) => void openProject(entry)}
           onError={handleError}
         />
       )}
 
-      {phase.name === 'collage' && (
-        <CollagePlaceholder photos={phase.photos} services={services} onBack={() => setPhase({ name: 'gallery' })} />
+      {phase.name === 'editor' && location && (
+        <EditorScreen
+          key={phase.key}
+          services={services}
+          location={location}
+          initialDoc={phase.doc}
+          onBack={() => setPhase({ name: 'gallery' })}
+          onReconnect={() => void reconnect()}
+          onError={handleError}
+        />
       )}
     </div>
   )
