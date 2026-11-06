@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "REMPLACER-PAR-ID-PROJET-GCP"
+  },
+  "targets": {
+    "REMPLACER-PAR-ID-PROJET-GCP": {
+      "hosting": {
+        "collimo": ["REMPLACER-PAR-ID-SITE-COLLIMO"]
+      }
+    }
+  }
+}
