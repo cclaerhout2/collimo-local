@@ -39,6 +39,37 @@ export interface Crop {
   flip: boolean
 }
 
+/**
+ * Réglages de couleur, chacun de -1 à 1 (0 = neutre), sauf netteté et vignettage de 0 à 1.
+ * Réglages du collage et d'une photo s'additionnent.
+ */
+export interface Adjustments {
+  exposure: number
+  brightness: number
+  contrast: number
+  highlights: number
+  shadows: number
+  warmth: number
+  tint: number
+  saturation: number
+  vibrance: number
+  sharpness: number
+  vignette: number
+}
+
+export type AdjustKey = keyof Adjustments
+
+export const ADJUST_KEYS: AdjustKey[] = [
+  'exposure', 'brightness', 'contrast', 'highlights', 'shadows', 'warmth', 'tint', 'saturation', 'vibrance', 'sharpness', 'vignette',
+]
+
+/** Réglages qui ne vont que de 0 à 1. */
+export const POSITIVE_ONLY: ReadonlySet<AdjustKey> = new Set(['sharpness', 'vignette'])
+
+export const NEUTRAL: Adjustments = {
+  exposure: 0, brightness: 0, contrast: 0, highlights: 0, shadows: 0, warmth: 0, tint: 0, saturation: 0, vibrance: 0, sharpness: 0, vignette: 0,
+}
+
 export interface PlacedPhoto {
   id: string
   name: string
@@ -46,6 +77,8 @@ export interface PlacedPhoto {
   width?: number
   height?: number
   crop: Crop
+  /** Réglages propres à cette photo. */
+  adjust?: Partial<Adjustments>
 }
 
 /** Réglages des bords, chacun de 0 à 1. */
@@ -124,6 +157,10 @@ export interface CollageDoc {
   photos: PlacedPhoto[]
   borders: Borders
   background: string
+  /** Filtre appliqué à toutes les photos, avec son intensité de 0 à 1. */
+  filter?: { id: string; intensity: number }
+  /** Réglages appliqués à toutes les photos. */
+  adjust?: Partial<Adjustments>
   /** Textes et stickers, du plus bas au plus haut. */
   overlays?: Overlay[]
   /** Découpe ajustée à la main (séparations déplacées) ; seulement pour les dispositions en découpe. */

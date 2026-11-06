@@ -1,8 +1,9 @@
 import { layoutById } from './catalog'
 import { splitToRects } from './layoutDsl'
 import { RATIOS } from './ratios'
+import { filterById } from './color'
 import { DEFAULT_EFFECTS } from './overlays'
-import { DEFAULT_CROP, type CollageDoc, type Overlay, type PlacedPhoto, type TextEffects } from './types'
+import { ADJUST_KEYS, DEFAULT_CROP, POSITIVE_ONLY, type Adjustments, type CollageDoc, type Overlay, type PlacedPhoto, type TextEffects } from './types'
 
 /** Extension des fichiers projet, rangés à côté des images exportées dans le dossier Collimo. */
 export const PROJECT_SUFFIX = '.collimo.json'
@@ -49,6 +50,7 @@ export function parseProject(raw: unknown): CollageDoc {
         angle: num(c.angle, 0, -360, 360),
         flip: c.flip === true,
       },
+      adjust: parseAdjust((p as { adjust?: unknown }).adjust),
     }
   })
   const layout = typeof d.layoutId === 'string' ? layoutById(d.layoutId) : undefined
@@ -71,8 +73,25 @@ export function parseProject(raw: unknown): CollageDoc {
     background: typeof d.background === 'string' && /^#[0-9a-f]{6}$/i.test(d.background) ? d.background : '#ffffff',
     split,
     overlays: parseOverlays(d.overlays),
+    adjust: parseAdjust(d.adjust),
+    filter:
+      d.filter && typeof d.filter === 'object' && filterById((d.filter as { id?: string }).id)
+        ? { id: (d.filter as { id: string }).id, intensity: num((d.filter as { intensity?: unknown }).intensity, 1, 0, 1) }
+        : undefined,
     createdFrom: typeof d.createdFrom === 'string' ? d.createdFrom : undefined,
   }
+}
+
+/** Réglages relus : clés connues seulement, valeurs bornées, valeurs nulles retirées. */
+export function parseAdjust(raw: unknown): Partial<Adjustments> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const out: Partial<Adjustments> = {}
+  for (const k of ADJUST_KEYS) {
+    const v = num(r[k], 0, POSITIVE_ONLY.has(k) ? 0 : -1, 1)
+    if (v) out[k] = v
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 const COLOR = /^#[0-9a-f]{6}$/i

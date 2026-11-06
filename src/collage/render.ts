@@ -1,4 +1,5 @@
 import { cellBoxes, placeImage, type CellBox } from './geometry'
+import { vignetteFor } from './color'
 import { drawOverlay } from './overlays'
 import type { CollageDoc, Layout, Overlay } from './types'
 
@@ -31,9 +32,28 @@ export function drawPhotoInCell(ctx: Ctx, img: Drawable, box: CellBox, crop: Col
   ctx.restore()
 }
 
+/** Vignettage : bords de la case assombris, d'intensité 0 à 1. */
+export function drawVignette(ctx: Ctx, box: CellBox, amount: number) {
+  if (amount <= 0) return
+  const cx = box.x + box.w / 2
+  const cy = box.y + box.h / 2
+  const r = Math.hypot(box.w, box.h) / 2
+  const g = ctx.createRadialGradient(cx, cy, r * 0.35, cx, cy, r)
+  g.addColorStop(0, 'rgba(0,0,0,0)')
+  g.addColorStop(1, `rgba(0,0,0,${Math.min(0.85, amount * 0.75)})`)
+  ctx.save()
+  roundedRectPath(ctx, box)
+  ctx.clip()
+  ctx.fillStyle = g
+  ctx.fillRect(box.x, box.y, box.w, box.h)
+  ctx.restore()
+}
+
 export interface RenderOptions {
   /** Couleur des cases dont la photo n'est pas encore chargée (aperçu). */
   placeholder?: string
+  /** Comparaison avant/après : photos sans réglages ni filtre. */
+  raw?: boolean
 }
 
 /**
@@ -62,6 +82,7 @@ export function renderCollage(
     const img = imageFor(i)
     if (photo && img) {
       drawPhotoInCell(ctx, img, box, photo.crop)
+      if (!options.raw) drawVignette(ctx, box, vignetteFor(doc, i))
     } else if (options.placeholder) {
       ctx.save()
       roundedRectPath(ctx, box)

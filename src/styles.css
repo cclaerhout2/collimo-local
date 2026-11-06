@@ -1579,3 +1579,147 @@ a.btn {
     visibility: hidden;
   }
 }
+
+/* Étape 5 : filtres et réglages */
+.compare {
+  position: absolute;
+  right: 1rem;
+  bottom: calc(1rem + 58px);
+  touch-action: none;
+}
+
+.compare.active {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.filters-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.filter-option {
+  flex: none;
+  width: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.filter-option.selected {
+  border-color: var(--accent);
+}
+
+.filter-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: var(--panel-2);
+}
+
+.filter-option span {
+  padding: 0 4px 4px;
+}
+
+.adjust {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.adjust-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.adjust-head .panel-note {
+  margin: 0;
+}
+
+.slider-centered input[type='range'] {
+  background: linear-gradient(90deg, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+.adjust-tools {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.adjust-tool {
+  flex: none;
+  width: 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0.5rem 0.2rem;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+}
+
+.adjust-tool.active {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.adjust-tool.changed::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* L'éditeur occupe exactement la hauteur restante, bandeaux compris. */
+.app:has(.editor) {
+  height: 100dvh;
+  min-height: 0;
+}
+
+.editor {
+  height: auto;
+  min-height: 0;
+}

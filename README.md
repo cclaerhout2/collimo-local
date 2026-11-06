@@ -6,7 +6,18 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 4 — texte et stickers** (branche `etape-4`) :
+**Étape 5 — filtres et réglages** (branche `etape-5`) :
+
+- 20 filtres en 5 familles (Naturel, Chaleur, Fraîcheur, Film, Noir et blanc), aperçus sur une photo du collage, intensité de 0 à 100, appliqués à tout le collage ;
+- 11 réglages + Auto : exposition, luminosité, contraste, hautes lumières, ombres, chaleur, nuance, saturation, vibrance, netteté, vignettage ;
+- réglages sur tout le collage (onglet Filtres › Ajuster) ou sur une seule photo (menu de la photo › Réglages) ; les deux s'additionnent ;
+- bouton avant/après (maintenir pour voir l'original) ; Réinitialiser ;
+- filtres et réglages ne touchent que les photos : fond, textes et stickers gardent leurs couleurs ;
+- calcul sur la carte graphique (WebGL 2), avec un calcul de secours identique sur le processeur ; l'export utilise le même moteur, en pleine résolution.
+
+Vérifié dans Chrome : carte graphique et calcul de secours donnent le même résultat (écart maximal 1/255) ; l'image exportée correspond à l'aperçu.
+
+**Étape 4 — texte et stickers** :
 
 - textes : saisie, 10 styles prédéfinis, polices Google (25 populaires + recherche dans les 1 580 du catalogue), gras et italique, alignement ;
 - couleurs et effets du texte : texte, contour, ombre, lueur, étiquette de fond, opacité ; pipette, couleur libre et nuancier ;
@@ -112,7 +123,8 @@ Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur
 - l'export d'un collage dans Mon Drive et dans un Drive partagé (envoi de fichiers de plus de 5 Mo) ;
 - les photos HEIC d'iPhone, sur Safari (décodage natif) et sur Chrome (décodeur chargé à la demande) ;
 - les polices Google dans l'aperçu et l'export (elles n'ont pas pu être chargées pendant les tests automatiques, faute d'accès réseau) ;
-- le pincement à deux doigts sur un vrai téléphone.
+- le pincement à deux doigts sur un vrai téléphone ;
+- la fluidité des réglages avec 20 photos sur un téléphone d'entrée de gamme.
 
 Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0. Il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée.
 

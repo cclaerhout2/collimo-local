@@ -12,12 +12,14 @@ interface Props {
   canvasRef?: MutableRefObject<HTMLCanvasElement | null>
   /** Change à chaque photo chargée, pour redessiner. */
   version: number
+  /** Avant/après : photos sans réglages. */
+  raw?: boolean
   /** Couche posée exactement sur l'aperçu (gestes, sélection). */
   overlay?: (size: { width: number; height: number }) => ReactNode
 }
 
 /** Aperçu du collage, ajusté à la place disponible et net sur les écrans haute densité. */
-export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvasRef: externalRef, version, overlay }: Props) {
+export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvasRef: externalRef, version, overlay, raw }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -46,9 +48,9 @@ export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvas
     canvas.height = Math.round(fit.height * dpr)
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44' }, overlayFor)
+    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44', raw }, overlayFor)
     if (externalRef) externalRef.current = canvas
-  }, [doc, layout, imageFor, overlayFor, externalRef, version, fit.width, fit.height])
+  }, [doc, layout, imageFor, overlayFor, externalRef, version, raw, fit.width, fit.height])
 
   return (
     <div className="canvas-wrap" ref={wrapRef}>

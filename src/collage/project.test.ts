@@ -88,3 +88,22 @@ describe('textes et stickers dans le projet', () => {
     expect(parseProject(raw).overlays).toEqual([])
   })
 })
+
+describe('filtres et réglages dans le projet', () => {
+  it('relit filtre, réglages du collage et d’une photo', () => {
+    const d = { ...doc, filter: { id: 'vintage', intensity: 0.6 }, adjust: { exposure: 0.2, vignette: 0.4 }, photos: [{ ...doc.photos[0], adjust: { contrast: -0.3 } }] }
+    const back = parseProject(JSON.parse(serializeProject(d, new Date())))
+    expect(back.filter).toEqual({ id: 'vintage', intensity: 0.6 })
+    expect(back.adjust).toEqual({ exposure: 0.2, vignette: 0.4 })
+    expect(back.photos[0].adjust).toEqual({ contrast: -0.3 })
+  })
+
+  it('ignore un filtre inconnu et borne les réglages', () => {
+    const raw = JSON.parse(serializeProject(doc, new Date()))
+    raw.doc.filter = { id: 'inexistant', intensity: 1 }
+    raw.doc.adjust = { exposure: 9, vignette: -1, pirate: 3 }
+    const back = parseProject(raw)
+    expect(back.filter).toBeUndefined()
+    expect(back.adjust).toEqual({ exposure: 1 })
+  })
+})

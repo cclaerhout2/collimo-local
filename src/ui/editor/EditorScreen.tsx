@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../collage/catalog'
 import type { ExportImage } from '../../collage/export'
+import { autoAdjust, isIdentity, paramsForPhoto, paramsKey } from '../../collage/color'
+import { processPhoto, type Processed } from '../../collage/colorProcessor'
 import { normalizeAngle, rotateTo, zoomAt } from '../../collage/gestures'
-import { createLimiter, loadImage, type LoadedImage } from '../../collage/images'
+import { createLimiter, fitWithin, loadImage, type LoadedImage } from '../../collage/images'
 import { ratioValue } from '../../collage/ratios'
 import { duplicateOverlay, newIcon, newImage, newText, type TextPreset } from '../../collage/overlays'
-import { DEFAULT_CROP, type CollageDoc, type Crop, type Layout, type Overlay } from '../../collage/types'
+import { DEFAULT_CROP, type Adjustments, type CollageDoc, type Crop, type Layout, type Overlay } from '../../collage/types'
 import type { Location, Services } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
@@ -13,6 +15,7 @@ import { ErrorBanner } from '../ErrorBanner'
 import { CollageCanvas } from './CollageCanvas'
 import { ExportSheet } from './ExportSheet'
 import { InteractionLayer } from './InteractionLayer'
+import { AdjustPanel, FilterList } from './FiltersPanel'
 import { BackgroundPanel, BordersPanel, LayoutPanel, RatioPanel } from './Panels'
 import { CropPanel, PhotoMenu, type PhotoAction } from './PhotoMenu'
 import { OverlayPanel, PresetGrid } from './overlay/OverlayPanel'
@@ -23,8 +26,20 @@ import { useOverlayAssets } from './useOverlayAssets'
 /** Taille des photos chargées pour l'aperçu (plus grand côté). */
 const PREVIEW_SIDE = 1600
 
-type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'text' | 'stickers'
-const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'text', 'stickers']
+type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'filters' | 'text' | 'stickers'
+const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'filters', 'text', 'stickers']
+
+/** Taille maximale des photos traitées pour l'aperçu (plus grand côté). */
+const PROCESSED_SIDE = 1200
+
+/** Petit échantillon RGBA d'une image, pour le réglage automatique. */
+function sampleRgba(img: ImageBitmap, side = 48): Uint8ClampedArray {
+  const { width, height } = fitWithin(img.width, img.height, side)
+  const c = new OffscreenCanvas(width, height)
+  const ctx = c.getContext('2d', { willReadFrequently: true })!
+  ctx.drawImage(img, 0, 0, width, height)
+  return ctx.getImageData(0, 0, width, height).data
+}
 
 /** Couleur hexadécimale d'un pixel. */
 export const toHex = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
@@ -67,6 +82,11 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
   const [eyedropper, setEyedropper] = useState<((color: string) => void) | null>(null)
   const [focusText, setFocusText] = useState(0)
+  const [filterMode, setFilterMode] = useState<'filters' | 'adjust'>('filters')
+  const [photoAdjust, setPhotoAdjust] = useState(false)
+  const [adjustScope, setAdjustScope] = useState<'collage' | 'photo'>('photo')
+  const [compare, setCompare] = useState(false)
+  const processed = useRef(new Map<string, { key: string; out: Processed }>())
   const canvasEl = useRef<HTMLCanvasElement | null>(null)
   const overlays = useMemo(() => doc.overlays ?? [], [doc.overlays])
   const assets = useOverlayAssets(services, overlays, onError)
@@ -118,10 +138,60 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     }
   }, [])
 
-  const imageFor = useCallback((i: number) => {
-    const p = doc.photos[i]
-    return p ? images.current.get(p.id) : undefined
-  }, [doc.photos])
+  /** Photo de la case i pour l'aperçu : réglages et filtre appliqués, résultat gardé en cache. */
+  const imageFor = useCallback(
+    (i: number) => {
+      const p = doc.photos[i]
+      const base = p ? images.current.get(p.id) : undefined
+      if (!p || !base || compare) return base
+      const params = paramsForPhoto(doc, i)
+      if (isIdentity(params)) return base
+      const key = paramsKey(params)
+      const hit = processed.current.get(p.id)
+      if (hit?.key === key) return hit.out
+      hit?.out.close()
+      const size = fitWithin(base.width, base.height, PROCESSED_SIDE)
+      const out = processPhoto(base.source, size.width, size.height, params)
+      processed.current.set(p.id, { key, out })
+      return out
+    },
+    [doc, compare],
+  )
+
+  useEffect(() => {
+    const map = processed.current
+    return () => {
+      map.forEach((v) => v.out.close())
+      map.clear()
+    }
+  }, [])
+
+  /** Échantillon pour les vignettes de filtres : la première photo chargée, réduite. */
+  const [sample, setSample] = useState<ImageBitmap | null>(null)
+  const firstLoaded = doc.photos.map((p) => images.current.get(p.id)).find(Boolean)
+  useEffect(() => {
+    if (!firstLoaded || sample) return
+    const size = fitWithin(firstLoaded.width, firstLoaded.height, 120)
+    void createImageBitmap(firstLoaded.source, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' }).then(setSample)
+  }, [firstLoaded, sample])
+
+  /** Réglage automatique : d'après la photo choisie, ou toutes les photos du collage. */
+  function autoFor(scope: 'collage' | number): Partial<Adjustments> {
+    const sources = (scope === 'collage' ? doc.photos : [doc.photos[scope]]).map((p) => images.current.get(p.id)).filter((x): x is LoadedImage => !!x)
+    const chunks = sources.map((img) => sampleRgba(img.source))
+    const all = new Uint8ClampedArray(chunks.reduce((s, c) => s + c.length, 0))
+    let o = 0
+    for (const c of chunks) {
+      all.set(c, o)
+      o += c.length
+    }
+    return autoAdjust(all)
+  }
+
+  const setCollageAdjust = (adjust: Partial<Adjustments> | undefined) => setDoc((d) => ({ ...d, adjust }))
+  const setPhotoAdjustValue = (i: number, adjust: Partial<Adjustments> | undefined) =>
+    setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, adjust } : p)) }))
+  const hasColor = !!doc.filter || !!doc.adjust || doc.photos.some((p) => p.adjust)
 
   /** Export : réutilise l'aperçu s'il est assez grand, sinon relit l'original à la taille utile. */
   const loadForCell = useCallback(
@@ -153,6 +223,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setSelectedOverlay(null)
     setSwapPick(false)
     setCropMode(false)
+    setPhotoAdjust(false)
     setEyedropper(null)
   }, [])
 
@@ -270,6 +341,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     else if (action === 'flip') setCrop(selected, { ...photo.crop, flip: !photo.crop.flip })
     else if (action === 'rotate' && s) setCrop(selected, rotateTo(photo.crop, s.img, s.box, normalizeAngle(Math.round(photo.crop.angle / 90) * 90 + 90)))
     else if (action === 'crop') setCropMode(true)
+    else if (action === 'adjust') {
+      setAdjustScope('photo')
+      setPhotoAdjust(true)
+    }
     else if (action === 'delete' && doc.photos.length > 1) {
       const next = nearestLayout(doc.photos.length - 1, layout.family)
       setDoc((d) => ({ ...d, photos: d.photos.filter((_, k) => k !== selected), layoutId: next.id, split: undefined }))
@@ -337,7 +412,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         className="editor-stage"
         onPointerDown={(e) => {
           // Toucher à côté du collage : désélection.
-          if (!(e.target as Element).closest('.canvas-frame, .shuffle')) select(null)
+          if (!(e.target as Element).closest('.canvas-frame, .shuffle, .compare')) select(null)
         }}
       >
         <CollageCanvas
@@ -348,6 +423,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           overlayFor={assets.overlayFor}
           canvasRef={canvasEl}
           version={version + assets.version * 1000}
+          raw={compare}
           overlay={(size) => (
             <InteractionLayer
               width={size.width}
@@ -372,6 +448,28 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
             />
           )}
         />
+        {hasColor && (
+          <button
+            type="button"
+            className={`round-button compare${compare ? ' active' : ''}`}
+            title={t('filters.compare')}
+            aria-label={t('filters.compare')}
+            aria-pressed={compare}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              setCompare(true)
+            }}
+            onPointerUp={() => setCompare(false)}
+            onPointerLeave={() => setCompare(false)}
+            onPointerCancel={() => setCompare(false)}
+            onKeyDown={(e) => e.key === ' ' && setCompare(true)}
+            onKeyUp={() => setCompare(false)}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 3v18M9 6H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h4M15 6h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-4" />
+            </svg>
+          </button>
+        )}
         {doc.photos.length > 1 && (
           <button
             type="button"
@@ -410,6 +508,24 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
               focusTextToken={focusText}
             />
           </div>
+        ) : selected !== null && doc.photos[selected] && photoAdjust ? (
+          <div className="panel">
+            <AdjustPanel
+              value={adjustScope === 'photo' ? doc.photos[selected].adjust : doc.adjust}
+              onChange={(v) => (adjustScope === 'photo' ? setPhotoAdjustValue(selected, v) : setCollageAdjust(v))}
+              onAuto={() => {
+                const v = autoFor(adjustScope === 'photo' ? selected : 'collage')
+                if (adjustScope === 'photo') setPhotoAdjustValue(selected, v)
+                else setCollageAdjust(v)
+              }}
+              scope={{ value: adjustScope, onChange: setAdjustScope }}
+            />
+            <div className="actions actions-tight">
+              <button type="button" className="btn btn-primary btn-small" onClick={() => setPhotoAdjust(false)}>
+                {t('photo.done')}
+              </button>
+            </div>
+          </div>
         ) : selected !== null && doc.photos[selected] ? (
           cropMode ? (
             <div className="panel">
@@ -441,13 +557,29 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
             </button>
           ))}
         </div>
-        <div className={`panel${tab === 'stickers' ? ' panel-tall' : ''}`} role="tabpanel">
+        <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
           {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
           {tab === 'layout' && (
             <LayoutPanel photoCount={doc.photos.length} value={layout.id} onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))} />
           )}
           {tab === 'borders' && <BordersPanel value={doc.borders} onChange={(b) => setDoc((d) => ({ ...d, borders: b }))} />}
           {tab === 'background' && <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />}
+          {tab === 'filters' && (
+            <div className="filters-tab">
+              <div className="segmented segmented-small">
+                {(['filters', 'adjust'] as const).map((m) => (
+                  <button key={m} type="button" className={filterMode === m ? 'active' : ''} aria-pressed={filterMode === m} onClick={() => setFilterMode(m)}>
+                    {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
+                  </button>
+                ))}
+              </div>
+              {filterMode === 'filters' ? (
+                <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
+              ) : (
+                <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
+              )}
+            </div>
+          )}
           {tab === 'text' && (
             <div className="text-tab">
               <button type="button" className="btn btn-primary" onClick={() => addText()}>

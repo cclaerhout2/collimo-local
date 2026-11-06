@@ -1,6 +1,8 @@
 import { cellBoxes, sizeForLongSide } from './geometry'
 import { drawOverlay, overlayBox } from './overlays'
-import { drawPhotoInCell, renderCollage, type Drawable } from './render'
+import { isIdentity, paramsForPhoto, vignetteFor } from './color'
+import { processPhoto } from './colorProcessor'
+import { drawPhotoInCell, drawVignette, renderCollage, type Drawable } from './render'
 import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
 
 export type ExportFormat = 'jpeg' | 'png'
@@ -111,7 +113,18 @@ export async function exportCollage(args: {
     const img = await args.loadForCell(i, maxSide)
     try {
       ctx.imageSmoothingQuality = 'high'
-      drawPhotoInCell(ctx, img, box, photo.crop)
+      // Réglages et filtre à la résolution d'export, avec le même moteur que l'aperçu.
+      const params = paramsForPhoto(doc, i)
+      if (isIdentity(params)) drawPhotoInCell(ctx, img, box, photo.crop)
+      else {
+        const done = processPhoto(img.source as CanvasImageSource & TexImageSource, img.width, img.height, params)
+        try {
+          drawPhotoInCell(ctx, done, box, photo.crop)
+        } finally {
+          done.close()
+        }
+      }
+      drawVignette(ctx, box, vignetteFor(doc, i))
     } finally {
       img.close()
     }
