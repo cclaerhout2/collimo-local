@@ -9,7 +9,7 @@ import {
   type ExportPreset,
 } from '../../collage/export'
 import { saveCollage, type SavedCollage } from '../../collage/save'
-import type { CollageDoc, Layout } from '../../collage/types'
+import type { CollageDoc, Layout, Overlay, TextOverlay } from '../../collage/types'
 import type { DriveService } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
@@ -22,6 +22,8 @@ interface Props {
   layout: Layout
   ratio: number
   loadForCell: (cellIndex: number, maxSide: number) => Promise<ExportImage>
+  loadOverlay?: (o: Exclude<Overlay, TextOverlay>, maxSide: number) => Promise<ExportImage>
+  prepareText?: (o: TextOverlay) => Promise<void>
   onClose: () => void
   onSaved: (saved: SavedCollage) => void
   onReconnect: () => void
@@ -33,7 +35,7 @@ type Status =
   | { name: 'uploading' }
   | { name: 'done'; saved: SavedCollage; url: string }
 
-export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadForCell, onClose, onSaved, onReconnect }: Props) {
+export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadForCell, loadOverlay, prepareText, onClose, onSaved, onReconnect }: Props) {
   const { t } = useI18n()
   const apple = useMemo(() => isAppleMobile(), [])
   const [format, setFormat] = useState<ExportFormat>('jpeg')
@@ -68,6 +70,8 @@ export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadFo
         format,
         quality,
         loadForCell,
+        loadOverlay,
+        prepareText,
         onPhase: (phase, done = 0, total = 0) =>
           setStatus(phase === 'rendering' ? { name: 'rendering', done, total } : { name: 'uploading' }),
       })

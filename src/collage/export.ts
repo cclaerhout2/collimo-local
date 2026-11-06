@@ -1,6 +1,7 @@
 import { cellBoxes, sizeForLongSide } from './geometry'
+import { drawOverlay, overlayBox } from './overlays'
 import { drawPhotoInCell, renderCollage, type Drawable } from './render'
-import type { CollageDoc, Layout } from './types'
+import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
 
 export type ExportFormat = 'jpeg' | 'png'
 export type ExportPreset = 'standard' | 'hd' | 'max'
@@ -87,6 +88,10 @@ export async function exportCollage(args: {
   /** Qualité JPEG de 1 à 100. */
   quality: number
   loadForCell: (cellIndex: number, maxSide: number) => Promise<ExportImage>
+  /** Icône ou image d'un élément, décodée au plus grand côté utile. */
+  loadOverlay?: (o: Exclude<Overlay, TextOverlay>, maxSide: number) => Promise<ExportImage>
+  /** Attendre que la police d'un texte soit chargée. */
+  prepareText?: (o: TextOverlay) => Promise<void>
   onProgress?: (done: number, total: number) => void
 }): Promise<Blob> {
   const { doc, layout, width, height } = args
@@ -95,8 +100,10 @@ export async function exportCollage(args: {
   if (!ctx) throw new Error('export impossible : pas de contexte de dessin')
   renderCollage(ctx, doc, layout, width, height, () => undefined)
   const boxes = cellBoxes(layout.cells, width, height, doc.borders)
-  const total = Math.min(boxes.length, doc.photos.length)
-  for (let i = 0; i < total; i++) {
+  const photoCount = Math.min(boxes.length, doc.photos.length)
+  const overlays = doc.overlays ?? []
+  const total = photoCount + overlays.length
+  for (let i = 0; i < photoCount; i++) {
     const photo = doc.photos[i]
     const box = boxes[i]
     // Marge pour le zoom et la rotation : √2 couvre une rotation quelconque.
@@ -109,6 +116,23 @@ export async function exportCollage(args: {
       img.close()
     }
     args.onProgress?.(i + 1, total)
+  }
+  // Textes et stickers par-dessus, dans leur ordre, en pleine résolution.
+  for (let k = 0; k < overlays.length; k++) {
+    const o = overlays[k]
+    if (o.type === 'text') {
+      await args.prepareText?.(o)
+      drawOverlay(ctx, o, width, height)
+    } else if (args.loadOverlay) {
+      const box = overlayBox(o, width, height)
+      const img = await args.loadOverlay(o, Math.max(box.w, box.h))
+      try {
+        drawOverlay(ctx, o, width, height, img)
+      } finally {
+        img.close()
+      }
+    }
+    args.onProgress?.(photoCount + k + 1, total)
   }
   const type = args.format === 'png' ? 'image/png' : 'image/jpeg'
   return toBlob(canvas, type, args.format === 'jpeg' ? args.quality / 100 : undefined)

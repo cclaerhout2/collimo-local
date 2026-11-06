@@ -4,7 +4,8 @@ import type { ExportImage } from '../../collage/export'
 import { normalizeAngle, rotateTo, zoomAt } from '../../collage/gestures'
 import { createLimiter, loadImage, type LoadedImage } from '../../collage/images'
 import { ratioValue } from '../../collage/ratios'
-import { DEFAULT_CROP, type CollageDoc, type Crop, type Layout } from '../../collage/types'
+import { duplicateOverlay, newIcon, newImage, newText, type TextPreset } from '../../collage/overlays'
+import { DEFAULT_CROP, type CollageDoc, type Crop, type Layout, type Overlay } from '../../collage/types'
 import type { Location, Services } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
@@ -14,12 +15,19 @@ import { ExportSheet } from './ExportSheet'
 import { InteractionLayer } from './InteractionLayer'
 import { BackgroundPanel, BordersPanel, LayoutPanel, RatioPanel } from './Panels'
 import { CropPanel, PhotoMenu, type PhotoAction } from './PhotoMenu'
+import { OverlayPanel, PresetGrid } from './overlay/OverlayPanel'
+import { StickerBrowser } from './overlay/StickerBrowser'
+import { useHistory } from './useHistory'
+import { useOverlayAssets } from './useOverlayAssets'
 
 /** Taille des photos chargées pour l'aperçu (plus grand côté). */
 const PREVIEW_SIDE = 1600
 
-type Tab = 'ratio' | 'layout' | 'borders' | 'background'
-const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background']
+type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'text' | 'stickers'
+const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'text', 'stickers']
+
+/** Couleur hexadécimale d'un pixel. */
+export const toHex = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 
 interface Props {
   services: Services
@@ -51,9 +59,17 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const [swapPick, setSwapPick] = useState(false)
   const [cropMode, setCropMode] = useState(false)
   const [notice, setNotice] = useState<UiError | null>(null)
-  const [doc, setDoc] = useState<CollageDoc>(() =>
+  const history = useHistory<CollageDoc>(() =>
     layoutById(initialDoc.layoutId) ? initialDoc : { ...initialDoc, layoutId: defaultLayoutFor(initialDoc.photos.length).id },
   )
+  const doc = history.value
+  const setDoc = history.set
+  const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
+  const [eyedropper, setEyedropper] = useState<((color: string) => void) | null>(null)
+  const [focusText, setFocusText] = useState(0)
+  const canvasEl = useRef<HTMLCanvasElement | null>(null)
+  const overlays = useMemo(() => doc.overlays ?? [], [doc.overlays])
+  const assets = useOverlayAssets(services, overlays, onError)
   const [tab, setTab] = useState<Tab>('layout')
   const [exporting, setExporting] = useState(false)
   const [version, setVersion] = useState(0)
@@ -134,13 +150,96 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
 
   const select = useCallback((i: number | null) => {
     setSelected(i)
+    setSelectedOverlay(null)
     setSwapPick(false)
     setCropMode(false)
+    setEyedropper(null)
   }, [])
+
+  const selectOverlay = useCallback((id: string | null) => {
+    setSelectedOverlay(id)
+    setSelected(null)
+    setSwapPick(false)
+    setCropMode(false)
+    setEyedropper(null)
+  }, [])
+
+  const updateOverlay = useCallback(
+    (o: Overlay) => setDoc((d) => ({ ...d, overlays: (d.overlays ?? []).map((x) => (x.id === o.id ? o : x)) })),
+    [setDoc],
+  )
+
+  const addOverlay = useCallback(
+    (o: Overlay) => {
+      setDoc((d) => ({ ...d, overlays: [...(d.overlays ?? []), o] }))
+      selectOverlay(o.id)
+    },
+    [setDoc, selectOverlay],
+  )
+
+  function addText(preset?: TextPreset) {
+    addOverlay(newText(t('text.default'), preset))
+    setFocusText((n) => n + 1)
+  }
+
+  async function addImageSticker() {
+    setNotice(null)
+    try {
+      const picked = await services.picker.pickImage(location.drive, lang, t('sticker.mineTitle'))
+      if (!picked) return
+      const p = await services.drive.getPhoto(picked.id)
+      if (!p.supported) {
+        setNotice({ key: 'photo.unsupported', vars: { type: p.mimeType.replace('image/', '').toUpperCase() } })
+        return
+      }
+      addOverlay(newImage(p.id, p.name, p.mimeType, p.width && p.height ? p.height / p.width : 1))
+    } catch (e) {
+      setNotice(toUiError(e))
+    }
+  }
+
+  /** Ordre des éléments : devant (+1) ou derrière (−1). */
+  function moveOverlay(id: string, step: 1 | -1) {
+    setDoc((d) => {
+      const list = [...(d.overlays ?? [])]
+      const i = list.findIndex((o) => o.id === id)
+      const j = i + step
+      if (i < 0 || j < 0 || j >= list.length) return d
+      ;[list[i], list[j]] = [list[j], list[i]]
+      return { ...d, overlays: list }
+    })
+  }
+
+  /** Pipette : couleur du pixel touché sur l'aperçu. */
+  function pickColorAt(x: number, y: number) {
+    const canvas = canvasEl.current
+    const apply = eyedropper
+    setEyedropper(null)
+    if (!canvas || !apply) return
+    const k = canvas.width / canvas.getBoundingClientRect().width
+    const ctx = canvas.getContext('2d')
+    const px = ctx?.getImageData(Math.floor(x * k), Math.floor(y * k), 1, 1).data
+    if (px) apply(toHex(px[0], px[1], px[2]))
+  }
+
+  // Annuler / rétablir au clavier.
+  const { undo, redo } = history
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || (e.target as Element)?.closest?.('input, textarea')) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) undo()
+      else if ((k === 'z' && e.shiftKey) || k === 'y') redo()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo])
 
   const setCrop = useCallback((i: number, crop: Crop) => {
     setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, crop } : p)) }))
-  }, [])
+  }, [setDoc])
 
   const swap = useCallback((a: number, b: number) => {
     setDoc((d) => {
@@ -150,7 +249,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     })
     setSelected(b)
     setSwapPick(false)
-  }, [])
+  }, [setDoc])
 
   /** Dimensions de la case sélectionnée et de sa photo, pour les réglages au curseur. */
   function selectedSizes() {
@@ -215,6 +314,14 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
                 ? t('editor.selectHint')
                 : ''}
         </span>
+        <div className="history-buttons">
+          <button type="button" className="round-button small" onClick={history.undo} disabled={!history.canUndo} title={t('editor.undo')} aria-label={t('editor.undo')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>
+          </button>
+          <button type="button" className="round-button small" onClick={history.redo} disabled={!history.canRedo} title={t('editor.redo')} aria-label={t('editor.redo')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg>
+          </button>
+        </div>
         <button type="button" className="btn btn-primary btn-small" onClick={() => setExporting(true)} disabled={!allLoaded}>
           {t('editor.export')}
         </button>
@@ -238,7 +345,9 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           layout={layout}
           ratio={ratio}
           imageFor={imageFor}
-          version={version}
+          overlayFor={assets.overlayFor}
+          canvasRef={canvasEl}
+          version={version + assets.version * 1000}
           overlay={(size) => (
             <InteractionLayer
               width={size.width}
@@ -252,6 +361,14 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
               onCrop={setCrop}
               onSwap={swap}
               onSplit={(split) => setDoc((d) => ({ ...d, split }))}
+              selectedOverlay={selectedOverlay}
+              onSelectOverlay={selectOverlay}
+              onOverlay={updateOverlay}
+              onEditText={(id) => {
+                selectOverlay(id)
+                setFocusText((n) => n + 1)
+              }}
+              onEyedropper={eyedropper ? pickColorAt : undefined}
             />
           )}
         />
@@ -272,7 +389,28 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
       </div>
 
       <div className="editor-tools">
-        {selected !== null && doc.photos[selected] ? (
+        {selectedOverlay && overlays.some((o) => o.id === selectedOverlay) ? (
+          <div className="panel panel-tall">
+            <OverlayPanel
+              overlay={overlays.find((o) => o.id === selectedOverlay)!}
+              onChange={updateOverlay}
+              onDuplicate={() => {
+                const o = overlays.find((x) => x.id === selectedOverlay)
+                if (o) addOverlay(duplicateOverlay(o))
+              }}
+              onForward={() => moveOverlay(selectedOverlay, 1)}
+              onBackward={() => moveOverlay(selectedOverlay, -1)}
+              onDelete={() => {
+                setDoc((d) => ({ ...d, overlays: (d.overlays ?? []).filter((o) => o.id !== selectedOverlay) }))
+                selectOverlay(null)
+              }}
+              onDone={() => selectOverlay(null)}
+              onEyedropper={(apply) => setEyedropper(() => apply)}
+              eyedropperActive={!!eyedropper}
+              focusTextToken={focusText}
+            />
+          </div>
+        ) : selected !== null && doc.photos[selected] ? (
           cropMode ? (
             <div className="panel">
               <CropPanel
@@ -303,13 +441,28 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
             </button>
           ))}
         </div>
-        <div className="panel" role="tabpanel">
+        <div className={`panel${tab === 'stickers' ? ' panel-tall' : ''}`} role="tabpanel">
           {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
           {tab === 'layout' && (
             <LayoutPanel photoCount={doc.photos.length} value={layout.id} onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))} />
           )}
           {tab === 'borders' && <BordersPanel value={doc.borders} onChange={(b) => setDoc((d) => ({ ...d, borders: b }))} />}
           {tab === 'background' && <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />}
+          {tab === 'text' && (
+            <div className="text-tab">
+              <button type="button" className="btn btn-primary" onClick={() => addText()}>
+                {t('text.add')}
+              </button>
+              <p className="panel-note">{t('text.stylesHint')}</p>
+              <PresetGrid onPick={(p) => addText(p)} />
+            </div>
+          )}
+          {tab === 'stickers' && (
+            <StickerBrowser
+              onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
+              onPickImage={() => void addImageSticker()}
+            />
+          )}
         </div>
           </>
         )}
@@ -323,6 +476,8 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           layout={layout}
           ratio={ratio}
           loadForCell={loadForCell}
+          loadOverlay={assets.loadOverlay}
+          prepareText={assets.prepareText}
           onClose={() => setExporting(false)}
           onSaved={() => {}}
           onReconnect={onReconnect}

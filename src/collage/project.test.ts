@@ -57,3 +57,34 @@ describe('fichier projet', () => {
     expect(projectBaseName('Collimo_2026-11-06_23-07-12_2.collimo.json')).toBe('Collimo_2026-11-06_23-07-12_2')
   })
 })
+
+describe('textes et stickers dans le projet', () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><path d="M0 0h10v10z" fill="currentColor"/></svg>'
+
+  it('relit textes, icônes et images', () => {
+    const withOverlays = {
+      ...doc,
+      overlays: [
+        { id: 't', type: 'text', cx: 0.5, cy: 0.2, angle: 5, opacity: 0.9, text: 'Bonjour', font: { family: 'Lato', weight: 400, italic: true }, size: 0.1, width: 0.8, align: 'left', color: '#ff0000', effects: { stroke: { on: true, color: '#000000', width: 0.5 } } },
+        { id: 'i', type: 'icon', cx: 0.3, cy: 0.3, angle: 0, opacity: 1, set: 'ph', name: 'heart', svg, color: '#00ff00', size: 0.2 },
+        { id: 'm', type: 'image', cx: 0.7, cy: 0.7, angle: 0, opacity: 1, fileId: 'logo', name: 'logo.png', mimeType: 'image/png', size: 0.3, aspect: 0.5 },
+      ],
+    } as unknown as CollageDoc
+    const back = parseProject(JSON.parse(serializeProject(withOverlays, new Date())))
+    expect(back.overlays?.map((o) => o.type)).toEqual(['text', 'icon', 'image'])
+    const t = back.overlays![0]
+    expect(t.type === 'text' && t.effects.stroke).toEqual({ on: true, color: '#000000', width: 0.5 })
+    expect(t.type === 'text' && t.effects.shadow.on).toBe(false)
+  })
+
+  it('refuse un SVG qui contient du code', () => {
+    const raw = JSON.parse(serializeProject(doc, new Date()))
+    raw.doc.overlays = [
+      { type: 'icon', set: 'ph', name: 'x', svg: '<svg><script>alert(1)</script></svg>' },
+      { type: 'icon', set: 'ph', name: 'y', svg: '<svg onload="alert(1)"></svg>' },
+      { type: 'icon', set: 'ph', name: 'z', svg: '<svg><image href="https://pirate.example/x.png"/></svg>' },
+      { type: 'inconnu' },
+    ]
+    expect(parseProject(raw).overlays).toEqual([])
+  })
+})

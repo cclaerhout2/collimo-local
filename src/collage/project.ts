@@ -1,7 +1,8 @@
 import { layoutById } from './catalog'
 import { splitToRects } from './layoutDsl'
 import { RATIOS } from './ratios'
-import { DEFAULT_CROP, type CollageDoc, type PlacedPhoto } from './types'
+import { DEFAULT_EFFECTS } from './overlays'
+import { DEFAULT_CROP, type CollageDoc, type Overlay, type PlacedPhoto, type TextEffects } from './types'
 
 /** Extension des fichiers projet, rangés à côté des images exportées dans le dossier Collimo. */
 export const PROJECT_SUFFIX = '.collimo.json'
@@ -69,8 +70,94 @@ export function parseProject(raw: unknown): CollageDoc {
     borders: { spacing: num(b.spacing, 0, 0, 1), margin: num(b.margin, 0, 0, 1), radius: num(b.radius, 0, 0, 1) },
     background: typeof d.background === 'string' && /^#[0-9a-f]{6}$/i.test(d.background) ? d.background : '#ffffff',
     split,
+    overlays: parseOverlays(d.overlays),
     createdFrom: typeof d.createdFrom === 'string' ? d.createdFrom : undefined,
   }
+}
+
+const COLOR = /^#[0-9a-f]{6}$/i
+const color = (v: unknown, fallback: string) => (typeof v === 'string' && COLOR.test(v) ? v : fallback)
+const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback)
+/** Un SVG gardé dans le projet ne doit contenir ni script ni lien externe. */
+export function safeSvg(v: unknown): string | null {
+  if (typeof v !== 'string' || !v.trim().startsWith('<svg') || v.length > 200_000) return null
+  // Seuls les renvois internes (href="#…") sont permis : pas de lien vers l'extérieur.
+  if (/<script|<foreignObject|\son\w+\s*=|javascript:|href\s*=\s*(?:["'](?!#)|(?!["'#]))/i.test(v)) return null
+  return v
+}
+
+function parseEffects(raw: unknown): TextEffects {
+  const r = (raw ?? {}) as Record<string, Record<string, unknown> | undefined>
+  const d = DEFAULT_EFFECTS
+  return {
+    stroke: { on: r.stroke?.on === true, color: color(r.stroke?.color, d.stroke.color), width: num(r.stroke?.width, d.stroke.width, 0, 1) },
+    shadow: {
+      on: r.shadow?.on === true,
+      color: color(r.shadow?.color, d.shadow.color),
+      blur: num(r.shadow?.blur, d.shadow.blur, 0, 1),
+      distance: num(r.shadow?.distance, d.shadow.distance, 0, 1),
+    },
+    glow: { on: r.glow?.on === true, color: color(r.glow?.color, d.glow.color), blur: num(r.glow?.blur, d.glow.blur, 0, 1) },
+    label: {
+      on: r.label?.on === true,
+      color: color(r.label?.color, d.label.color),
+      padding: num(r.label?.padding, d.label.padding, 0, 1),
+      radius: num(r.label?.radius, d.label.radius, 0, 1),
+    },
+  }
+}
+
+/** Textes et stickers relus : les éléments abîmés sont ignorés, les autres ramenés dans les limites. */
+export function parseOverlays(raw: unknown): Overlay[] {
+  if (!Array.isArray(raw)) return []
+  const out: Overlay[] = []
+  for (const r of raw.slice(0, 200) as Record<string, unknown>[]) {
+    if (!r || typeof r !== 'object') continue
+    const base = {
+      id: str(r.id) || `o${out.length}`,
+      cx: num(r.cx, 0.5, -0.5, 1.5),
+      cy: num(r.cy, 0.5, -0.5, 1.5),
+      angle: num(r.angle, 0, -360, 360),
+      opacity: num(r.opacity, 1, 0, 1),
+    }
+    if (r.type === 'text') {
+      const f = (r.font ?? {}) as Record<string, unknown>
+      out.push({
+        ...base,
+        type: 'text',
+        text: str(r.text).slice(0, 2000),
+        font: { family: str(f.family, 'Montserrat').slice(0, 80), weight: num(f.weight, 700, 100, 900), italic: f.italic === true },
+        size: num(r.size, 0.1, 0.01, 1),
+        width: num(r.width, 0.8, 0.05, 1.5),
+        align: r.align === 'left' || r.align === 'right' ? r.align : 'center',
+        color: color(r.color, '#ffffff'),
+        effects: parseEffects(r.effects),
+      })
+    } else if (r.type === 'icon') {
+      const svg = safeSvg(r.svg)
+      if (!svg) continue
+      out.push({
+        ...base,
+        type: 'icon',
+        set: r.set === 'fluent' ? 'fluent' : 'ph',
+        name: str(r.name),
+        svg,
+        color: typeof r.color === 'string' && COLOR.test(r.color) ? r.color : undefined,
+        size: num(r.size, 0.25, 0.01, 2),
+      })
+    } else if (r.type === 'image' && typeof r.fileId === 'string') {
+      out.push({
+        ...base,
+        type: 'image',
+        fileId: r.fileId,
+        name: str(r.name, r.fileId),
+        mimeType: str(r.mimeType, 'image/png'),
+        size: num(r.size, 0.35, 0.01, 2),
+        aspect: num(r.aspect, 1, 0.05, 20),
+      })
+    }
+  }
+  return out
 }
 
 /** « Collimo_2026-11-06_23-07-12.collimo.json » → « Collimo_2026-11-06_23-07-12 ». */

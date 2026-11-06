@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { renderCollage, type Drawable } from '../../collage/render'
-import type { CollageDoc, Layout } from '../../collage/types'
+import type { CollageDoc, Layout, Overlay } from '../../collage/types'
 
 interface Props {
   doc: CollageDoc
   layout: Layout
   ratio: number
   imageFor: (cellIndex: number) => Drawable | undefined
+  overlayFor?: (o: Overlay) => Drawable | undefined
+  /** Accès au Canvas (pipette). */
+  canvasRef?: MutableRefObject<HTMLCanvasElement | null>
   /** Change à chaque photo chargée, pour redessiner. */
   version: number
   /** Couche posée exactement sur l'aperçu (gestes, sélection). */
@@ -14,7 +17,7 @@ interface Props {
 }
 
 /** Aperçu du collage, ajusté à la place disponible et net sur les écrans haute densité. */
-export function CollageCanvas({ doc, layout, ratio, imageFor, version, overlay }: Props) {
+export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvasRef: externalRef, version, overlay }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -43,8 +46,9 @@ export function CollageCanvas({ doc, layout, ratio, imageFor, version, overlay }
     canvas.height = Math.round(fit.height * dpr)
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44' })
-  }, [doc, layout, imageFor, version, fit.width, fit.height])
+    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44' }, overlayFor)
+    if (externalRef) externalRef.current = canvas
+  }, [doc, layout, imageFor, overlayFor, externalRef, version, fit.width, fit.height])
 
   return (
     <div className="canvas-wrap" ref={wrapRef}>

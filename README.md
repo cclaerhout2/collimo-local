@@ -6,7 +6,20 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 3 — travail sur chaque photo** (branche `etape-3`) :
+**Étape 4 — texte et stickers** (branche `etape-4`) :
+
+- textes : saisie, 10 styles prédéfinis, polices Google (25 populaires + recherche dans les 1 580 du catalogue), gras et italique, alignement ;
+- couleurs et effets du texte : texte, contour, ombre, lueur, étiquette de fond, opacité ; pipette, couleur libre et nuancier ;
+- stickers : Fluent Emoji (1 591 émojis en couleur) et Phosphor (1 512 icônes, contour ou plein, recolorables), recherche en français ou en anglais, catégories ;
+- image personnelle (logo, PNG transparent) choisie dans le Drive en cours ;
+- chaque élément se déplace, s'agrandit (coin), tourne (poignée ronde), se pince à deux doigts ; largeur du texte réglable (poignée latérale) ; double-clic sur un texte pour le modifier ;
+- dupliquer, passer devant ou derrière, supprimer ;
+- annuler / rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z) pour toutes les actions de l'éditeur ;
+- les textes et stickers sont enregistrés dans le projet et exportés en pleine résolution (icônes redessinées à la taille finale).
+
+Les catalogues d'icônes et de polices sont générés dans `public/assets` par `npm run gen:assets` et chargés seulement à l'ouverture des panneaux. Les SVG relus depuis un projet sont filtrés (ni script ni lien externe).
+
+**Étape 3 — travail sur chaque photo** :
 
 - toucher ou cliquer une photo pour la sélectionner (cadre vert), toucher à côté pour désélectionner ;
 - glisser pour recadrer ; molette, pincement (doigts ou trackpad) ou double-clic pour zoomer, centré sous le curseur ;
@@ -97,7 +110,9 @@ Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur
 - la création du dossier `Collimo` dans un Drive partagé ;
 - l'affichage des miniatures (repli automatique sur le fichier si une miniature ne s'affiche pas) ;
 - l'export d'un collage dans Mon Drive et dans un Drive partagé (envoi de fichiers de plus de 5 Mo) ;
-- les photos HEIC d'iPhone, sur Safari (décodage natif) et sur Chrome (décodeur chargé à la demande).
+- les photos HEIC d'iPhone, sur Safari (décodage natif) et sur Chrome (décodeur chargé à la demande) ;
+- les polices Google dans l'aperçu et l'export (elles n'ont pas pu être chargées pendant les tests automatiques, faute d'accès réseau) ;
+- le pincement à deux doigts sur un vrai téléphone.
 
 Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0. Il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée.
 
@@ -111,5 +126,7 @@ src/
   collage/             moteur : modèle, géométrie, rendu, export, projet, catalogue des dispositions
   lib/                 logique pure testée : nommage, sélection, erreurs
   ui/                  écrans (ui/editor : écran du collage)
+  stickers/            catalogues d'icônes et de polices, recherche FR/EN
   dev/                 planche de recette (développement uniquement)
+tools/gen-assets.mjs   génération des catalogues dans public/assets
 ```

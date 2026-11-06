@@ -1,5 +1,6 @@
 import { cellBoxes, placeImage, type CellBox } from './geometry'
-import type { CollageDoc, Layout } from './types'
+import { drawOverlay } from './overlays'
+import type { CollageDoc, Layout, Overlay } from './types'
 
 /** Toute source que le Canvas sait dessiner et dont on connaît la taille. */
 export interface Drawable {
@@ -47,6 +48,7 @@ export function renderCollage(
   height: number,
   imageFor: (cellIndex: number) => Drawable | undefined,
   options: RenderOptions = {},
+  overlayFor: (o: Overlay) => Drawable | undefined = () => undefined,
 ) {
   ctx.save()
   ctx.clearRect(0, 0, width, height)
@@ -68,5 +70,6 @@ export function renderCollage(
       ctx.restore()
     }
   })
+  for (const o of doc.overlays ?? []) drawOverlay(ctx, o, width, height, overlayFor(o))
   ctx.restore()
 }

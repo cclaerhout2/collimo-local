@@ -2,7 +2,7 @@ import type { DriveFileInfo, DriveService } from '../google/types'
 import { uniqueCollageBaseName } from '../lib/naming'
 import { exportCollage, type ExportFormat, type ExportImage } from './export'
 import { PROJECT_SUFFIX, serializeProject } from './project'
-import type { CollageDoc, Layout } from './types'
+import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
 
 export interface SavedCollage {
   baseName: string
@@ -25,6 +25,8 @@ export async function saveCollage(args: {
   format: ExportFormat
   quality: number
   loadForCell: (cellIndex: number, maxSide: number) => Promise<ExportImage>
+  loadOverlay?: (o: Exclude<Overlay, TextOverlay>, maxSide: number) => Promise<ExportImage>
+  prepareText?: (o: TextOverlay) => Promise<void>
   onPhase?: (phase: 'rendering' | 'uploading', done?: number, total?: number) => void
   now?: Date
 }): Promise<SavedCollage> {
@@ -32,7 +34,7 @@ export async function saveCollage(args: {
   const existing = await args.drive.listFolderFiles(args.collimoFolderId)
   const baseName = uniqueCollageBaseName(now, existing.map((f) => f.name))
 
-  args.onPhase?.('rendering', 0, args.doc.photos.length)
+  args.onPhase?.('rendering', 0, args.doc.photos.length + (args.doc.overlays?.length ?? 0))
   const blob = await exportCollage({
     doc: args.doc,
     layout: args.layout,
@@ -41,6 +43,8 @@ export async function saveCollage(args: {
     format: args.format,
     quality: args.quality,
     loadForCell: args.loadForCell,
+    loadOverlay: args.loadOverlay,
+    prepareText: args.prepareText,
     onProgress: (done, total) => args.onPhase?.('rendering', done, total),
   })
 

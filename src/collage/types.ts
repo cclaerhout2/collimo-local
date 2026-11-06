@@ -55,6 +55,67 @@ export interface Borders {
   radius: number
 }
 
+/** Effet activable avec sa couleur. Les tailles sont relatives à la taille du texte. */
+export interface TextEffects {
+  /** Contour : épaisseur 0 à 1 (1 = 15 % de la taille du texte). */
+  stroke: { on: boolean; color: string; width: number }
+  /** Ombre portée : flou et décalage 0 à 1. */
+  shadow: { on: boolean; color: string; blur: number; distance: number }
+  /** Lueur : halo de couleur autour des lettres. */
+  glow: { on: boolean; color: string; blur: number }
+  /** Étiquette : rectangle de fond derrière le texte. */
+  label: { on: boolean; color: string; padding: number; radius: number }
+}
+
+interface OverlayBase {
+  id: string
+  /** Centre, relatif au collage (0 à 1). */
+  cx: number
+  cy: number
+  /** Rotation en degrés. */
+  angle: number
+  /** Opacité de 0 à 1. */
+  opacity: number
+}
+
+export interface TextOverlay extends OverlayBase {
+  type: 'text'
+  text: string
+  font: { family: string; weight: number; italic: boolean }
+  /** Taille du texte, relative au plus petit côté du collage. */
+  size: number
+  /** Largeur maximale avant retour à la ligne, relative à la largeur du collage. */
+  width: number
+  align: 'left' | 'center' | 'right'
+  color: string
+  effects: TextEffects
+}
+
+export interface IconOverlay extends OverlayBase {
+  type: 'icon'
+  set: 'ph' | 'fluent'
+  name: string
+  /** Balise <svg> complète, gardée dans le projet pour le rouvrir à l'identique. */
+  svg: string
+  /** Couleur des icônes d'une couleur (Phosphor) ; sans effet sur les émojis. */
+  color?: string
+  /** Largeur, relative au plus petit côté du collage. */
+  size: number
+}
+
+export interface ImageOverlay extends OverlayBase {
+  type: 'image'
+  fileId: string
+  name: string
+  mimeType: string
+  /** Largeur, relative au plus petit côté du collage. */
+  size: number
+  /** Hauteur / largeur. */
+  aspect: number
+}
+
+export type Overlay = TextOverlay | IconOverlay | ImageOverlay
+
 export interface CollageDoc {
   version: 1
   ratio: string
@@ -63,6 +124,8 @@ export interface CollageDoc {
   photos: PlacedPhoto[]
   borders: Borders
   background: string
+  /** Textes et stickers, du plus bas au plus haut. */
+  overlays?: Overlay[]
   /** Découpe ajustée à la main (séparations déplacées) ; seulement pour les dispositions en découpe. */
   split?: string
   /** Nom du collage dont celui-ci a été tiré, s'il a été rouvert. */

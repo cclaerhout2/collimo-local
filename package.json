@@ -11,7 +11,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy:preview": "npm run build && firebase hosting:channel:deploy test --only collimo",
-    "deploy": "npm run build && firebase deploy --only hosting:collimo"
+    "deploy": "npm run build && firebase deploy --only hosting:collimo",
+    "gen:assets": "node tools/gen-assets.mjs"
   },
   "dependencies": {
     "heic-to": "^1.6.7",
@@ -19,11 +20,15 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@iconify-json/fluent-emoji-flat": "^1.2.6",
+    "@iconify-json/ph": "^1.2.2",
+    "@phosphor-icons/core": "^2.1.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "google-fonts-complete": "^2.2.3",
     "jsdom": "^31.0.0",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
