@@ -31,7 +31,7 @@ declare namespace google.accounts.oauth2 {
 }
 
 declare namespace google.picker {
-  const ViewId: { FOLDERS: string }
+  const ViewId: { FOLDERS: string; DOCS_IMAGES: string }
   const Action: { PICKED: string; CANCEL: string }
   const Feature: { SUPPORT_DRIVES: string }
   interface PickedDoc {

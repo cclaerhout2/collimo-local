@@ -1,4 +1,5 @@
 import { layoutById } from './catalog'
+import { splitToRects } from './layoutDsl'
 import { RATIOS } from './ratios'
 import { DEFAULT_CROP, type CollageDoc, type PlacedPhoto } from './types'
 
@@ -51,6 +52,14 @@ export function parseProject(raw: unknown): CollageDoc {
   })
   const layout = typeof d.layoutId === 'string' ? layoutById(d.layoutId) : undefined
   const b = (d.borders ?? {}) as Partial<CollageDoc['borders']>
+  let split: string | undefined
+  if (layout?.split && typeof d.split === 'string') {
+    try {
+      if (splitToRects(d.split).length === photos.length) split = d.split
+    } catch {
+      /* découpe ajustée illisible : ignorée */
+    }
+  }
   return {
     version: 1,
     ratio: RATIOS.some((r) => r.id === d.ratio) ? (d.ratio as string) : '1:1',
@@ -59,6 +68,7 @@ export function parseProject(raw: unknown): CollageDoc {
     photos,
     borders: { spacing: num(b.spacing, 0, 0, 1), margin: num(b.margin, 0, 0, 1), radius: num(b.radius, 0, 0, 1) },
     background: typeof d.background === 'string' && /^#[0-9a-f]{6}$/i.test(d.background) ? d.background : '#ffffff',
+    split,
     createdFrom: typeof d.createdFrom === 'string' ? d.createdFrom : undefined,
   }
 }

@@ -123,6 +123,11 @@ export function createMockServices(): Services {
         return delay({ id: f.id, name: f.name, driveId: f.driveId, canAddChildren: f.canAddChildren })
       },
       listPhotos: (folder) => delay(folders[folder.id]?.photos ?? [], 600),
+      async getPhoto(id) {
+        const p = Object.values(folders).flatMap((f) => f.photos).find((x) => x.id === id)
+        if (!p) throw new Error('photo not found')
+        return delay(p, 150)
+      },
       ensureCollimoFolder: (folderId) => delay(`${folderId}/${COLLIMO_FOLDER_NAME}`),
       loadSettings: () => delay(settings),
       async saveSettings(s) {
@@ -154,6 +159,12 @@ export function createMockServices(): Services {
       },
     },
     picker: {
+      async pickImage(drive) {
+        // Démo : la dernière photo du premier dossier de ce Drive.
+        const f = Object.values(folders).find((x) => x.driveId === drive.id)
+        const p = f?.photos.filter((x) => x.supported).at(-1)
+        return delay(p ? { id: p.id } : null, 300)
+      },
       async pickFolder(drive) {
         // Le vrai sélecteur Google est une fenêtre ; ici on choisit le premier dossier du Drive.
         const match = Object.values(folders).find((f) => f.driveId === drive.id)

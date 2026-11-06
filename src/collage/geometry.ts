@@ -15,13 +15,16 @@ export interface CellBox extends Rect {
  * constant entre cases voisines et la marge voulue au bord, pour les découpes comme pour les
  * rectangles libres.
  */
-export function cellBoxes(cells: Rect[], width: number, height: number, borders: Borders): CellBox[] {
+export function drawingArea(width: number, height: number, borders: Borders) {
   const unit = Math.min(width, height)
   const gap = borders.spacing * MAX_SPACING * unit
   const margin = borders.margin * MAX_MARGIN * unit
   const outer = margin - gap / 2
-  const areaW = width - 2 * outer
-  const areaH = height - 2 * outer
+  return { gap, outer, areaW: width - 2 * outer, areaH: height - 2 * outer }
+}
+
+export function cellBoxes(cells: Rect[], width: number, height: number, borders: Borders): CellBox[] {
+  const { gap, outer, areaW, areaH } = drawingArea(width, height, borders)
   return cells.map((c) => {
     const x = outer + c.x * areaW + gap / 2
     const y = outer + c.y * areaH + gap / 2

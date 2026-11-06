@@ -86,6 +86,8 @@ export interface DriveService {
   listSharedDrives(): Promise<DriveRef[]>
   getFolder(id: string): Promise<FolderInfo>
   listPhotos(folder: { id: string }, driveId: string | null): Promise<Photo[]>
+  /** Une photo par son identifiant (après un choix dans le sélecteur). */
+  getPhoto(id: string): Promise<Photo>
   /** Retrouve ou crée le sous-dossier « Collimo » ; renvoie son identifiant. */
   ensureCollimoFolder(folderId: string): Promise<string>
   loadSettings(): Promise<UserSettings | null>
@@ -102,6 +104,8 @@ export interface DriveService {
 export interface FolderPicker {
   /** Ouvre le sélecteur de dossier sur le Drive donné ; null si l'utilisateur annule. */
   pickFolder(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string; name: string } | null>
+  /** Ouvre le sélecteur de photos sur le Drive donné ; null si l'utilisateur annule. */
+  pickImage(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string } | null>
 }
 
 export interface Services {

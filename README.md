@@ -6,7 +6,17 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 2 — écran du collage** (branche `etape-2`) :
+**Étape 3 — travail sur chaque photo** (branche `etape-3`) :
+
+- toucher ou cliquer une photo pour la sélectionner (cadre vert), toucher à côté pour désélectionner ;
+- glisser pour recadrer ; molette, pincement (doigts ou trackpad) ou double-clic pour zoomer, centré sous le curseur ;
+- poignée ronde pour tourner, à la souris ou au doigt, ou rotation à deux doigts ; aimantation à 0/90/180/270°, pas de 15° avec Maj ;
+- poignées vertes sur les séparations pour agrandir une case aux dépens de sa voisine (dispositions en découpe) ;
+- échanger deux photos : bouton « Échanger » puis toucher l'autre photo, ou appui long d'une demi-seconde puis glisser ;
+- menu : Échanger, Inverser, Rotation, Recadrer (zoom et angle au curseur, Réinitialiser), Remplacer (une photo du Drive en cours), Supprimer (disposition la plus proche avec une photo de moins) ;
+- clavier : flèches pour déplacer, + et − pour zoomer, Échap pour désélectionner.
+
+**Étape 2 — écran du collage** :
 
 - format (1:1 par défaut, 4:5, 9:16, 16:9, A4…), disposition, bords (écart, marge, arrondi), couleur de fond ;
 - catalogue des dispositions en rectangles, transcrit depuis les captures de référence (`src/collage/catalog/`) ;

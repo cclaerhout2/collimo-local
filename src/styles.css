@@ -1067,3 +1067,162 @@ a.btn {
     line-height: 1.2;
   }
 }
+
+/* Gestes sur l'aperçu */
+.canvas-frame {
+  position: relative;
+  flex: none;
+}
+
+.interaction {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.interaction.picking {
+  cursor: copy;
+}
+
+.interaction-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.selection {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.interaction:focus-visible .selection {
+  stroke-dasharray: 6 4;
+}
+
+.lifted {
+  fill: rgba(255, 255, 255, 0.28);
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.drop-target {
+  fill: rgba(45, 212, 167, 0.18);
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
+
+.handle {
+  pointer-events: all;
+  cursor: grab;
+}
+
+.handle circle {
+  fill: var(--accent);
+  stroke: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45));
+}
+
+.rotate-handle path {
+  stroke: var(--accent-ink);
+}
+
+.rotate-stem {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.divider-handle.ew {
+  cursor: ew-resize;
+}
+
+.divider-handle.ns {
+  cursor: ns-resize;
+}
+
+/* Menu de la photo */
+.photo-menu {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.photo-actions {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.photo-action {
+  flex: 1 0 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0.7rem 0.3rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.photo-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.photo-action.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.photo-action.danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.photo-action.done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.actions-tight {
+  margin-top: 0.25rem;
+}
+
+.editor-notice {
+  padding: 0 1rem;
+}
+
+@media (max-width: 480px) {
+  .panel:has(.photo-menu) {
+    height: auto;
+  }
+
+  .photo-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    overflow: visible;
+  }
+
+  .photo-action {
+    padding: 0.55rem 0.2rem;
+    font-size: 0.75rem;
+  }
+
+  .photo-menu .panel-note {
+    font-size: 0.75rem;
+  }
+}

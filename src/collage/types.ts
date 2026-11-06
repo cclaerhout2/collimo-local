@@ -63,6 +63,8 @@ export interface CollageDoc {
   photos: PlacedPhoto[]
   borders: Borders
   background: string
+  /** Découpe ajustée à la main (séparations déplacées) ; seulement pour les dispositions en découpe. */
+  split?: string
   /** Nom du collage dont celui-ci a été tiré, s'il a été rouvert. */
   createdFrom?: string
 }

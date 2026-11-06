@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { renderCollage, type Drawable } from '../../collage/render'
 import type { CollageDoc, Layout } from '../../collage/types'
 
@@ -9,10 +9,12 @@ interface Props {
   imageFor: (cellIndex: number) => Drawable | undefined
   /** Change à chaque photo chargée, pour redessiner. */
   version: number
+  /** Couche posée exactement sur l'aperçu (gestes, sélection). */
+  overlay?: (size: { width: number; height: number }) => ReactNode
 }
 
 /** Aperçu du collage, ajusté à la place disponible et net sur les écrans haute densité. */
-export function CollageCanvas({ doc, layout, ratio, imageFor, version }: Props) {
+export function CollageCanvas({ doc, layout, ratio, imageFor, version, overlay }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -46,13 +48,16 @@ export function CollageCanvas({ doc, layout, ratio, imageFor, version }: Props) 
 
   return (
     <div className="canvas-wrap" ref={wrapRef}>
-      <canvas
-        ref={canvasRef}
-        className="collage-canvas"
-        style={{ width: fit.width, height: fit.height }}
-        role="img"
-        aria-label={`${doc.photos.length} photo(s), ${layout.id}`}
-      />
+      <div className="canvas-frame" style={{ width: fit.width, height: fit.height }}>
+        <canvas
+          ref={canvasRef}
+          className="collage-canvas"
+          style={{ width: fit.width, height: fit.height }}
+          role="img"
+          aria-label={`${doc.photos.length} photo(s), ${layout.id}`}
+        />
+        {overlay && fit.width > 0 && overlay(fit)}
+      </div>
     </div>
   )
 }

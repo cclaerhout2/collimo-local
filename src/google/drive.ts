@@ -168,6 +168,16 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
       return files.map(toPhoto)
     },
 
+    async getPhoto(id) {
+      const f = await call<RawFile>(
+        url(`/files/${encodeURIComponent(id)}`, {
+          supportsAllDrives: 'true',
+          fields: 'id,name,mimeType,thumbnailLink,imageMediaMetadata(width,height,rotation)',
+        }),
+      )
+      return toPhoto(f)
+    },
+
     async ensureCollimoFolder(folderId) {
       const existing = await listAll<{ id: string }>('/files', 'files', {
         supportsAllDrives: 'true',

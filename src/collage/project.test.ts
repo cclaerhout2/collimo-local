@@ -43,6 +43,16 @@ describe('fichier projet', () => {
     },
   )
 
+  it('garde une découpe ajustée valide, ignore une découpe invalide', () => {
+    const two = { ...doc, layoutId: 'p02-01', photos: [doc.photos[0], { ...doc.photos[0], id: 'b' }] }
+    const ok = parseProject(JSON.parse(serializeProject({ ...two, split: 'c(1.4*x,0.6*x)' }, new Date())))
+    expect(ok.split).toBe('c(1.4*x,0.6*x)')
+    const wrongCount = parseProject(JSON.parse(serializeProject({ ...two, split: 'c(x,x,x)' }, new Date())))
+    expect(wrongCount.split).toBeUndefined()
+    const garbage = parseProject(JSON.parse(serializeProject({ ...two, split: 'c(x' }, new Date())))
+    expect(garbage.split).toBeUndefined()
+  })
+
   it('retrouve le nom de base', () => {
     expect(projectBaseName('Collimo_2026-11-06_23-07-12_2.collimo.json')).toBe('Collimo_2026-11-06_23-07-12_2')
   })

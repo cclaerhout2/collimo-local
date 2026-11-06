@@ -14,38 +14,43 @@ function loadPicker(): Promise<void> {
   return pickerReady
 }
 
-/** Sélecteur de dossier Google Picker, ouvert sur Mon Drive ou sur un Drive partagé. */
+/** Sélecteur Google Picker (dossiers ou photos), ouvert sur Mon Drive ou sur un Drive partagé. */
 export function createGooglePicker(config: AppConfig, getToken: () => string): FolderPicker {
-  return {
-    async pickFolder(drive: DriveRef, lang: Lang, title: string) {
-      await loadPicker()
-      const token = getToken()
-      return new Promise((resolve) => {
-        const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-          .setIncludeFolders(true)
-          .setSelectFolderEnabled(true)
-          .setMimeTypes(FOLDER_MIME)
-        if (drive.id) view.setEnableDrives(true).setParent(drive.id)
-        else view.setParent('root')
+  async function open(drive: DriveRef, lang: Lang, title: string, view: google.picker.DocsView) {
+    await loadPicker()
+    const token = getToken()
+    if (drive.id) view.setEnableDrives(true).setParent(drive.id)
+    else view.setParent('root')
+    return new Promise<{ id: string; name: string } | null>((resolve) => {
+      new google.picker.PickerBuilder()
+        .addView(view)
+        .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+        .setOAuthToken(token)
+        .setDeveloperKey(config.apiKey)
+        .setAppId(config.appId)
+        .setLocale(lang)
+        .setTitle(title)
+        .setCallback((data) => {
+          if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
+            resolve({ id: data.docs[0].id, name: data.docs[0].name })
+          } else if (data.action === google.picker.Action.CANCEL) {
+            resolve(null)
+          }
+        })
+        .build()
+        .setVisible(true)
+    })
+  }
 
-        new google.picker.PickerBuilder()
-          .addView(view)
-          .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
-          .setOAuthToken(token)
-          .setDeveloperKey(config.apiKey)
-          .setAppId(config.appId)
-          .setLocale(lang)
-          .setTitle(title)
-          .setCallback((data) => {
-            if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
-              resolve({ id: data.docs[0].id, name: data.docs[0].name })
-            } else if (data.action === google.picker.Action.CANCEL) {
-              resolve(null)
-            }
-          })
-          .build()
-          .setVisible(true)
-      })
-    },
+  return {
+    pickFolder: (drive, lang, title) =>
+      open(
+        drive,
+        lang,
+        title,
+        new google.picker.DocsView(google.picker.ViewId.FOLDERS).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(FOLDER_MIME),
+      ),
+    pickImage: (drive, lang, title) =>
+      open(drive, lang, title, new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true)),
   }
 }
