@@ -164,10 +164,10 @@ export function createMockServices(): Services {
         const stored = files.get(id)
         return stored ? stored.data : fakeOriginal(id)
       },
-      listFolderFiles: (folderId) =>
+      listFolderFiles: (folderId, namePrefix) =>
         delay(
           [...files.values()]
-            .filter((f) => f.parent === folderId)
+            .filter((f) => f.parent === folderId && (!namePrefix || f.name.includes(namePrefix)))
             .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
             .map(({ id, name, modifiedTime, webViewLink, thumbnailLink }) => ({ id, name, modifiedTime, webViewLink, thumbnailLink })),
         ),

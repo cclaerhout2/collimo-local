@@ -4,7 +4,7 @@ import { drawOverlay, overlayBox } from './overlays'
 import { isIdentity, paramsForPhoto, vignetteFor } from './color'
 import { processPhoto } from './colorProcessor'
 import { cellStyle, drawDecor, drawPhotoInCell, drawVignette, finishCell, underCell, type Drawable } from './render'
-import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
+import type { CollageDoc, Layout, Overlay, PlacedPhoto, TextOverlay } from './types'
 
 export type ExportFormat = 'jpeg' | 'png'
 export type ExportPreset = 'standard' | 'hd' | 'max'
@@ -37,6 +37,22 @@ export function nativeLongSide(doc: CollageDoc, layout: Layout, ratio: number): 
     best = best === null ? side : Math.max(best, side)
   })
   return best
+}
+
+/**
+ * Plus grand côté de la source nécessaire pour dessiner la photo dans une case (w × h px) sans
+ * agrandissement, au zoom et à l'angle du cadrage. Sans dimensions connues, √2 couvre toute rotation.
+ */
+export function sourceLongSide(w: number, h: number, photo: Pick<PlacedPhoto, 'width' | 'height' | 'crop'>): number {
+  const zoom = Math.max(1, photo.crop.zoom)
+  if (!photo.width || !photo.height) return Math.ceil(Math.max(w, h) * zoom * Math.SQRT2)
+  const a = (photo.crop.angle * Math.PI) / 180
+  const cos = Math.abs(Math.cos(a))
+  const sin = Math.abs(Math.sin(a))
+  const needW = w * cos + h * sin
+  const needH = w * sin + h * cos
+  const scale = Math.max(needW / photo.width, needH / photo.height) * zoom
+  return Math.ceil(Math.max(photo.width, photo.height) * scale)
 }
 
 export interface ExportSize {
@@ -113,9 +129,7 @@ export async function exportCollage(args: {
     const photo = doc.photos[i]
     const cell = cells[i]
     const box = cell.box
-    // Marge pour le zoom et la rotation : √2 couvre une rotation quelconque.
-    const maxSide = Math.ceil(Math.max(box.w, box.h) * Math.max(1, photo.crop.zoom) * Math.SQRT2)
-    const img = await args.loadForCell(i, maxSide)
+    const img = await args.loadForCell(i, sourceLongSide(box.w, box.h, photo))
     underCell(ctx, cell, style)
     try {
       ctx.imageSmoothingQuality = 'high'

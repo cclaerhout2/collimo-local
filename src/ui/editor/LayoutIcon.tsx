@@ -1,10 +1,11 @@
+import { memo } from 'react'
 import { cellGeometry, decorGeometry, gapPx } from '../../collage/cells'
 import type { Layout } from '../../collage/types'
 
 const ICON_BORDERS = { spacing: 0.6, margin: 0.45, radius: 0.1 }
 
 /** Vignette d'une disposition : cases sombres sur fond gris, comme dans l'app de référence. */
-export function LayoutIcon({ layout, size = 64 }: { layout: Layout; size?: number }) {
+export const LayoutIcon = memo(function LayoutIcon({ layout, size = 64 }: { layout: Layout; size?: number }) {
   const cells = cellGeometry(layout, size, size, ICON_BORDERS)
   const gap = gapPx(size, size, ICON_BORDERS)
   return (
@@ -22,4 +23,4 @@ export function LayoutIcon({ layout, size = 64 }: { layout: Layout; size?: numbe
       ))}
     </svg>
   )
-}
+})

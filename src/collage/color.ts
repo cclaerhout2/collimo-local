@@ -127,8 +127,8 @@ export function adjustPixel(c: RGB, a: Adjustments): RGB {
   return [clamp01(r), clamp01(g), clamp01(b)]
 }
 
-export function lookPixel(c: RGB, look: FilterLook): RGB {
-  let [r, g, b] = adjustPixel(c, combine(look.adjust))
+export function lookPixel(c: RGB, look: FilterLook, lookAdjust: Adjustments = combine(look.adjust)): RGB {
+  let [r, g, b] = adjustPixel(c, lookAdjust)
   if (look.mono) r = g = b = luma(r, g, b)
   const L = luma(r, g, b)
   const st = look.shadowTint ?? [0, 0, 0]
@@ -150,10 +150,10 @@ export interface ColorParams {
   intensity: number
 }
 
-export function colorPixel(c: RGB, p: ColorParams): RGB {
+export function colorPixel(c: RGB, p: ColorParams, lookAdjust?: Adjustments): RGB {
   const base = adjustPixel(c, p.adjust)
   if (!p.look || p.intensity <= 0) return base
-  const f = lookPixel(base, p.look)
+  const f = lookPixel(base, p.look, lookAdjust)
   const t = clamp01(p.intensity)
   return [base[0] + (f[0] - base[0]) * t, base[1] + (f[1] - base[1]) * t, base[2] + (f[2] - base[2]) * t]
 }

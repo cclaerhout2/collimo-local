@@ -110,8 +110,8 @@ export interface DriveService {
   saveSettings(settings: UserSettings): Promise<void>
   /** Contenu d'un fichier (photos originales, repli des miniatures). */
   fetchFileBlob(id: string): Promise<Blob>
-  /** Fichiers directement dans un dossier (hors sous-dossiers), du plus récent au plus ancien. */
-  listFolderFiles(folderId: string): Promise<DriveFileInfo[]>
+  /** Fichiers directement dans un dossier (hors sous-dossiers), du plus récent au plus ancien ; `namePrefix` limite aux noms qui le contiennent. */
+  listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   readJson(id: string): Promise<unknown>
   /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo). */
   uploadFile(folderId: string, name: string, data: Blob, mimeType: string): Promise<DriveFileInfo>

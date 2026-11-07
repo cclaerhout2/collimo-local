@@ -99,7 +99,11 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const failed = useRef(new Set<string>())
   const limiter = useMemo(() => createLimiter(3), [])
 
-  const layout = resolveLayout(doc)
+  // Mémo : une découpe ajustée à la main donnerait sinon un nouvel objet à chaque rendu, donc un redessin.
+  const layoutId = doc.layoutId
+  const split = doc.split
+  const photoCount = doc.photos.length
+  const layout = useMemo(() => resolveLayout(layoutId, split, photoCount), [layoutId, split, photoCount])
   const ratio = ratioValue(doc.ratio)
   const photoKey = doc.photos.map((p) => p.id).sort().join('|')
 

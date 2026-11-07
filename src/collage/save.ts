@@ -1,5 +1,5 @@
 import type { DriveFileInfo, DriveService } from '../google/types'
-import { uniqueCollageBaseName } from '../lib/naming'
+import { collageStamp, uniqueCollageBaseName } from '../lib/naming'
 import { exportCollage, type ExportFormat, type ExportImage } from './export'
 import { PROJECT_SUFFIX, serializeProject } from './project'
 import type { CollageDoc, Layout, Overlay, TextOverlay } from './types'
@@ -31,7 +31,8 @@ export async function saveCollage(args: {
   now?: Date
 }): Promise<SavedCollage> {
   const now = args.now ?? new Date()
-  const existing = await args.drive.listFolderFiles(args.collimoFolderId)
+  // Seuls les fichiers de la même seconde comptent pour le suffixe : inutile de lister tout le dossier.
+  const existing = await args.drive.listFolderFiles(args.collimoFolderId, collageStamp(now))
   const baseName = uniqueCollageBaseName(now, existing.map((f) => f.name))
 
   args.onPhase?.('rendering', 0, args.doc.photos.length + (args.doc.overlays?.length ?? 0))

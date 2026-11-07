@@ -1,5 +1,5 @@
 /**
- * Génère les catalogues servis par l'app, chargés à la demande depuis public/assets :
+ * Génère les catalogues servis par l'app, chargés à la demande depuis public/data :
  *   fonts.json                 polices Google (nom, catégorie, graisses, italique)
  *   ph/index.json              icônes Phosphor (nom, catégories, mots-clés)
  *   ph/regular.json, fill.json corps SVG par graisse (couleur = currentColor, viewBox 256)
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const out = join(root, 'public', 'assets')
+const out = join(root, 'public', 'data')
 const write = (rel, data) => {
   const p = join(out, rel)
   mkdirSync(dirname(p), { recursive: true })

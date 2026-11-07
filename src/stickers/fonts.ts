@@ -18,7 +18,7 @@ export const DEFAULT_FONT = 'Montserrat'
 let catalog: Promise<FontEntry[]> | null = null
 
 export function loadFontCatalog(): Promise<FontEntry[]> {
-  catalog ??= fetch('/assets/fonts.json')
+  catalog ??= fetch('/data/fonts.json')
     .then((r) => {
       if (!r.ok) throw new Error(`fonts.json : ${r.status}`)
       return r.json() as Promise<{ f: string; c: string; w: number[]; i: boolean }[]>

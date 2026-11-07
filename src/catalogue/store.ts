@@ -62,7 +62,8 @@ export async function saveCatalogue(
     try {
       file = await drive.updateJsonFile(file.id, next)
     } catch (e) {
-      if (e instanceof DriveApiError && (e.status === 403 || e.status === 404)) throw new CatalogueGrantError()
+      // 403 « droits insuffisants » (et non quota) ou 404 : Collimo n'est pas autorisé sur ce fichier.
+      if (e instanceof DriveApiError && !e.isRateLimit && (e.status === 403 || e.status === 404)) throw new CatalogueGrantError()
       throw e
     }
   }

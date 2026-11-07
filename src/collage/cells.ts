@@ -73,8 +73,29 @@ export function defBBox(c: CellDef): Rect {
   return pathBBox(cellPathFrame(c, 1)!.segs)
 }
 
-/** Cases d'une disposition en pixels, pour un collage de taille (width, height). */
+/**
+ * Cases d'une disposition en pixels, pour un collage de taille (width, height).
+ * Les derniers résultats sont gardés : pendant un geste, l'aperçu, la couche des gestes et l'export
+ * redemandent la même géométrie plusieurs fois par image.
+ */
 export function cellGeometry(layout: Layout, width: number, height: number, borders: Borders): CellGeom[] {
+  const key = `${width}|${height}|${borders.spacing}|${borders.margin}|${borders.radius}|${borders.outline ?? 0}`
+  let byKey = geomCache.get(layout)
+  const hit = byKey?.get(key)
+  if (hit) return hit
+  const out = computeCellGeometry(layout, width, height, borders)
+  if (!byKey) {
+    byKey = new Map()
+    geomCache.set(layout, byKey)
+  }
+  if (byKey.size >= 8) byKey.delete(byKey.keys().next().value!)
+  byKey.set(key, out)
+  return out
+}
+
+const geomCache = new WeakMap<Layout, Map<string, CellGeom[]>>()
+
+function computeCellGeometry(layout: Layout, width: number, height: number, borders: Borders): CellGeom[] {
   if (!layout.geo) return cellBoxes(layout.cells, width, height, borders).map((box) => ({ box }))
   const { outer, areaW, areaH } = drawingArea(width, height, borders)
   const aspect = areaW / Math.max(1, areaH)

@@ -44,10 +44,16 @@ export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvas
     const canvas = canvasRef.current
     if (!canvas || fit.width <= 0 || fit.height <= 0) return
     const dpr = Math.min(window.devicePixelRatio || 1, 3)
-    canvas.width = Math.round(fit.width * dpr)
-    canvas.height = Math.round(fit.height * dpr)
+    // Ne redimensionne que si besoin : affecter la même taille vide et réalloue le canvas.
+    // `reset()` remet le contexte à neuf sans réallouer ; à défaut, on réaffecte la taille.
+    const w = Math.round(fit.width * dpr)
+    const h = Math.round(fit.height * dpr)
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    if (canvas.width !== w || canvas.height !== h || !('reset' in ctx)) {
+      canvas.width = w
+      canvas.height = h
+    } else ctx.reset()
     renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44', raw }, overlayFor)
     if (externalRef) externalRef.current = canvas
   }, [doc, layout, imageFor, overlayFor, externalRef, version, raw, fit.width, fit.height])

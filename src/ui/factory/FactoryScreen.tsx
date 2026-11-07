@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { defBBox } from '../../collage/cells'
 import { builtinLayouts, buildLayout } from '../../collage/catalog'
 import {
@@ -420,12 +420,14 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
   const [shapesOpen, setShapesOpen] = useState(false)
   const [cutDraft, setCutDraft] = useState<{ amp: number; n: number }>({ amp: 0.05, n: 3 })
 
-  const issues = useMemo(() => validateCells(cells, meta.photos), [cells, meta.photos])
+  // Vérifications et aperçu suivent les gestes avec un temps de retard : le glissé reste fluide.
+  const settled = useDeferredValue(cells)
+  const issues = useMemo(() => validateCells(settled, meta.photos), [settled, meta.photos])
   const dirty = cells !== savedCells || JSON.stringify(meta) !== JSON.stringify(savedMeta)
   const published = meta.stored === 'published' || meta.stored === 'hidden'
   const sel = selected !== null ? cells[selected] : null
 
-  const set = hist.set
+  const { set, undo, redo } = hist
   const change = (next: CellDef[]) => set(next)
 
   // L'éditeur s'ouvre en haut de la page (la bibliothèque a pu être défilée).
@@ -440,8 +442,8 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
       if (target.closest('input, textarea, select')) return
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
-        if (e.shiftKey) hist.redo()
-        else hist.undo()
+        if (e.shiftKey) redo()
+        else undo()
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && selected !== null) {
         e.preventDefault()
         if (point !== null) {
@@ -455,7 +457,7 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [hist, selected, point, set])
+  }, [undo, redo, selected, point, set])
 
   function add(cell: CellDef) {
     set((c) => [...c, cell])
@@ -790,7 +792,7 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
             )}
           </section>
 
-          <FactoryPreview cells={cells} decor={meta.decor} images={images} />
+          <FactoryPreview cells={settled} decor={meta.decor} images={images} />
 
           <section className="factory-panel factory-save">
             {notice && !dirty && <p className="check-ok" role="status">{t(notice)}</p>}

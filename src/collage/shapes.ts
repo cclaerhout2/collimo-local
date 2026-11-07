@@ -366,13 +366,13 @@ export function pieDisc(n: number, cx = 0.5, cy = 0.5, r = 0.5, start = 0): Cell
  * Hexagones pointe en haut, en rangées décalées. `cells` = positions [colonne, rangée] ;
  * `size` = largeur d'un hexagone ; (x0, y0) = centre de la case [0, 0].
  */
-export function hexes(cells: [number, number][], size: number, x0: number, y0: number, gapless = true): CellDef[] {
+export function hexes(cells: [number, number][], size: number, x0: number, y0: number): CellDef[] {
   const w = size
   const h = size / 0.866
   return cells.map(([c, r]) => {
     const cx = x0 + c * w + (r % 2 ? w / 2 : 0)
     const cy = y0 + r * h * 0.75
-    return gapless ? shape('hexagon', cx - h / 2, cy - h / 2, h, h) : shape('hexagon', cx - h / 2, cy - h / 2, h, h)
+    return shape('hexagon', cx - h / 2, cy - h / 2, h, h)
   })
 }
 

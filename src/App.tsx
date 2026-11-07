@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { config, missingConfig } from './config'
 import { defaultLayoutFor, setCustomCatalogue } from './collage/catalog'
 import { loadCatalogue, type CatalogueState } from './catalogue/store'
@@ -10,7 +10,9 @@ import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './
 import { useI18n, type Lang } from './i18n'
 import { isAllowedEmail, toUiError, type UiError } from './lib/errors'
 import { EditorScreen } from './ui/editor/EditorScreen'
-import { FactoryScreen } from './ui/factory/FactoryScreen'
+
+/** L'usine (admins seulement) n'est chargée qu'à l'ouverture. */
+const FactoryScreen = lazy(() => import('./ui/factory/FactoryScreen').then((m) => ({ default: m.FactoryScreen })))
 import { ErrorBanner } from './ui/ErrorBanner'
 import { GalleryScreen } from './ui/GalleryScreen'
 import type { ProjectEntry } from './ui/ProjectsList'
@@ -201,15 +203,17 @@ export default function App() {
       )}
 
       {phase.name === 'factory' && location && catalogue && user && (
-        <FactoryScreen
-          services={services}
-          location={location}
-          catalogue={catalogue}
-          userEmail={user.email}
-          onCatalogueChange={applyCatalogue}
-          onBack={() => setPhase({ name: 'gallery' })}
-          onError={handleError}
-        />
+        <Suspense fallback={<main className="screen screen-center"><div className="spinner" aria-label={t('signin.loading')} /></main>}>
+          <FactoryScreen
+            services={services}
+            location={location}
+            catalogue={catalogue}
+            userEmail={user.email}
+            onCatalogueChange={applyCatalogue}
+            onBack={() => setPhase({ name: 'gallery' })}
+            onError={handleError}
+          />
+        </Suspense>
       )}
 
       {phase.name === 'editor' && location && (

@@ -34,7 +34,7 @@ export const CATEGORY_LABELS: Record<string, [string, string]> = {
   flags: ['Drapeaux', 'Flags'],
 }
 
-const ASSETS = '/assets'
+const ASSETS = '/data'
 const cache = new Map<string, Promise<unknown>>()
 
 function fetchJson<T>(path: string): Promise<T> {

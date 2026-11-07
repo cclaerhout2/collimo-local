@@ -58,7 +58,7 @@ Vérifié dans Chrome : carte graphique et calcul de secours donnent le même r�
 - annuler / rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z) pour toutes les actions de l'éditeur ;
 - les textes et stickers sont enregistrés dans le projet et exportés en pleine résolution (icônes redessinées à la taille finale).
 
-Les catalogues d'icônes et de polices sont générés dans `public/assets` par `npm run gen:assets` et chargés seulement à l'ouverture des panneaux. Les SVG relus depuis un projet sont filtrés (ni script ni lien externe).
+Les catalogues d'icônes et de polices sont générés dans `public/data` par `npm run gen:assets` et chargés seulement à l'ouverture des panneaux. Les SVG relus depuis un projet sont filtrés (ni script ni lien externe).
 
 **Étape 3 — travail sur chaque photo** :
 
@@ -113,6 +113,19 @@ Trois scripts, lancés d'un double-clic, sans ligne de commande ni droits d'admi
 - Les outils (Node.js, Git, Firebase) s'installent dans le profil Windows de l'utilisateur, sans toucher au système.
 
 La configuration est enregistrée dans `.firebaserc` et `.env.production`, versionnés : ces valeurs ne sont pas secrètes (elles sont visibles dans le site publié). `deploy.bat` ne publie que la cible `hosting:collimo` : les autres sites et bases du projet ne sont jamais touchés.
+
+## Relecture et optimisations
+
+Après l'étape 7, tout le code a été relu par des relecteurs indépendants (moteur, interface, Drive et build). Corrigé :
+
+- **export** : la taille de source demandée pour chaque photo tient compte de ses proportions et de son angle (plus de flou léger sur les photos panoramiques dans les cases hautes, plus de sources inutilement géantes) ;
+- **réglages** : les textures restent sur la carte graphique pendant qu'on bouge un curseur (plus de renvoi des 20 photos à chaque pas) ; le repli processeur ne fait plus d'allocations par pixel ; un contexte WebGL perdu (onglet en arrière-plan sur mobile) est recréé ;
+- **gestes** : la géométrie des cases est mise en mémoire pendant un geste ; le canvas de l'aperçu n'est plus réalloué à chaque image ; la disposition n'est recalculée que si elle change ;
+- **usine** : les vérifications et l'aperçu suivent le glissé avec un temps de retard, pour qu'il reste fluide ; l'usine n'est chargée qu'à son ouverture ;
+- **Drive** : réessais automatiques (quota, erreurs 5xx, réseau) ; reprise d'un envoi interrompu ; miniature expirée redemandée à Drive avant de lire le fichier entier ; moins de requêtes à l'enregistrement ;
+- **cache** : les catalogues d'icônes et de polices sont servis depuis `/data/` avec un cache d'un jour (les fichiers `/assets/` de Vite, nommés par empreinte, restent en cache un an) ; `index.html` n'est jamais mis en cache.
+
+Jugé inutile : découper davantage le code (le catalogue des 541 dispositions se construit en 23 ms), dédoubler le canvas de l'aperçu, ou changer le décodage HEIC (déjà chargé à la demande).
 
 ## Démarrer en local
 
@@ -205,5 +218,5 @@ src/
   ui/                  écrans (ui/editor : écran du collage, ui/factory : usine à dispositions)
   stickers/            catalogues d'icônes et de polices, recherche FR/EN
   dev/                 planche de recette (développement uniquement)
-tools/gen-assets.mjs   génération des catalogues dans public/assets
+tools/gen-assets.mjs   génération des catalogues dans public/data
 ```

@@ -1,6 +1,6 @@
 import { defBBox } from '../cells'
 import { splitToRects } from '../layoutDsl'
-import type { CollageDoc, Layout, LayoutDef } from '../types'
+import type { Layout, LayoutDef } from '../types'
 import type { CatalogueData } from './custom'
 import { CATALOG_DEFS } from './defs'
 
@@ -101,12 +101,12 @@ export function defaultLayoutFor(photoCount: number): Layout {
  * Disposition effective d'un collage : celle du catalogue, avec les séparations déplacées à la main
  * si le collage en a. Une découpe ajustée invalide est ignorée.
  */
-export function resolveLayout(doc: Pick<CollageDoc, 'layoutId' | 'split' | 'photos'>): Layout {
-  const base = layoutById(doc.layoutId) ?? defaultLayoutFor(doc.photos.length)
-  if (!doc.split || !base.split) return base
+export function resolveLayout(layoutId: string, split: string | undefined, photoCount: number): Layout {
+  const base = layoutById(layoutId) ?? defaultLayoutFor(photoCount)
+  if (!split || !base.split) return base
   try {
-    const cells = splitToRects(doc.split)
-    if (cells.length === base.photos) return { ...base, split: doc.split, cells }
+    const cells = splitToRects(split)
+    if (cells.length === base.photos) return { ...base, split, cells }
   } catch {
     /* découpe illisible : on garde celle du catalogue */
   }

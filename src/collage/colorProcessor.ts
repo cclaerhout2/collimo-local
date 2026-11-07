@@ -2,7 +2,7 @@
  * Traitement couleur d'une photo sur la carte graphique (WebGL 2), avec un secours sur le
  * processeur. Les formules GLSL reprennent exactement celles de color.ts.
  */
-import { colorPixel, type ColorParams } from './color'
+import { colorPixel, combine, type ColorParams, type RGB } from './color'
 import type { Drawable } from './render'
 
 export type Processed = Drawable & { close(): void }
@@ -80,14 +80,22 @@ function makeCanvas(w: number, h: number): AnyCanvas {
 function sharpenCpu(px: Uint8ClampedArray, w: number, h: number, amount: number) {
   if (amount <= 0) return px
   const src = px.slice()
-  const at = (x: number, y: number, k: number) => src[(Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4 + k]
-  for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++)
+  const k2 = amount * 2
+  for (let y = 0; y < h; y++) {
+    const yu = Math.max(0, y - 1) * w
+    const yd = Math.min(h - 1, y + 1) * w
+    const yy = y * w
+    for (let x = 0; x < w; x++) {
+      const xl = Math.max(0, x - 1)
+      const xr = Math.min(w - 1, x + 1)
+      const i = (yy + x) * 4
       for (let k = 0; k < 3; k++) {
-        const c = at(x, y, k)
-        const n = at(x + 1, y, k) + at(x - 1, y, k) + at(x, y + 1, k) + at(x, y - 1, k)
-        px[(y * w + x) * 4 + k] = c + amount * 2 * (c - n * 0.25)
+        const c = src[i + k]
+        const n = src[(yy + xr) * 4 + k] + src[(yy + xl) * 4 + k] + src[(yd + x) * 4 + k] + src[(yu + x) * 4 + k]
+        px[i + k] = c + k2 * (c - n * 0.25)
       }
+    }
+  }
   return px
 }
 
@@ -97,8 +105,14 @@ export function processPhotoCpu(source: CanvasImageSource, w: number, h: number,
   ctx.drawImage(source, 0, 0, w, h)
   const img = ctx.getImageData(0, 0, w, h)
   const px = sharpenCpu(img.data, w, h, p.adjust.sharpness)
+  // Réglages du filtre résolus une fois pour toute l'image (et non par pixel).
+  const lookAdjust = p.look ? combine(p.look.adjust) : undefined
+  const c: RGB = [0, 0, 0]
   for (let i = 0; i < px.length; i += 4) {
-    const [r, g, b] = colorPixel([px[i] / 255, px[i + 1] / 255, px[i + 2] / 255], p)
+    c[0] = px[i] / 255
+    c[1] = px[i + 1] / 255
+    c[2] = px[i + 2] / 255
+    const [r, g, b] = colorPixel(c, p, lookAdjust)
     px[i] = r * 255
     px[i + 1] = g * 255
     px[i + 2] = b * 255
@@ -111,7 +125,6 @@ interface Gl {
   gl: WebGL2RenderingContext
   canvas: AnyCanvas
   prog: WebGLProgram
-  tex: WebGLTexture
   u: Record<string, WebGLUniformLocation | null>
   maxSize: number
 }
@@ -140,18 +153,12 @@ function initGl(): Gl | null {
     const loc = gl.getAttribLocation(prog, 'p')
     gl.enableVertexAttribArray(loc)
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
-    const tex = gl.createTexture()!
-    gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     // Sans retournement : cette option est ignorée pour les ImageBitmap, on retourne dans le shader.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
     const names = ['u_tex', 'u_texel', 'u_a0', 'u_a1', 'u_a2', 'u_hasLook', 'u_intensity', 'u_mono', 'u_fade', 'u_l0', 'u_l1', 'u_l2', 'u_st', 'u_ht']
     const u = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(prog, n)]))
-    return { gl, canvas, prog, tex, u, maxSize: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number }
+    return { gl, canvas, prog, u, maxSize: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number }
   } catch {
     return null
   }
@@ -159,13 +166,49 @@ function initGl(): Gl | null {
 
 let shared: Gl | null | undefined
 
+/** Textures déjà envoyées à la carte graphique : un curseur de réglage ne renvoie pas 20 photos par image. */
+const MAX_TEXTURES = 24
+const textures = new Map<TexImageSource, WebGLTexture>()
+
+function textureFor(g: Gl, source: TexImageSource): WebGLTexture {
+  const { gl } = g
+  const hit = textures.get(source)
+  if (hit) {
+    // Entrée remise en fin de liste : la plus ancienne est évincée en premier.
+    textures.delete(source)
+    textures.set(source, hit)
+    return hit
+  }
+  if (textures.size >= MAX_TEXTURES) {
+    const [oldSource, oldTex] = textures.entries().next().value!
+    textures.delete(oldSource)
+    gl.deleteTexture(oldTex)
+  }
+  const tex = gl.createTexture()!
+  gl.bindTexture(gl.TEXTURE_2D, tex)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+  textures.set(source, tex)
+  return tex
+}
+
+/** À appeler quand une image source est libérée (bitmap fermé). */
+export function forgetTexture(source: TexImageSource) {
+  const tex = textures.get(source)
+  if (!tex) return
+  textures.delete(source)
+  shared?.gl.deleteTexture(tex)
+}
+
 function processGl(g: Gl, source: TexImageSource, w: number, h: number, p: ColorParams): Processed {
   const { gl, canvas, u } = g
-  canvas.width = w
-  canvas.height = h
+  if (canvas.width !== w) canvas.width = w
+  if (canvas.height !== h) canvas.height = h
   gl.viewport(0, 0, w, h)
-  gl.bindTexture(gl.TEXTURE_2D, g.tex)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+  gl.bindTexture(gl.TEXTURE_2D, textureFor(g, source))
   const a = p.adjust
   gl.uniform1i(u.u_tex, 0)
   gl.uniform2f(u.u_texel, 1 / w, 1 / h)
@@ -200,10 +243,16 @@ function processGl(g: Gl, source: TexImageSource, w: number, h: number, p: Color
  */
 export function processPhoto(source: CanvasImageSource & TexImageSource, w: number, h: number, p: ColorParams): Processed {
   if (shared === undefined) shared = initGl()
-  if (shared && w <= shared.maxSize && h <= shared.maxSize && !shared.gl.isContextLost()) {
+  if (shared?.gl.isContextLost()) {
+    // Contexte perdu (onglet en arrière-plan sur mobile) : on le recrée à l'appel suivant.
+    textures.clear()
+    shared = initGl()
+  }
+  if (shared && w <= shared.maxSize && h <= shared.maxSize) {
     try {
       return processGl(shared, source, w, h, p)
     } catch {
+      textures.clear()
       shared = null
     }
   }

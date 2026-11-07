@@ -69,34 +69,63 @@ export function toPhoto(f: RawFile): Photo {
 
 export class DriveApiError extends Error {
   readonly status: number
-  constructor(status: number, message: string) {
+  /** Motif donné par Drive (`userRateLimitExceeded`, `insufficientFilePermissions`…), s'il y en a un. */
+  readonly reason?: string
+  constructor(status: number, message: string, reason?: string) {
     super(message)
     this.name = 'DriveApiError'
     this.status = status
+    this.reason = reason
+  }
+  /** Quota dépassé : Drive répond 403 ou 429, et accepte la même requête un peu plus tard. */
+  get isRateLimit() {
+    return this.status === 429 || (this.status === 403 && /rateLimitExceeded/i.test(this.reason ?? ''))
   }
 }
 
 type Fetch = typeof fetch
 
-export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fetch.bind(globalThis)): DriveService {
-  async function call<T>(url: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> {
-    const res = await fetchImpl(url, {
-      ...init,
-      headers: { Authorization: `Bearer ${getToken()}`, ...(init.headers ?? {}) },
-    })
-    if (res.status === 401) throw new SessionExpiredError()
-    if (!res.ok) {
-      let message = res.statusText
+/** Erreurs passagères (quota, 5xx, réseau) : jusqu'à 3 réessais, en attendant 0,5 s, 1 s puis 2 s. */
+export const RETRY_DELAYS_MS = [500, 1000, 2000]
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fetch.bind(globalThis), delays = RETRY_DELAYS_MS): DriveService {
+  /** Une requête authentifiée, réessayée si Drive répond par une erreur passagère. */
+  async function request(url: string, init: RequestInit = {}): Promise<Response> {
+    for (let attempt = 0; ; attempt++) {
+      let res: Response
       try {
-        const body = (await res.json()) as { error?: { message?: string } }
+        res = await fetchImpl(url, { ...init, headers: { Authorization: `Bearer ${getToken()}`, ...(init.headers ?? {}) } })
+      } catch (e) {
+        if (attempt >= delays.length) throw e
+        await sleep(delays[attempt])
+        continue
+      }
+      if (res.status === 401) throw new SessionExpiredError()
+      if (res.ok) return res
+      let message = res.statusText
+      let reason: string | undefined
+      try {
+        const body = (await res.json()) as { error?: { message?: string; errors?: { reason?: string }[] } }
         message = body.error?.message ?? message
+        reason = body.error?.errors?.[0]?.reason
       } catch {
         /* corps non JSON */
       }
-      throw new DriveApiError(res.status, message)
+      const err = new DriveApiError(res.status, message, reason)
+      const transient = err.isRateLimit || res.status >= 500
+      if (!transient || attempt >= delays.length) throw err
+      await sleep(delays[attempt])
     }
+  }
+
+  async function call<T>(url: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> {
+    const res = await request(url, init)
     return (as === 'json' ? res.json() : res.blob()) as Promise<T>
   }
+
+  /** Identifiant du fichier de réglages, gardé après la première recherche (une requête de moins par enregistrement). */
+  let settingsFileId: string | null | undefined
 
   const url = (path: string, params: Record<string, string>) =>
     `${API}${path}?${new URLSearchParams(params).toString()}`
@@ -115,13 +144,15 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
   }
 
   async function findSettingsFileId(): Promise<string | null> {
+    if (settingsFileId !== undefined) return settingsFileId
     const files = await listAll<{ id: string }>('/files', 'files', {
       spaces: 'appDataFolder',
       q: `name = ${quote(SETTINGS_FILE)} and trashed = false`,
       fields: 'nextPageToken, files(id)',
       pageSize: '10',
     })
-    return files[0]?.id ?? null
+    settingsFileId = files[0]?.id ?? null
+    return settingsFileId
   }
 
   type RawJsonFile = { id: string; name: string; modifiedTime?: string; webViewLink?: string; capabilities?: { canEdit?: boolean } }
@@ -133,6 +164,18 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
     webViewLink: f.webViewLink,
     canEdit: f.capabilities?.canEdit ?? false,
   })
+
+  /** Octets déjà reçus par une session d'envoi (0 si Drive ne répond pas). */
+  async function uploadedBytes(session: string, size: number): Promise<number> {
+    try {
+      const res = await fetchImpl(session, { method: 'PUT', headers: { 'Content-Range': `bytes */${size}` } })
+      const range = res.status === 308 ? res.headers.get('Range') : null
+      const m = range?.match(/bytes=0-(\d+)/)
+      return m ? Number(m[1]) + 1 : 0
+    } catch {
+      return 0
+    }
+  }
 
   return {
     async findSharedDrive(ref) {
@@ -243,7 +286,6 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
       const existing = await listAll<{ id: string }>('/files', 'files', {
         supportsAllDrives: 'true',
         includeItemsFromAllDrives: 'true',
-        corpora: 'allDrives',
         q: collimoFolderQuery(folderId),
         fields: 'nextPageToken, files(id)',
       })
@@ -279,23 +321,24 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
       const multipart =
         `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
         `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`
-      await call(`${UPLOAD}/files?uploadType=multipart&fields=id`, {
+      const created = await call<{ id: string }>(`${UPLOAD}/files?uploadType=multipart&fields=id`, {
         method: 'POST',
         headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
         body: multipart,
       })
+      settingsFileId = created.id
     },
 
     fetchFileBlob(id) {
       return call<Blob>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }), {}, 'blob')
     },
 
-    listFolderFiles(folderId) {
+    listFolderFiles(folderId, namePrefix) {
+      const prefix = namePrefix ? ` and name contains ${quote(namePrefix)}` : ''
       return listAll<DriveFileInfo>('/files', 'files', {
         supportsAllDrives: 'true',
         includeItemsFromAllDrives: 'true',
-        corpora: 'allDrives',
-        q: `${quote(folderId)} in parents and mimeType != '${FOLDER_MIME}' and trashed = false`,
+        q: `${quote(folderId)} in parents and mimeType != '${FOLDER_MIME}' and trashed = false${prefix}`,
         orderBy: 'modifiedTime desc',
         pageSize: '1000',
         fields: 'nextPageToken, files(id,name,modifiedTime,webViewLink,thumbnailLink)',
@@ -308,12 +351,11 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
 
     async uploadFile(folderId, name, data, mimeType) {
       // 1. Ouverture d'une session d'envoi : Drive renvoie l'adresse où déposer le contenu.
-      const start = await fetchImpl(
+      const start = await request(
         `${UPLOAD}/files?${new URLSearchParams({ uploadType: 'resumable', supportsAllDrives: 'true', fields: 'id,name,modifiedTime,webViewLink' })}`,
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${getToken()}`,
             'Content-Type': 'application/json; charset=UTF-8',
             'X-Upload-Content-Type': mimeType,
             'X-Upload-Content-Length': String(data.size),
@@ -321,14 +363,29 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
           body: JSON.stringify({ name, mimeType, parents: [folderId] }),
         },
       )
-      if (start.status === 401) throw new SessionExpiredError()
       const session = start.headers.get('Location')
-      if (!start.ok || !session) throw new DriveApiError(start.status, `envoi refusé (${start.status})`)
-      // 2. Dépôt du contenu en une fois.
-      const done = await fetchImpl(session, { method: 'PUT', headers: { 'Content-Type': mimeType }, body: data })
-      if (done.status === 401) throw new SessionExpiredError()
-      if (!done.ok) throw new DriveApiError(done.status, `envoi interrompu (${done.status})`)
-      return (await done.json()) as DriveFileInfo
+      if (!session) throw new DriveApiError(start.status, `envoi refusé (${start.status})`)
+      // 2. Dépôt du contenu ; si la connexion lâche, Drive dit où il en est et on renvoie la suite.
+      let from = 0
+      for (let attempt = 0; ; attempt++) {
+        let done: Response
+        try {
+          const chunk = from ? data.slice(from) : data
+          const headers: Record<string, string> = { 'Content-Type': mimeType }
+          if (from) headers['Content-Range'] = `bytes ${from}-${data.size - 1}/${data.size}`
+          done = await fetchImpl(session, { method: 'PUT', headers, body: chunk })
+        } catch (e) {
+          if (attempt >= delays.length) throw e
+          await sleep(delays[attempt])
+          from = await uploadedBytes(session, data.size)
+          continue
+        }
+        if (done.status === 401) throw new SessionExpiredError()
+        if (done.ok) return (await done.json()) as DriveFileInfo
+        if ((done.status < 500 && done.status !== 429) || attempt >= delays.length) throw new DriveApiError(done.status, `envoi interrompu (${done.status})`)
+        await sleep(delays[attempt])
+        from = await uploadedBytes(session, data.size)
+      }
     },
   }
 }
