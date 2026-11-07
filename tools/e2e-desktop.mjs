@@ -214,6 +214,11 @@ try {
   step('langue anglaise mémorisée')
   await page.getByRole('button', { name: 'EN', exact: true }).click()
   await page.getByText('My collages').waitFor()
+  // Le choix est enregistré sur le disque en arrière-plan : attendre qu'il y soit avant de fermer l'app.
+  for (let i = 0; !(await readFile(path.join(userData, 'settings.json'), 'utf8').catch(() => '')).includes('"lang": "en"'); i++) {
+    if (i > 50) throw new Error('langue non enregistrée dans settings.json')
+    await page.waitForTimeout(100)
+  }
 } catch (e) {
   await page.screenshot({ path: path.join(OUT, 'echec.png') }).catch(() => {})
   await app.close().catch(() => {})

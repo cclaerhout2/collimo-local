@@ -157,6 +157,11 @@ try {
   step('langue anglaise mémorisée')
   await page.getByRole('button', { name: 'EN', exact: true }).click()
   await page.getByText('My collages').waitFor()
+  // Le choix est enregistré en arrière-plan : attendre qu'il soit sur le téléphone avant d'arrêter l'app.
+  for (let i = 0; !asApp('cat files/settings.json 2>/dev/null || true').includes('"lang":"en"'); i++) {
+    if (i > 50) throw new Error('langue non enregistrée')
+    await page.waitForTimeout(200)
+  }
 } catch (e) {
   await page.screenshot({ path: path.join(OUT, 'android-echec.png') }).catch(() => {})
   throw e
