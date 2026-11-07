@@ -32,8 +32,6 @@ const bridge: DesktopBridge = {
   saveSettings: invoke(CHANNELS.saveSettings),
   catalogueDir: invoke(CHANNELS.catalogueDir),
   chooseCatalogueDir: invoke(CHANNELS.chooseCatalogueDir),
-  openPath: invoke(CHANNELS.openPath),
-  showInFolder: invoke(CHANNELS.showInFolder),
 }
 
 contextBridge.exposeInMainWorld(BRIDGE_GLOBAL, bridge)

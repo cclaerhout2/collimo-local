@@ -97,16 +97,32 @@ function toJsonFile(f: LocalFile): DriveJsonFile {
   return { id: f.path, name: f.name, modifiedTime: f.modifiedTime, webViewLink: shellUrl('reveal', f.path), canEdit: true }
 }
 
+/** Photo introuvable à son chemin d'origine (supprimée, ou dossier déplacé et non retrouvé). */
+export class MissingFileError extends Error {
+  constructor(path: string, status: number) {
+    super(status === 404 ? `Fichier introuvable : ${path}` : `Lecture impossible (${status}) : ${path}`)
+    this.name = 'MissingFileError'
+  }
+}
+
 /**
  * Lit un fichier local par le protocole de l'app.
  * @param path - chemin complet
  * @returns le contenu, avec son type MIME
+ * @throws {@link MissingFileError} si le fichier est absent ou hors des dossiers autorisés
  */
 async function readBlob(path: string): Promise<Blob> {
   const res = await fetch(localFileUrl(path))
-  if (!res.ok) throw new Error(res.status === 404 ? `Fichier introuvable : ${path}` : `Lecture impossible (${res.status}) : ${path}`)
+  if (!res.ok) throw new MissingFileError(path, res.status)
   return res.blob()
 }
+
+/**
+ * Nom de fichier d'un chemin Windows ou Unix.
+ * @param path - chemin complet
+ * @returns la dernière partie du chemin
+ */
+export const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path
 
 /**
  * Contenu d'un objet JSON, en octets UTF-8.
@@ -122,6 +138,35 @@ const jsonBytes = (data: unknown) => new TextEncoder().encode(JSON.stringify(dat
  */
 export function createDesktopServices(bridge: DesktopBridge): Services {
   const join = (dir: string, name: string) => joinPath(dir, name, bridge.platform)
+  /** Dernier dossier de photos parcouru : on y cherche les photos d'un collage dont le dossier a bougé. */
+  let photoFolder: string | null = null
+
+  /**
+   * Chemin de repli d'une photo introuvable : le fichier du même nom dans le dossier de photos en cours.
+   * Couvre un dossier déplacé ou renommé, un autre lecteur, et un collage ouvert depuis un autre PC.
+   * @param id - chemin d'origine
+   * @returns le chemin de repli, ou null s'il n'y en a pas
+   */
+  const moved = (id: string) => {
+    const candidate = photoFolder ? join(photoFolder, baseName(id)) : null
+    return candidate && candidate !== id ? candidate : null
+  }
+
+  /**
+   * Exécute une lecture sur le chemin d'une photo, puis sur son chemin de repli si elle a disparu.
+   * @param id - chemin d'origine
+   * @param read - lecture à faire
+   * @returns le résultat de la lecture
+   */
+  const withMoved = async <T>(id: string, read: (path: string) => Promise<T>): Promise<T> => {
+    try {
+      return await read(id)
+    } catch (e) {
+      const other = moved(id)
+      if (!other) throw e
+      return read(other).catch(() => Promise.reject(e))
+    }
+  }
 
   return {
     kind: 'desktop',
@@ -138,8 +183,11 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
         const f = await call(() => bridge.folderInfo(id))
         return { id: f.path, name: f.name, driveId: null, canAddChildren: f.writable }
       },
-      listPhotos: async (folder) => (await call(() => bridge.listImages(folder.id))).map(toPhoto),
-      getPhoto: async (id) => toPhoto(await call(() => bridge.fileInfo(id))),
+      async listPhotos(folder) {
+        photoFolder = folder.id
+        return (await call(() => bridge.listImages(folder.id))).map(toPhoto)
+      },
+      getPhoto: async (id) => toPhoto(await withMoved(id, (p) => call(() => bridge.fileInfo(p)))),
       async ensureCollimoFolder(folderId) {
         const path = join(folderId, 'Collimo')
         await call(() => bridge.ensureDir(path))
@@ -150,7 +198,7 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
         return raw && typeof raw === 'object' && raw.version === 1 ? (raw as UserSettings) : null
       },
       saveSettings: (s) => call(() => bridge.saveSettings(s)),
-      fetchFileBlob: (id) => readBlob(id),
+      fetchFileBlob: (id) => withMoved(id, readBlob),
       listFolderFiles: async (folderId, namePrefix) => (await call(() => bridge.listFiles(folderId, namePrefix))).map(toFileInfo),
       readJson: async (id) => JSON.parse(await (await readBlob(id)).text()) as unknown,
       async uploadFile(folderId, name, data) {

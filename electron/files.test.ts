@@ -1,10 +1,11 @@
 // @vitest-environment node
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertPlainName,
+  assertWritableType,
   canWrite,
   fileInfo,
   folderInfo,
@@ -16,6 +17,7 @@ import {
   naturalCompare,
   PathGuard,
   readJsonFile,
+  renameWithRetry,
   replaceFile,
   writeJsonFile,
   writeNewFile,
@@ -52,7 +54,7 @@ describe('types de fichiers', () => {
 })
 
 describe('lecture des dossiers', () => {
-  it('liste les images seules, triées, avec leurs dimensions', async () => {
+  it('liste les images seules, triées, sans lire leur contenu', async () => {
     await writeFile(path.join(dir, 'IMG_10.png'), PNG_3x2)
     await writeFile(path.join(dir, 'IMG_2.png'), PNG_3x2)
     await writeFile(path.join(dir, 'abime.jpg'), 'pas une image')
@@ -60,8 +62,8 @@ describe('lecture des dossiers', () => {
     await mkdir(path.join(dir, 'Collimo.png'))
     const list = await listImages(dir)
     expect(list.map((f) => f.name)).toEqual(['abime.jpg', 'IMG_2.png', 'IMG_10.png'])
-    expect(list[1]).toMatchObject({ path: path.join(dir, 'IMG_2.png'), mimeType: 'image/png', width: 3, height: 2 })
-    expect(list[0].width).toBeUndefined()
+    expect(list[1]).toMatchObject({ path: path.join(dir, 'IMG_2.png'), mimeType: 'image/png', size: PNG_3x2.length })
+    expect(list[1].width).toBeUndefined()
   })
 
   it('liste les fichiers du plus récent au plus ancien, filtrés par nom', async () => {
@@ -76,9 +78,16 @@ describe('lecture des dossiers', () => {
     expect(await listFiles(path.join(dir, 'absent'))).toEqual([])
   })
 
+  it('garde les liens vers des fichiers, écarte les liens cassés', async () => {
+    await writeFile(path.join(dir, 'vraie.png'), PNG_3x2)
+    await symlink(path.join(dir, 'vraie.png'), path.join(dir, 'lien.png'))
+    await symlink(path.join(dir, 'absente.png'), path.join(dir, 'casse.png'))
+    expect((await listImages(dir)).map((f) => f.name)).toEqual(['lien.png', 'vraie.png'])
+  })
+
   it('décrit un dossier et le droit d’y écrire', async () => {
-    const info = await folderInfo(dir)
-    expect(info).toEqual({ path: dir, name: path.basename(dir), writable: true })
+    expect(await folderInfo(dir)).toEqual({ path: dir, name: path.basename(dir), writable: true })
+    expect(await folderInfo(dir, true)).toEqual({ path: dir, name: path.basename(dir), writable: true })
     expect(await readdir(dir)).toEqual([]) // l'essai d'écriture ne laisse rien
     await expect(folderInfo(path.join(dir, 'absent'))).rejects.toThrow(/Introuvable/)
     await writeFile(path.join(dir, 'f.txt'), 'x')
@@ -102,10 +111,27 @@ describe('écriture', () => {
   })
 
   it('refuse les noms qui sortent du dossier ou que Windows interdit', () => {
-    for (const bad of ['', '..', '../x.jpg', 'a/b.jpg', 'a\\b.jpg', 'c:x', 'a?.jpg', 'a\u0001']) {
+    for (const bad of ['', '..', '../x.jpg', 'a/b.jpg', 'a\\b.jpg', 'c:x', 'a?.jpg', 'a\u0001', 'CON', 'nul.json', 'x.jpg.', 'x.jpg ']) {
       expect(() => assertPlainName(bad), bad).toThrow(/refusé/)
     }
     expect(() => assertPlainName('Collimo_2026-11-07_10-00-00.collimo.json')).not.toThrow()
+  })
+
+  it('ne crée que des images et des fichiers JSON, jamais un programme', async () => {
+    for (const ok of ['a.jpg', 'a.JPEG', 'a.png', 'x.collimo.json']) expect(() => assertWritableType(ok), ok).not.toThrow()
+    for (const bad of ['a.exe', 'a.bat', 'a.cmd', 'a.lnk', 'a.hta', 'a.ps1', 'a.vbs', 'a.js', 'a.url', 'a', 'a.jpg.exe']) {
+      expect(() => assertWritableType(bad), bad).toThrow(/refusé/)
+    }
+    await expect(writeNewFile(dir, 'piege.bat', new Uint8Array([1]))).rejects.toThrow(/Type de fichier refusé/)
+    expect(await readdir(dir)).toEqual([])
+  })
+
+  it('renomme, en réessayant tant que le fichier est verrouillé', async () => {
+    await writeFile(path.join(dir, 'a.tmp'), 'neuf')
+    await writeFile(path.join(dir, 'a.json'), 'ancien')
+    await renameWithRetry(path.join(dir, 'a.tmp'), path.join(dir, 'a.json'), [])
+    expect(await readFile(path.join(dir, 'a.json'), 'utf8')).toBe('neuf')
+    await expect(renameWithRetry(path.join(dir, 'absent.tmp'), path.join(dir, 'a.json'), [])).rejects.toThrow(/ENOENT/)
   })
 
   it('remplace un fichier sans laisser de fichier temporaire', async () => {
@@ -156,6 +182,15 @@ describe('PathGuard', () => {
     expect(g.allows('\\\\serveur\\partage\\a.jpg')).toBe(false)
     g.add('\\\\serveur\\partage')
     expect(g.allows('\\\\SERVEUR\\partage\\Collimo\\a.jpg')).toBe(true)
+  })
+
+  it('refuse les chemins incomplets ou de périphérique', () => {
+    const g = new PathGuard('win32', ['C:\\Photos'])
+    const cwdLike = ['Photos\\a.jpg', 'C:Photos\\a.jpg', '\\Photos\\a.jpg', '\\\\?\\C:\\Photos\\a.jpg', '\\\\.\\C:\\Photos\\a.jpg']
+    for (const p of cwdLike) expect(g.allows(p), p).toBe(false)
+    expect(g.add('Photos')).toBe(false)
+    expect(g.add('\\\\serveur')).toBe(false)
+    expect(new PathGuard('linux', ['/p']).allows('p/a.jpg')).toBe(false)
   })
 
   it('autorise un fichier seul, sans son dossier', () => {

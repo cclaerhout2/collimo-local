@@ -4,7 +4,7 @@
  * fichiers pour la page, limités aux dossiers que l'utilisateur a choisis.
  *
  * Variables d'environnement, pour le développement et les tests automatiques :
- * - `COLLIMO_DEV_URL` : charge la page depuis le serveur de développement Vite ;
+ * - `COLLIMO_DEV_URL` : charge la page depuis le serveur de développement Vite (jamais dans l'app installée) ;
  * - `COLLIMO_USER_DATA` : dossier des données de l'app (réglages, catalogue) ;
  * - `COLLIMO_TEST_PICK_FOLDER`, `COLLIMO_TEST_PICK_FILE` : réponses des sélecteurs, sans fenêtre.
  */
@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { APP_SCHEME, CHANNELS, type LocalFile, type LocalFolder, type PickFilter } from '../src/desktop/bridge'
 import {
+  assertWritableType,
   ensureDir,
   fileInfo,
   FileAccessError,
@@ -50,6 +51,23 @@ process.on('uncaughtException', (e) => {
 process.on('unhandledRejection', (e) => logError('promesse', e))
 
 if (process.env.COLLIMO_USER_DATA) app.setPath('userData', path.resolve(process.env.COLLIMO_USER_DATA))
+
+/** Origine du serveur de développement Vite, hors app installée seulement ; null sinon. */
+const DEV_ORIGIN = !app.isPackaged && process.env.COLLIMO_DEV_URL ? new URL(process.env.COLLIMO_DEV_URL).origin : null
+
+/**
+ * Indique si une adresse est celle de la page de Collimo (ou du serveur de développement).
+ * @param url - adresse à vérifier
+ * @returns `true` pour la page de l'app
+ */
+function isAppUrl(url: string): boolean {
+  if (url.startsWith(`${APP_SCHEME}://app/`)) return true
+  try {
+    return DEV_ORIGIN !== null && new URL(url).origin === DEV_ORIGIN
+  } catch {
+    return false
+  }
+}
 
 // Le protocole doit être déclaré avant que l'app soit prête : origine sûre, fetch et streaming permis.
 protocol.registerSchemesAsPrivileged([
@@ -88,6 +106,8 @@ interface DesktopState {
 let state: DesktopState = { roots: [] }
 let guard = new PathGuard()
 let mainWindow: BrowserWindow | null = null
+/** Droit d'écriture des dossiers vérifié par un vrai essai lors de leur choix, pour la session. */
+const probed = new Map<string, boolean>()
 
 /** Charge les réglages de l'application Windows et reconstruit la liste des chemins autorisés. */
 async function loadState(): Promise<void> {
@@ -96,7 +116,8 @@ async function loadState(): Promise<void> {
     roots: Array.isArray(raw?.roots) ? raw.roots.filter((r): r is string => typeof r === 'string') : [],
     catalogueDir: typeof raw?.catalogueDir === 'string' ? raw.catalogueDir : undefined,
   }
-  guard = new PathGuard(process.platform, [app.getPath('userData'), ...state.roots])
+  // Des données de l'app, seul le catalogue est accessible à la page (pas les réglages ni ceux de Chromium).
+  guard = new PathGuard(process.platform, [defaultCatalogueDir(), ...state.roots])
   if (state.catalogueDir) guard.add(state.catalogueDir)
 }
 
@@ -130,9 +151,7 @@ const ownerOf = (e: IpcMainInvokeEvent) => BrowserWindow.fromWebContents(e.sende
  */
 function handle<A extends unknown[], R>(channel: string, handler: (e: IpcMainInvokeEvent, ...args: A) => Promise<R>): void {
   ipcMain.handle(channel, (e, ...args) => {
-    const url = e.senderFrame?.url ?? ''
-    const devUrl = process.env.COLLIMO_DEV_URL
-    if (!url.startsWith(`${APP_SCHEME}://app/`) && !(devUrl && url.startsWith(devUrl))) {
+    if (!isAppUrl(e.senderFrame?.url ?? '')) {
       throw new FileAccessError('Appel refusé : origine inconnue')
     }
     return handler(e, ...(args as A))
@@ -157,7 +176,8 @@ function registerIpc(): void {
       if (r.canceled || !r.filePaths[0]) return null
       dir = r.filePaths[0]
     }
-    const info = await folderInfo(dir)
+    const info = await folderInfo(dir, true)
+    probed.set(dir, info.writable)
     await allow(dir)
     return info
   })
@@ -183,12 +203,19 @@ function registerIpc(): void {
     return info
   })
 
-  handle(CHANNELS.folderInfo, async (_e, p: string) => folderInfo(guard.check(p)))
+  handle(CHANNELS.folderInfo, async (_e, p: string) => {
+    const info = await folderInfo(guard.check(p))
+    return { ...info, writable: probed.get(p) ?? info.writable }
+  })
   handle(CHANNELS.listImages, async (_e, p: string) => listImages(guard.check(p)))
   handle(CHANNELS.listFiles, async (_e, p: string, contains?: string) => listFiles(guard.check(p), contains))
   handle(CHANNELS.fileInfo, async (_e, p: string) => fileInfo(guard.check(p)))
   handle(CHANNELS.writeNewFile, async (_e, dir: string, name: string, data: Uint8Array) => writeNewFile(guard.check(dir), name, data))
-  handle(CHANNELS.replaceFile, async (_e, p: string, data: Uint8Array) => replaceFile(guard.check(p), data))
+  handle(CHANNELS.replaceFile, async (_e, p: string, data: Uint8Array) => {
+    assertWritableType(p)
+    if (!p.toLowerCase().endsWith('.json')) throw new FileAccessError('Seuls les fichiers JSON peuvent être réécrits')
+    return replaceFile(guard.check(p), data)
+  })
   handle(CHANNELS.ensureDir, async (_e, p: string) => ensureDir(guard.check(p)))
   handle(CHANNELS.loadSettings, async () => readJsonFile(settingsFile()))
   handle(CHANNELS.saveSettings, async (_e, data: unknown) => writeJsonFile(settingsFile(), data))
@@ -196,7 +223,8 @@ function registerIpc(): void {
   handle(CHANNELS.catalogueDir, async () => {
     const dir = state.catalogueDir ?? defaultCatalogueDir()
     if (!state.catalogueDir) await ensureDir(dir)
-    return folderInfo(dir)
+    const info = await folderInfo(dir)
+    return { ...info, writable: probed.get(dir) ?? info.writable }
   })
 
   handle(CHANNELS.chooseCatalogueDir, async (e, title: string): Promise<LocalFolder | null> => {
@@ -210,18 +238,13 @@ function registerIpc(): void {
       if (r.canceled || !r.filePaths[0]) return null
       dir = r.filePaths[0]
     }
-    const info = await folderInfo(dir)
+    const info = await folderInfo(dir, true)
+    probed.set(dir, info.writable)
     guard.add(dir)
     state.catalogueDir = dir
     await saveState()
     return info
   })
-
-  handle(CHANNELS.openPath, async (_e, p: string) => {
-    const err = await shell.openPath(guard.check(p))
-    if (err) throw new FileAccessError(err)
-  })
-  handle(CHANNELS.showInFolder, async (_e, p: string) => shell.showItemInFolder(guard.check(p)))
 }
 
 /**
@@ -315,7 +338,10 @@ async function serveThumb(p: string, size: number, version: string): Promise<Res
         img = null
       }
     }
-    if (!img || img.isEmpty()) {
+    // Repli décodé sur le processus principal : réservé aux fichiers raisonnables, pour ne pas figer la
+    // fenêtre ; au-delà, la page décode elle-même la photo (voir Thumbnail.tsx).
+    const bytes = (await fs.stat(p).catch(() => null))?.size ?? Infinity
+    if ((!img || img.isEmpty()) && bytes < 12 * 1024 * 1024) {
       const full = nativeImage.createFromPath(p)
       if (!full.isEmpty()) {
         const { width, height } = full.getSize()
@@ -355,9 +381,26 @@ function registerProtocol(): void {
   })
 }
 
+/** Fichiers que la page peut faire ouvrir par Windows : images exportées et JSON, jamais un programme. */
+const OPENABLE = ['.jpg', '.jpeg', '.png', '.json']
+
 /**
- * Traite un lien ouvert par la page : `collimo://shell/…` ouvre un fichier ou l'Explorateur, une
- * adresse web s'ouvre dans le navigateur par défaut ; rien ne s'ouvre dans une fenêtre de Collimo.
+ * Ouvre un dossier dans l'Explorateur, ou un fichier sans risque dans son application par défaut.
+ * @param p - chemin autorisé
+ * @param reveal - montrer le fichier dans l'Explorateur plutôt que l'ouvrir
+ */
+async function openLocal(p: string, reveal: boolean): Promise<void> {
+  if (!guard.allows(p)) return
+  const stat = await fs.stat(p).catch(() => null)
+  if (!stat) return
+  if (stat.isDirectory()) void shell.openPath(p)
+  else if (reveal) shell.showItemInFolder(p)
+  else if (stat.isFile() && OPENABLE.includes(path.extname(p).toLowerCase())) void shell.openPath(p)
+}
+
+/**
+ * Traite un lien ouvert par la page : `collimo://shell/…` ouvre un dossier ou un fichier sans risque,
+ * une adresse web s'ouvre dans le navigateur par défaut ; rien ne s'ouvre dans une fenêtre de Collimo.
  * @param target - adresse du lien
  */
 function openLink(target: string): void {
@@ -368,10 +411,7 @@ function openLink(target: string): void {
     return
   }
   if (url.protocol === `${APP_SCHEME}:` && url.host === 'shell') {
-    const p = url.searchParams.get('path') ?? ''
-    if (!guard.allows(p)) return
-    if (url.searchParams.get('action') === 'reveal') shell.showItemInFolder(p)
-    else void shell.openPath(p)
+    void openLocal(url.searchParams.get('path') ?? '', url.searchParams.get('action') === 'reveal')
   } else if (url.protocol === 'https:' || url.protocol === 'http:') {
     void shell.openExternal(url.toString())
   }
@@ -410,7 +450,7 @@ function createWindow(): void {
   })
   // La page ne quitte jamais l'app : tout autre lien s'ouvre à l'extérieur.
   wc.on('will-navigate', (e, url) => {
-    if (url.startsWith(`${APP_SCHEME}://app/`) || (process.env.COLLIMO_DEV_URL && url.startsWith(process.env.COLLIMO_DEV_URL))) return
+    if (isAppUrl(url)) return
     e.preventDefault()
     openLink(url)
   })
@@ -426,7 +466,7 @@ function createWindow(): void {
     }
   })
 
-  void mainWindow.loadURL(process.env.COLLIMO_DEV_URL ?? `${APP_SCHEME}://app/index.html`)
+  void mainWindow.loadURL(DEV_ORIGIN && process.env.COLLIMO_DEV_URL ? process.env.COLLIMO_DEV_URL : `${APP_SCHEME}://app/index.html`)
 }
 
 // Une seule instance : un second lancement remet la fenêtre existante au premier plan.

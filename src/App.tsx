@@ -125,7 +125,8 @@ export default function App() {
     try {
       await services.auth.signIn()
       const me = await services.drive.currentUser()
-      if (!isAllowedEmail(me.email, config.allowedDomain)) {
+      // Application Windows : pas de compte Google, donc pas de domaine à contrôler.
+      if (!desktop && !isAllowedEmail(me.email, config.allowedDomain)) {
         services.auth.signOut()
         setError({ key: 'error.domain', vars: { email: me.email, domain: config.allowedDomain } })
         return
@@ -182,6 +183,17 @@ export default function App() {
     } catch (e) {
       handleError(e)
     }
+  }
+
+  /**
+   * Ouvre l'éditeur sur un nouveau collage.
+   * Dans l'application Windows, les dimensions des photos ne sont lues qu'ici, pour les seules photos
+   * choisies : la galerie ne les lit pas, pour ne pas télécharger tout un dossier synchronisé.
+   * @param photos - photos choisies, dans l'ordre de sélection
+   */
+  async function createCollage(photos: Photo[]) {
+    if (desktop) photos = await Promise.all(photos.map((p) => services.drive.getPhoto(p.id).catch(() => p)))
+    setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })
   }
 
   /** Reconnecte l'utilisateur après expiration du jeton, sans quitter l'écran en cours. */
@@ -278,7 +290,7 @@ export default function App() {
           location={location}
           selection={selection}
           onSelectionChange={setSelection}
-          onCreate={(photos) => setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })}
+          onCreate={(photos) => void createCollage(photos)}
           onOpenProject={(entry) => void openProject(entry)}
           onError={handleError}
         />

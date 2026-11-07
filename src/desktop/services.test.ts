@@ -60,8 +60,6 @@ function fakeBridge() {
     saveSettings: async (s) => void (settings = s),
     catalogueDir: async () => ({ path: 'C:\\AppData\\catalogue', name: 'catalogue', writable: true }),
     chooseCatalogueDir: async () => null,
-    openPath: async () => {},
-    showInFolder: async () => {},
   }
   put('C:\\Photos\\IMG_1.jpg', new Uint8Array([0xff, 0xd8]))
   put('C:\\Photos\\IMG_2.png', new Uint8Array([0x89]))
@@ -135,6 +133,18 @@ describe('services de l’application Windows', () => {
     expect((await s.drive.listPhotos({ id: 'C:\\Photos' }, null)).map((p) => p.name)).toEqual(['IMG_1.jpg', 'IMG_2.png'])
     expect(await s.drive.ensureCollimoFolder('C:\\Photos')).toBe('C:\\Photos\\Collimo')
     expect(await s.picker.pickImage({ id: null, name: '' }, 'fr', 'x')).toEqual({ id: 'C:\\Photos\\IMG_1.jpg' })
+  })
+
+  it('retrouve par son nom une photo dont le dossier a bougé', async () => {
+    const { bridge, files } = fakeBridge()
+    stubFetch(files)
+    const s = createDesktopServices(bridge)
+    await s.drive.listPhotos({ id: 'C:\\Photos' }, null)
+    // Collage créé sur un autre PC, ou avant le déplacement du dossier.
+    const blob = await s.drive.fetchFileBlob('D:\\Ancien\\Vacances\\IMG_1.jpg')
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(new Uint8Array([0xff, 0xd8]))
+    expect((await s.drive.getPhoto('\\\\serveur\\photos\\IMG_2.png')).id).toBe('C:\\Photos\\IMG_2.png')
+    await expect(s.drive.fetchFileBlob('D:\\Ancien\\absente.jpg')).rejects.toThrow(/introuvable/)
   })
 
   it('mémorise les réglages, et ignore un format inconnu', async () => {

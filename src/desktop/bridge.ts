@@ -27,8 +27,6 @@ export const CHANNELS = {
   saveSettings: 'collimo:save-settings',
   catalogueDir: 'collimo:catalogue-dir',
   chooseCatalogueDir: 'collimo:choose-catalogue-dir',
-  openPath: 'collimo:open-path',
-  showInFolder: 'collimo:show-in-folder',
 } as const
 
 /** Fichier local tel que décrit par le processus principal. */
@@ -90,7 +88,7 @@ export interface DesktopBridge {
   listFiles(path: string, contains?: string): Promise<LocalFile[]>
   /** Un fichier. */
   fileInfo(path: string): Promise<LocalFile>
-  /** Crée un nouveau fichier ; erreur s'il existe déjà (jamais d'écrasement). */
+  /** Crée un nouveau fichier (image JPG ou PNG, ou JSON) ; erreur s'il existe déjà (jamais d'écrasement). */
   writeNewFile(dir: string, name: string, data: Uint8Array): Promise<LocalFile>
   /** Remplace le contenu d'un fichier (écriture dans un fichier temporaire puis renommage). */
   replaceFile(path: string, data: Uint8Array): Promise<LocalFile>
@@ -104,10 +102,6 @@ export interface DesktopBridge {
   catalogueDir(): Promise<LocalFolder>
   /** Fait choisir un autre dossier pour le catalogue (dossier réseau partagé, par exemple) ; null si annulé. */
   chooseCatalogueDir(title: string): Promise<LocalFolder | null>
-  /** Ouvre un fichier ou un dossier avec l'application par défaut de Windows. */
-  openPath(path: string): Promise<void>
-  /** Ouvre l'Explorateur sur un fichier, sélectionné. */
-  showInFolder(path: string): Promise<void>
 }
 
 /**
@@ -132,6 +126,7 @@ export function localThumbUrl(path: string, size: number, version = ''): string 
 
 /**
  * Adresse qui, ouverte comme un lien, demande à Windows d'ouvrir un fichier ou de le montrer dans l'Explorateur.
+ * Seuls les dossiers, images JPG/PNG et fichiers JSON autorisés sont ouverts (jamais un programme).
  * @param action - `open` (application par défaut) ou `reveal` (Explorateur)
  * @param path - chemin complet
  * @returns l'adresse `collimo://shell/?action=…&path=…`
