@@ -39,6 +39,11 @@ findstr /c:"REMPLACER" .firebaserc >nul 2>&1 && goto noconfig
 set "SITE="
 for /f "usebackq delims=" %%s in (`%PS% "(ConvertFrom-Json -InputObject (Get-Content -Raw '.firebaserc')).targets.PSObject.Properties.Value.hosting.collimo[0]"`) do set "SITE=%%s"
 if "%SITE%"=="" goto noconfig
+:: Compte Google choisi par install.bat pour ce projet (plusieurs comptes peuvent etre connectes).
+set "ACC="
+for /f "tokens=1,* delims==" %%a in ('findstr /b "COLLIMO_FIREBASE_ACCOUNT=" .env.production 2^>nul') do set "ACC=%%b"
+set "FBACCOPT="
+if defined ACC set "FBACCOPT=--account %ACC%"
 
 echo.
 echo  Collimo - deploiement du site %SITE%
@@ -83,7 +88,7 @@ echo   OK
 
 :: -------------------------------------------------------------------
 echo [4/5] Version de test (adresse de test, prolongee a chaque deploiement)
-call firebase hosting:channel:deploy test --only collimo --expires 30d --json >"%LOG%" 2>&1
+call firebase hosting:channel:deploy test --only collimo --expires 30d --json %FBACCOPT% >"%LOG%" 2>&1
 if errorlevel 1 goto errlog
 set "TESTURL="
 for /f "usebackq delims=" %%u in (`%PS% "$t = Get-Content -Raw $env:C_LOG; $i = $t.IndexOf('{'); if ($i -ge 0) { (ConvertFrom-Json -InputObject $t.Substring($i)).result.PSObject.Properties.Value.url }"`) do set "TESTURL=%%u"
@@ -115,7 +120,7 @@ echo [5/5] Site Collimo
 set "ANS="
 <con set /p "ANS=Publier cette version pour tout le domaine (O/N) ? "
 if /i not "%ANS%"=="O" goto notpublished
-call firebase deploy --only hosting:collimo >"%LOG%" 2>&1
+call firebase deploy --only hosting:collimo %FBACCOPT% >"%LOG%" 2>&1
 if errorlevel 1 goto errlog
 echo   OK - en ligne : https://%SITE%.web.app
 echo.

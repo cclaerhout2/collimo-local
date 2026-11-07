@@ -19,6 +19,7 @@ set "REPO=https://github.com/cclaerhout2/collimo.git"
 set "OUTILS=%USERPROFILE%\outils"
 set "LOG=%TEMP%\collimo-install.log"
 set "TMPJ=%TEMP%\collimo-install.json"
+set "TMPA=%TEMP%\collimo-accounts.txt"
 set "C_LOG=%LOG%"
 set "C_TMPJ=%TMPJ%"
 set "PS=powershell -NoProfile -ExecutionPolicy Bypass -Command"
@@ -151,16 +152,35 @@ call :paths
 set "FB=firebase"
 where firebase >nul 2>&1
 if errorlevel 1 if exist "%APPDATA%\npm\firebase.cmd" set "FB=%APPDATA%\npm\firebase.cmd"
+:: Plusieurs comptes Google peuvent etre connectes a l'outil Firebase (entreprise, personnel) :
+:: on choisit celui de ce projet, sans deconnecter les autres. Il est retenu dans .env.production
+:: et deploy.bat l'utilise.
 :fb_account
 set "FBUSER="
+set "FBACC="
+set "NACC=0"
 call :fb login:list >"%LOG%" 2>&1
-for /f "usebackq delims=" %%e in (`%PS% "$m = Select-String -Path $env:C_LOG -Pattern '[\w.+-]+@[\w-]+(\.[\w-]+)+' -AllMatches; if ($m) { $m[0].Matches[0].Value }"`) do set "FBUSER=%%e"
-if "%FBUSER%"=="" goto fb_login
-echo   Compte Google connecte a Firebase : %FBUSER%
+%PS% "$m = Select-String -Path $env:C_LOG -Pattern '[\w.+-]+@[\w-]+(\.[\w-]+)+' -AllMatches; if ($m) { $m.Matches.Value | Select-Object -Unique }" >"%TMPA%" 2>nul
+for /f "usebackq delims=" %%e in ("%TMPA%") do call :addacc "%%e"
+if "%NACC%"=="0" goto fb_login
+echo   Comptes Google connectes a Firebase :
+for /l %%i in (1,1,%NACC%) do call echo     %%i = %%ACC%%i%%
 set "ANS="
-<con set /p "ANS=  Est-ce le bon compte (celui qui gere le projet GCP) (O/N) ? "
-if /i "%ANS%"=="O" goto step6
-call :fb logout >nul 2>&1
+<con set /p "ANS=  Numero du compte qui gere le projet GCP (Entree = 1, N = connecter un autre compte) : "
+if defined ANS set "ANS=%ANS: =%"
+if "%ANS%"=="" set "ANS=1"
+if /i "%ANS%"=="N" goto fb_add
+call set "FBUSER=%%ACC%ANS%%%"
+if "%FBUSER%"=="" goto fb_account
+set "FBACC=%FBUSER%"
+echo   OK - compte %FBUSER%
+goto step6
+:fb_add
+echo   Connexion d'un autre compte Google : une page va s'ouvrir dans le navigateur.
+echo   Les comptes deja connectes le restent.
+call :fb login:add
+if errorlevel 1 goto nologin
+goto fb_account
 :fb_login
 echo   Connexion a Google : une page va s'ouvrir dans le navigateur.
 call :fb login
@@ -184,8 +204,24 @@ if /i not "%ANS%"=="O" goto step7
 
 :cfg_start
 echo.
-echo   La configuration se fait une seule fois pour tout le monde.
-echo   Ouvre-la avec le compte Google qui a les droits sur le projet GCP.
+echo   La configuration est propre a ce dossier, sur ce PC.
+echo.
+:: Type de compte : Google Workspace d'entreprise (W) ou compte personnel gmail.com (P).
+set "KIND=W"
+echo %FBUSER%| findstr /i /e /c:"@gmail.com" /c:"@googlemail.com" >nul && set "KIND=P"
+echo   Type de compte Google :
+echo     W = Google Workspace d'entreprise (adresse de l'entreprise)
+echo     P = compte personnel (adresse gmail.com)
+set "ANS="
+<con set /p "ANS=  Type (Entree = %KIND%) : "
+if /i "%ANS%"=="W" set "KIND=W"
+if /i "%ANS%"=="P" set "KIND=P"
+if "%KIND%"=="W" goto cfg_project
+echo.
+echo   Compte personnel : il faut un projet Firebase a toi. S'il n'existe pas encore,
+echo   cree-le maintenant (Ajouter un projet), puis reviens ici.
+start "" "https://console.firebase.google.com/"
+pause <con
 echo.
 :cfg_project
 set "PROJ="
@@ -254,10 +290,23 @@ echo   OK - site %SITE%
 echo.
 echo   --- Reglages Google Cloud (pages ouvertes dans le navigateur) ---
 echo.
+if "%KIND%"=="P" goto cfg_consent_p
 echo   a) Ecran de consentement : verifie qu'il est en "Interne".
 echo      Ne change ni son nom ni son logo (communs a tout le projet).
 start "" "https://console.cloud.google.com/apis/credentials/consent?project=%PROJ%"
 pause <con
+goto cfg_apis
+:cfg_consent_p
+echo   a) Ecran de consentement (Google Auth Platform, bouton "Commencer" si demande) :
+echo        - Nom de l'application : Collimo ; e-mail d'assistance : ton adresse ;
+echo        - Audience : "Externe" ; laisse l'etat de publication sur "Test" ;
+echo        - Audience ^> Utilisateurs test : ajoute ton adresse et celles des personnes
+echo          invitees (100 au maximum). Les autres comptes seront refuses.
+echo      A la connexion, Google affichera "Google n'a pas valide cette application" :
+echo      cliquer sur Continuer. En mode Test, l'autorisation est a redonner tous les 7 jours.
+start "" "https://console.cloud.google.com/auth/overview?project=%PROJ%"
+pause <con
+:cfg_apis
 echo   b) Active "Google Drive API" puis "Google Picker API" (bouton Activer).
 start "" "https://console.cloud.google.com/apis/library/drive.googleapis.com?project=%PROJ%"
 start "" "https://console.cloud.google.com/apis/library/picker.googleapis.com?project=%PROJ%"
@@ -298,12 +347,17 @@ echo     Format inattendu, recommence.
 goto cfg_key_in
 :cfg_domain
 set "DOMAIN="
+set "CATA="
+:: Compte personnel : pas de domaine (les utilisateurs test font le tri) ni de Drive partage pour l'usine.
+if "%KIND%"=="P" goto cfg_write
 for /f "tokens=2 delims=@" %%d in ("%FBUSER%") do set "DOMAIN=%%d"
-echo   e) Domaine Workspace autorise (Entree = %DOMAIN%)
+echo   e) Domaine(s) Workspace autorise(s), separes par des virgules
+echo      (Entree = %DOMAIN%, - = aucun controle)
 set "ANS="
 <con set /p "ANS=     Domaine : "
 if defined ANS set "ANS=%ANS: =%"
-if not "%ANS%"=="" set "DOMAIN=%ANS%"
+if "%ANS%"=="-" set "DOMAIN="
+if not "%ANS%"=="" if not "%ANS%"=="-" set "DOMAIN=%ANS%"
 echo   f) Usine a dispositions (facultatif) : identifiant du Drive partage
 echo      "Collimo - Catalogue" (la fin de son adresse, apres /folders/).
 echo      Entree = le chercher par son nom.
@@ -311,6 +365,7 @@ set "CATA="
 <con set /p "CATA=     Identifiant : "
 if defined CATA set "CATA=%CATA: =%"
 
+:cfg_write
 >".env.production" echo # Configuration de Collimo, ecrite par install.bat (locale, jamais envoyee sur GitHub).
 >>".env.production" echo # Ces valeurs ne sont pas secretes : elles sont visibles dans le site publie.
 >>".env.production" echo VITE_GOOGLE_CLIENT_ID=%CID%
@@ -318,6 +373,10 @@ if defined CATA set "CATA=%CATA: =%"
 >>".env.production" echo VITE_GOOGLE_APP_ID=%APPID%
 >>".env.production" echo VITE_ALLOWED_DOMAIN=%DOMAIN%
 >>".env.production" echo VITE_CATALOGUE_DRIVE_ID=%CATA%
+>>".env.production" echo # Pour les scripts (non publie) : type de compte (W = Workspace, P = personnel)
+>>".env.production" echo # et compte Google utilise par deploy.bat pour publier.
+>>".env.production" echo COLLIMO_ACCOUNT_TYPE=%KIND%
+>>".env.production" echo COLLIMO_FIREBASE_ACCOUNT=%FBUSER%
 echo   OK - configuration ecrite (.firebaserc et .env.production), sur ce PC seulement
 
 :: -------------------------------------------------------------------
@@ -339,10 +398,19 @@ echo.
 echo   Prochaine etape : double-clic sur deploy.bat (dans le dossier du projet).
 echo   Il publie d'abord une version de test, puis le site sur confirmation.
 echo.
+if not defined KIND for /f "tokens=1,* delims==" %%a in ('findstr /b "COLLIMO_ACCOUNT_TYPE=" .env.production 2^>nul') do set "KIND=%%b"
+if "%KIND%"=="P" goto done_perso
 echo   A demander une fois a l'administrateur Workspace (voir README) :
 echo    - autoriser l'ID client OAuth de Collimo si Drive est filtre ;
 echo    - creer le Drive partage "Collimo - Catalogue" pour l'usine.
 echo.
+goto done_open
+:done_perso
+echo   Compte personnel : pour inviter quelqu'un, ajoute son adresse dans
+echo   Google Auth Platform ^> Audience ^> Utilisateurs test (100 au maximum).
+echo   L'usine a dispositions n'est pas disponible (pas de Drive partage).
+echo.
+:done_open
 start "" "%CD%"
 pause <con
 exit /b 0
@@ -359,12 +427,24 @@ exit /b 0
 
 :: Firebase lance hors du dossier du projet : tant que .firebaserc contient
 :: les valeurs a remplacer, l'outil refuse de demarrer dans ce dossier.
+:: Avec un compte choisi (FBACC), l'outil l'utilise au lieu du compte par defaut.
 :fb
 pushd "%TEMP%"
+if defined FBACC goto fb_with_account
 call "%FB%" %*
+goto fb_done
+:fb_with_account
+call "%FB%" %* --account "%FBACC%"
+:fb_done
 set "FBERR=%errorlevel%"
 popd
 exit /b %FBERR%
+
+:: Ajoute un compte a la liste numerotee (ACC1, ACC2...).
+:addacc
+set /a NACC+=1
+set "ACC%NACC%=%~1"
+exit /b 0
 
 :readcfg
 set "PROJ="

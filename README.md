@@ -76,19 +76,27 @@ Trois scripts, à la racine du projet, se lancent d'un double-clic, sans ligne d
 
 | Script | Quand | Ce qu'il fait |
 | --- | --- | --- |
-| `install.bat` | une fois par PC | installe Node.js et Git en version portable si besoin, télécharge le projet depuis GitHub, installe l'outil Firebase, connecte le compte Google ; la première fois seulement, configure le site (projet GCP, site d'hébergement dédié, identifiants) et partage cette configuration via GitHub |
+| `install.bat` | une fois par PC | installe Node.js et Git en version portable si besoin, télécharge le projet depuis GitHub, installe l'outil Firebase, connecte le compte Google ; configure le site (projet GCP, site d'hébergement dédié, identifiants) et garde cette configuration sur le PC |
 | `sync.bat` | en arrivant sur un PC | met la copie du PC à jour depuis GitHub, sans perdre de travail local |
 | `deploy.bat` | pour publier | envoie le travail sur GitHub, construit le site, publie une version de test, puis le site pour tout le domaine après confirmation (O/N) |
 
 **Premier PC** : télécharger `install.bat` depuis la page GitHub du dépôt (ouvrir le fichier, bouton « Download raw file »), double-clic, répondre aux questions. Les pages de la console Google Cloud à régler s'ouvrent une par une, avec les valeurs exactes à saisir ; le script vérifie le format de ce qu'on colle. Le numéro du projet est retrouvé automatiquement.
 
-**PC suivants** : même `install.bat` ; la configuration est déjà sur GitHub, seuls les outils et le compte sont à installer.
+**PC suivants** : même `install.bat` ; la configuration n'étant pas sur GitHub, il faut la refaire (mêmes valeurs) ou copier `.firebaserc` et `.env.production` depuis un PC déjà configuré.
 
 **Au quotidien** : `sync.bat` en arrivant sur un PC, `deploy.bat` pour publier.
 
 **Version de test** : `deploy.bat` la publie à une adresse du type `https://SITE--test-xxxx.web.app`, fixe tant qu'elle est republiée au moins tous les 30 jours. La première fois, la connexion Google n'y marche qu'après avoir ajouté cette adresse à l'ID client OAuth et à la clé API : le script affiche les lignes à ajouter et ouvre la page.
 
 La configuration est enregistrée dans `.firebaserc` et `.env.production`, sur le PC seulement : ces deux fichiers sont exclus de Git et ne sont jamais envoyés sur GitHub. Chaque PC qui publie le site doit donc avoir sa configuration (relancer `install.bat`, ou copier les deux fichiers d'un PC déjà configuré). Ces valeurs restent visibles dans le site publié.
+
+**Compte Google personnel (gmail.com)** : possible, dans un projet Firebase à soi. Copier `install.bat` hors de tout dossier Collimo (sur le Bureau, par exemple), le lancer et indiquer un nouveau dossier, connecter le compte personnel (`N` pour l'ajouter sans déconnecter les autres), puis choisir le type `P`. Différences avec un compte Workspace :
+
+- écran de consentement en **Externe**, laissé en **Test** : seuls les utilisateurs test inscrits (100 au maximum) peuvent se connecter, après l'avertissement « Google n'a pas validé cette application », et l'autorisation est à redonner tous les 7 jours. Ouvrir l'app à tous demanderait la vérification de Google, longue pour les autorisations Drive ;
+- pas de domaine autorisé (`VITE_ALLOWED_DOMAIN` vide) ;
+- pas d'usine à dispositions : les comptes personnels n'ont pas de Drive partagé.
+
+Plusieurs comptes Google peuvent rester connectés à l'outil Firebase : `install.bat` retient celui du projet dans `.env.production` (`COLLIMO_FIREBASE_ACCOUNT`), et `deploy.bat` publie avec ce compte.
 
 **À demander une fois à l'administrateur Workspace** :
 
