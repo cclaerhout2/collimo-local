@@ -5,10 +5,13 @@
  */
 import { polyPath, type Pt } from './path'
 
-export type ShapeName =
-  | 'circle' | 'heart' | 'star' | 'star6' | 'hexagon' | 'hexagon-flat' | 'diamond' | 'triangle' | 'triangle-down'
-  | 'rounded' | 'arch' | 'leaf' | 'petal' | 'drop' | 'flower' | 'flower6' | 'clover' | 'spade' | 'club'
-  | 'bear' | 'pumpkin' | 'popsicle' | 'cone' | 'octagon' | 'cross' | 'shield' | 'cloud'
+export const SHAPE_NAMES = [
+  'circle', 'heart', 'star', 'star6', 'hexagon', 'hexagon-flat', 'diamond', 'triangle', 'triangle-down',
+  'rounded', 'arch', 'leaf', 'petal', 'drop', 'flower', 'flower6', 'clover', 'spade', 'club',
+  'bear', 'pumpkin', 'popsicle', 'cone', 'octagon', 'cross', 'shield', 'cloud',
+] as const
+
+export type ShapeName = (typeof SHAPE_NAMES)[number]
 
 /**
  * Case d'une disposition.
@@ -17,11 +20,26 @@ export type ShapeName =
  * - path  : chemin SVG, coordonnées du cadre (plusieurs morceaux possibles : une photo vue à travers plusieurs fenêtres) ;
  * - shape : forme de la bibliothèque posée dans un rectangle, proportions gardées (sauf `stretch`).
  */
-export type CellDef =
+export type CellDef = (
   | { kind: 'rect'; x: number; y: number; w: number; h: number }
-  | { kind: 'poly'; points: Pt[] }
+  | { kind: 'poly'; points: Pt[]; cuts?: (EdgeCut | null)[] }
   | { kind: 'path'; d: string; evenodd?: boolean }
   | { kind: 'shape'; shape: ShapeName; x: number; y: number; w: number; h: number; rotate?: number; stretch?: boolean }
+) & {
+  /** Case posée volontairement sur une autre (médaillon) : chevauchement accepté, anneau d'écart tracé. */
+  over?: boolean
+}
+
+/**
+ * Coupe spéciale sur un côté de polygone (côté i = du point i au point i + 1).
+ * Deux cases voisines qui partagent un côté avec la même coupe ont exactement le même bord.
+ */
+export interface EdgeCut {
+  kind: EdgeKind
+  amp?: number
+  n?: number
+  seed?: number
+}
 
 /** Élément de décor sans photo (perforations d'une pellicule, cadre d'appareil photo…). */
 export interface Decor {
@@ -464,4 +482,26 @@ export function mirror4(d: string): CellDef[] {
   const flip = (sx: boolean, sy: boolean) =>
     d.replace(/(-?\d*\.?\d+)\s+(-?\d*\.?\d+)/g, (_, a: string, b: string) => `${sx ? 1 - Number(a) : Number(a)} ${sy ? 1 - Number(b) : Number(b)}`)
   return [path(d), path(flip(true, false)), path(flip(false, true)), path(flip(true, true))]
+}
+
+const before = (a: Pt, b: Pt) => a[0] < b[0] - 1e-9 || (Math.abs(a[0] - b[0]) <= 1e-9 && a[1] < b[1])
+
+/**
+ * Chemin d'un polygone dont certains côtés portent une coupe spéciale. Chaque côté est calculé dans
+ * un sens fixe (du plus petit point au plus grand) : la case voisine, qui le parcourt à l'envers,
+ * obtient le même tracé.
+ */
+export function polyCutPath(points: Pt[], cuts: (EdgeCut | null)[]): string {
+  let d = `M${points[0][0]} ${points[0][1]}`
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % points.length]
+    const cut = cuts[i]
+    if (!cut || cut.kind === 'line') {
+      d += `L${b[0]} ${b[1]}`
+      continue
+    }
+    d += before(a, b) ? edge(a, b, cut.kind, cut.amp, cut.n, cut.seed) : reverseEdge(b, a, cut.kind, cut.amp, cut.n, cut.seed)
+  }
+  return d + 'Z'
 }

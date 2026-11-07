@@ -7,6 +7,9 @@ export interface AppConfig {
   allowedDomain: string
   /** Mode démo : Drive simulé, aucun appel à Google. */
   mock: boolean
+  /** Drive partagé du catalogue de l'usine à dispositions : identifiant (prioritaire) ou nom exact. */
+  catalogueDriveId: string
+  catalogueDriveName: string
 }
 
 const env = import.meta.env
@@ -17,6 +20,8 @@ export const config: AppConfig = {
   appId: env.VITE_GOOGLE_APP_ID ?? '',
   allowedDomain: (env.VITE_ALLOWED_DOMAIN ?? '').trim().toLowerCase(),
   mock: env.VITE_MOCK === '1',
+  catalogueDriveId: (env.VITE_CATALOGUE_DRIVE_ID ?? '').trim(),
+  catalogueDriveName: (env.VITE_CATALOGUE_DRIVE_NAME ?? '').trim() || 'Collimo – Catalogue',
 }
 
 /** Autorisations Drive demandées : lecture seule + écriture limitée aux fichiers créés par Collimo. */

@@ -50,6 +50,8 @@ export function createGooglePicker(config: AppConfig, getToken: () => string): F
         title,
         new google.picker.DocsView(google.picker.ViewId.FOLDERS).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(FOLDER_MIME),
       ),
+    pickFile: (drive, lang, title, mimeType) =>
+      open(drive, lang, title, new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(false).setMimeTypes(mimeType)),
     pickImage: (drive, lang, title) =>
       open(drive, lang, title, new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true)),
   }

@@ -6,7 +6,25 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 6 — dispositions en forme** (branche `etape-6`) :
+**Étape 7 — usine à dispositions** (branche `etape-7`, réservée aux admins) :
+
+- accès par le menu du compte, « Usine à dispositions », pour qui peut écrire dans le Drive partagé du catalogue ;
+- bibliothèque par nombre de photos : dispositions créées dans l'usine (brouillon, publiée, masquée) et dispositions intégrées ;
+- créer à partir d'une grille colonnes × lignes, d'un cadre vide, ou en dupliquant n'importe quelle disposition ;
+- outils : couper une case en deux, glisser une séparation (toutes les cases alignées suivent, avec aimantation), rectangle, triangle, polygone (glisser un sommet, ajouter un point au milieu d'un côté, supprimer un point), 27 formes de la bibliothèque (déplacer, agrandir, tourner, étirer) ;
+- coupes spéciales sur une séparation : courbe, vague, zigzag, éclair, déchirure, amplitude et nombre d'ondulations ; le bord est identique des deux côtés, même quand la séparation n'est partagée qu'en partie ;
+- ordre des cases : toucher les cases dans l'ordre voulu, ou ordre de lecture automatique ;
+- vérifications automatiques : nombre de cases, cases dans le cadre, chevauchements (sauf case cochée « Posée sur une autre »), cases trop petites ; publication impossible tant qu'il reste un problème ;
+- aperçu avec les photos du dossier en cours, en 1:1, 4:5, 9:16 et 16:9 ; icône générée automatiquement ;
+- famille et place dans la liste (en tête ou à la fin) ;
+- brouillon, publication, masquage (les collages qui utilisent une disposition masquée restent lisibles) ; un brouillon se supprime, une disposition publiée se masque ; les dispositions intégrées se masquent aussi ;
+- annuler / rétablir, Ctrl+Z, touche Suppr.
+
+Le catalogue est le fichier `collimo-catalogue.json` à la racine du Drive partagé. Il est lu par tous au démarrage et vérifié à la lecture : une disposition invalide est ignorée. Chaque enregistrement relit d'abord le fichier, pour ne pas écraser le travail d'un autre admin. Drive garde l'historique des versions.
+
+Vérifié dans Chrome (Drive simulé, bureau et mobile) : création, séparation déplacée, coupe en vague, publication, disposition proposée dans l'éditeur de collage, disposition intégrée masquée, demande d'autorisation sur un catalogue créé par un autre admin, simple lecteur sans accès à l'usine.
+
+**Étape 6 — dispositions en forme** :
 
 - catalogue complet de 1 à 20 photos : 541 dispositions, dont 208 en forme (cœurs, ronds, fleurs, étoiles, hexagones, losanges, puzzle, découpes courbes, en zigzag ou déchirées, feuilles, illustrations) ; décompte par nombre de photos : 24, 39, 40, 40, 38, 31, 26, 34, 32, 22, 25, 18, 26, 20, 22, 20, 24, 20, 20, 20 ;
 - chaque disposition a été comparée à la capture de référence (planche de recette `/planche.html?n=N` en développement) ; l'inventaire de 8 photos est de 34 dispositions (et non 38 comme noté au départ) ;
@@ -80,7 +98,7 @@ cp .env.example .env.local   # puis compléter
 npm run dev
 ```
 
-**Mode démo sans compte Google** : `VITE_MOCK=1 npm run dev`. Le Drive est simulé, aucune donnée réelle.
+**Mode démo sans compte Google** : `VITE_MOCK=1 npm run dev`. Le Drive est simulé, aucune donnée réelle. Le compte démo est admin de l'usine ; ajouter `?catalogue=lecteur` à l'adresse pour un simple lecteur, ou `?catalogue=autoriser` pour un catalogue créé par un autre admin.
 
 Commandes utiles : `npm test` (tests unitaires), `npm run typecheck`, `npm run build`.
 
@@ -104,6 +122,12 @@ Tout est isolé : un site d'hébergement dédié, un identifiant OAuth et une cl
 
    Puis remplacer les deux valeurs `REMPLACER-PAR-…` dans `.firebaserc` par l'identifiant du projet et celui du site.
 8. **Faire autoriser l'app** par l'administrateur Workspace si votre organisation filtre les apps qui accèdent à Drive (identifiant client de l'étape 3).
+9. **Drive partagé du catalogue** (usine à dispositions), créé par l'administrateur Workspace :
+   - nom « Collimo – Catalogue » ;
+   - membres : tout le domaine (ou un groupe qui contient tous les utilisateurs) en **Lecteur**, les admins de Collimo en **Gestionnaire de contenu** ;
+   - son identifiant (dans l'adresse du Drive partagé) → `VITE_CATALOGUE_DRIVE_ID`, sinon Collimo le cherche par son nom (`VITE_CATALOGUE_DRIVE_NAME`).
+
+   Sans ce Drive partagé, Collimo fonctionne avec les seules dispositions intégrées.
 
 ## Déployer
 
@@ -124,6 +148,8 @@ npm run deploy           # site Collimo en ligne
 | `drive.file` | Créer le dossier `Collimo` et, plus tard, les collages ; aucun autre fichier n'est modifiable |
 | `drive.appdata` | Mémoriser l'emplacement et la langue de chaque utilisateur |
 
+Aucune autorisation supplémentaire pour l'usine : le catalogue se lit avec `drive.readonly` et s'écrit avec `drive.file`. L'admin qui crée le fichier du catalogue peut le modifier directement. Un autre admin doit, une seule fois, choisir ce fichier dans le sélecteur Google que Collimo lui ouvre : c'est ce choix qui autorise Collimo à le modifier pour lui.
+
 ## À vérifier avec un vrai compte
 
 Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur le site de prévisualisation :
@@ -133,6 +159,7 @@ Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur
 - la création du dossier `Collimo` dans un Drive partagé ;
 - l'affichage des miniatures (repli automatique sur le fichier si une miniature ne s'affiche pas) ;
 - l'export d'un collage dans Mon Drive et dans un Drive partagé (envoi de fichiers de plus de 5 Mo) ;
+- l'usine : menu visible pour un Gestionnaire de contenu du Drive du catalogue, absent pour un lecteur ; première publication (création du fichier), puis publication par un second admin (autorisation par le sélecteur) ; disposition publiée visible par un utilisateur ordinaire ;
 - les photos HEIC d'iPhone, sur Safari (décodage natif) et sur Chrome (décodeur chargé à la demande) ;
 - les polices Google dans l'aperçu et l'export (elles n'ont pas pu être chargées pendant les tests automatiques, faute d'accès réseau) ;
 - le pincement à deux doigts sur un vrai téléphone ;
@@ -148,8 +175,10 @@ src/
   google/              connexion (GIS), client Drive, sélecteur Picker, Drive simulé
   i18n/                libellés FR et EN
   collage/             moteur : modèle, géométrie, rendu, export, projet, catalogue des dispositions
+  collage/factory/     opérations de l'usine (séparations, sommets, coupes, ordre) ; collage/validate.ts : vérifications
+  catalogue/           lecture et écriture du catalogue sur le Drive partagé, droits admin
   lib/                 logique pure testée : nommage, sélection, erreurs
-  ui/                  écrans (ui/editor : écran du collage)
+  ui/                  écrans (ui/editor : écran du collage, ui/factory : usine à dispositions)
   stickers/            catalogues d'icônes et de polices, recherche FR/EN
   dev/                 planche de recette (développement uniquement)
 tools/gen-assets.mjs   génération des catalogues dans public/assets

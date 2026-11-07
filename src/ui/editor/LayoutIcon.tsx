@@ -12,7 +12,7 @@ export function LayoutIcon({ layout, size = 64 }: { layout: Layout; size?: numbe
       <rect width={size} height={size} rx="4" className="layout-icon-bg" />
       {cells.map((c, i) =>
         c.path ? (
-          <path key={i} d={c.path} fillRule={c.evenodd ? 'evenodd' : 'nonzero'} className="layout-icon-cell" stroke="#767676" strokeWidth={c.shaped ? 0 : gap} strokeLinejoin="round" />
+          <path key={i} d={c.path} fillRule={c.evenodd ? 'evenodd' : 'nonzero'} className="layout-icon-cell" stroke="#767676" strokeWidth={c.shaped || c.noGap ? 0 : gap} strokeLinejoin="round" />
         ) : (
           <rect key={i} x={c.box.x} y={c.box.y} width={c.box.w} height={c.box.h} rx={Math.min(c.box.radius, 3)} className="layout-icon-cell" stroke="#767676" strokeWidth={1.5} />
         ),

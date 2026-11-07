@@ -2,6 +2,7 @@ import { COLLIMO_FOLDER_NAME, SUPPORTED_IMAGE_TYPES } from '../config'
 import {
   SessionExpiredError,
   type DriveFileInfo,
+  type DriveJsonFile,
   type DriveRef,
   type DriveService,
   type FolderInfo,
@@ -123,7 +124,67 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
     return files[0]?.id ?? null
   }
 
+  type RawJsonFile = { id: string; name: string; modifiedTime?: string; webViewLink?: string; capabilities?: { canEdit?: boolean } }
+  const JSON_FIELDS = 'id,name,modifiedTime,webViewLink,capabilities(canEdit)'
+  const toJsonFile = (f: RawJsonFile): DriveJsonFile => ({
+    id: f.id,
+    name: f.name,
+    modifiedTime: f.modifiedTime,
+    webViewLink: f.webViewLink,
+    canEdit: f.capabilities?.canEdit ?? false,
+  })
+
   return {
+    async findSharedDrive(ref) {
+      type RawDrive = { id: string; name: string; capabilities?: { canAddChildren?: boolean } }
+      const fields = 'id,name,capabilities(canAddChildren)'
+      let d: RawDrive | undefined
+      if (ref.id) {
+        try {
+          d = await call<RawDrive>(url(`/drives/${encodeURIComponent(ref.id)}`, { fields }))
+        } catch (e) {
+          if (e instanceof DriveApiError && (e.status === 404 || e.status === 403)) return null
+          throw e
+        }
+      } else if (ref.name) {
+        const found = await listAll<RawDrive>('/drives', 'drives', { q: `name = ${quote(ref.name)}`, pageSize: '10', fields: `nextPageToken, drives(${fields})` })
+        d = found[0]
+      }
+      return d ? { id: d.id, name: d.name, canAddChildren: d.capabilities?.canAddChildren ?? false } : null
+    },
+
+    async findRootFile(driveId, name) {
+      const files = await listAll<RawJsonFile>('/files', 'files', {
+        ...listScope(driveId),
+        q: `name = ${quote(name)} and ${quote(driveId)} in parents and trashed = false`,
+        fields: `nextPageToken, files(${JSON_FIELDS})`,
+        pageSize: '10',
+      })
+      return files[0] ? toJsonFile(files[0]) : null
+    },
+
+    async createJsonFile(parentId, name, data) {
+      const boundary = `collimo-${Math.random().toString(36).slice(2)}`
+      const metadata = JSON.stringify({ name, parents: [parentId], mimeType: 'application/json' })
+      const multipart =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--`
+      const f = await call<RawJsonFile>(`${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=${encodeURIComponent(JSON_FIELDS)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body: multipart,
+      })
+      return toJsonFile(f)
+    },
+
+    async updateJsonFile(id, data) {
+      const f = await call<RawJsonFile>(
+        `${UPLOAD}/files/${encodeURIComponent(id)}?uploadType=media&supportsAllDrives=true&fields=${encodeURIComponent(JSON_FIELDS)}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) },
+      )
+      return toJsonFile(f)
+    },
+
     async currentUser() {
       const about = await call<{ user: { displayName: string; emailAddress: string; photoLink?: string } }>(
         url('/about', { fields: 'user(displayName,emailAddress,photoLink)' }),

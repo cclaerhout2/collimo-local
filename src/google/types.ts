@@ -81,6 +81,22 @@ export interface DriveFileInfo {
   thumbnailLink?: string
 }
 
+/** Drive partagé, avec le droit d'y ajouter des fichiers (rôle « Gestionnaire de contenu » ou plus). */
+export interface SharedDriveInfo {
+  id: string
+  name: string
+  canAddChildren: boolean
+}
+
+export interface DriveJsonFile {
+  id: string
+  name: string
+  modifiedTime?: string
+  webViewLink?: string
+  /** L'utilisateur a-t-il le droit de modifier ce fichier dans Drive ? */
+  canEdit: boolean
+}
+
 export interface DriveService {
   currentUser(): Promise<SignedInUser>
   listSharedDrives(): Promise<DriveRef[]>
@@ -99,6 +115,13 @@ export interface DriveService {
   readJson(id: string): Promise<unknown>
   /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo). */
   uploadFile(folderId: string, name: string, data: Blob, mimeType: string): Promise<DriveFileInfo>
+  /** Drive partagé par son identifiant, ou par son nom exact ; null s'il n'existe pas ou n'est pas visible. */
+  findSharedDrive(ref: { id?: string; name?: string }): Promise<SharedDriveInfo | null>
+  /** Fichier par son nom, à la racine d'un Drive partagé. */
+  findRootFile(driveId: string, name: string): Promise<DriveJsonFile | null>
+  createJsonFile(parentId: string, name: string, data: unknown): Promise<DriveJsonFile>
+  /** Réécrit un fichier JSON ; erreur 403/404 si Collimo n'a pas encore été autorisé sur ce fichier. */
+  updateJsonFile(id: string, data: unknown): Promise<DriveJsonFile>
 }
 
 export interface FolderPicker {
@@ -106,6 +129,8 @@ export interface FolderPicker {
   pickFolder(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string; name: string } | null>
   /** Ouvre le sélecteur de photos sur le Drive donné ; null si l'utilisateur annule. */
   pickImage(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string } | null>
+  /** Sélecteur sur un fichier précis (donne à Collimo le droit de le modifier) ; null si annulé. */
+  pickFile(drive: DriveRef, lang: Lang, title: string, mimeType: string): Promise<{ id: string } | null>
 }
 
 export interface Services {

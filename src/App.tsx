@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { config, missingConfig } from './config'
-import { defaultLayoutFor } from './collage/catalog'
+import { defaultLayoutFor, setCustomCatalogue } from './collage/catalog'
+import { loadCatalogue, type CatalogueState } from './catalogue/store'
 import { parseProject, ProjectFormatError } from './collage/project'
 import { DEFAULT_RATIO } from './collage/ratios'
 import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } from './collage/types'
@@ -9,6 +10,7 @@ import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './
 import { useI18n, type Lang } from './i18n'
 import { isAllowedEmail, toUiError, type UiError } from './lib/errors'
 import { EditorScreen } from './ui/editor/EditorScreen'
+import { FactoryScreen } from './ui/factory/FactoryScreen'
 import { ErrorBanner } from './ui/ErrorBanner'
 import { GalleryScreen } from './ui/GalleryScreen'
 import type { ProjectEntry } from './ui/ProjectsList'
@@ -22,6 +24,7 @@ type Phase =
   | { name: 'setup' }
   | { name: 'gallery' }
   | { name: 'editor'; doc: CollageDoc; key: number }
+  | { name: 'factory' }
 
 const EMPTY_SETTINGS: UserSettings = { version: 1 }
 
@@ -48,6 +51,13 @@ export default function App() {
   const [selection, setSelection] = useState<string[]>([])
   const [error, setError] = useState<UiError | null>(null)
   const [busy, setBusy] = useState(false)
+  const [catalogue, setCatalogue] = useState<CatalogueState | null>(null)
+
+  /** Catalogue de l'usine : chargé en arrière-plan ; s'il est absent ou illisible, seules les dispositions intégrées sont proposées. */
+  const applyCatalogue = useCallback((c: CatalogueState | null) => {
+    setCatalogue(c)
+    setCustomCatalogue(c?.data ?? null)
+  }, [])
 
   const handleError = useCallback((e: unknown) => setError(toUiError(e)), [])
 
@@ -76,6 +86,9 @@ export default function App() {
       }
       setUser(me)
       setPhase({ name: 'loading' })
+      loadCatalogue(services.drive, config)
+        .then(applyCatalogue)
+        .catch((e) => console.warn('Catalogue des dispositions indisponible', e))
       const saved = (await services.drive.loadSettings()) ?? EMPTY_SETTINGS
       if (saved.lang) setLang(saved.lang)
       if (saved.location) {
@@ -111,6 +124,7 @@ export default function App() {
 
   function signOut() {
     services.auth.signOut()
+    applyCatalogue(null)
     setUser(null)
     setSettings(EMPTY_SETTINGS)
     setSelection([])
@@ -148,6 +162,7 @@ export default function App() {
         user={user}
         onLangChange={changeLang}
         onChangeLocation={user && phase.name === 'gallery' ? () => setPhase({ name: 'setup' }) : undefined}
+        onOpenFactory={catalogue?.isAdmin && location && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
         onSignOut={user ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
@@ -181,6 +196,18 @@ export default function App() {
           onSelectionChange={setSelection}
           onCreate={(photos) => setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })}
           onOpenProject={(entry) => void openProject(entry)}
+          onError={handleError}
+        />
+      )}
+
+      {phase.name === 'factory' && location && catalogue && user && (
+        <FactoryScreen
+          services={services}
+          location={location}
+          catalogue={catalogue}
+          userEmail={user.email}
+          onCatalogueChange={applyCatalogue}
+          onBack={() => setPhase({ name: 'gallery' })}
           onError={handleError}
         />
       )}

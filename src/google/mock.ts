@@ -3,7 +3,8 @@
  * Aucune donnée réelle : les « photos » sont des images générées.
  */
 import { COLLIMO_FOLDER_NAME } from '../config'
-import type { DriveFileInfo, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
+import { DriveApiError } from './drive'
+import type { DriveFileInfo, DriveJsonFile, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
 const PALETTE = ['#2dd4a7', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b']
 
@@ -95,7 +96,32 @@ async function fakeOriginal(id: string): Promise<Blob> {
   return canvas.convertToBlob({ type: 'image/png' })
 }
 
+/**
+ * Drive partagé du catalogue simulé. `?catalogue=lecteur` dans l'adresse : simple lecteur (pas d'usine) ;
+ * `?catalogue=autoriser` : catalogue existant, créé par un autre admin (il faut autoriser Collimo dessus).
+ */
+const CATALOGUE_DRIVE = { id: 'shared-catalogue', name: 'Collimo – Catalogue' }
+function catalogueMode(): 'admin' | 'lecteur' | 'autoriser' {
+  const v = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('catalogue') : null
+  return v === 'lecteur' || v === 'autoriser' ? v : 'admin'
+}
+
 export function createMockServices(): Services {
+  const mode = catalogueMode()
+  const json = new Map<string, DriveJsonFile & { parent: string; data: string; granted: boolean }>()
+  if (mode === 'autoriser') {
+    json.set('catalogue-1', {
+      id: 'catalogue-1',
+      name: 'collimo-catalogue.json',
+      parent: CATALOGUE_DRIVE.id,
+      canEdit: true,
+      granted: false,
+      modifiedTime: new Date().toISOString(),
+      webViewLink: '#demo',
+      data: JSON.stringify({ format: 'collimo-catalogue', version: 1, layouts: [], hiddenBuiltins: [] }),
+    })
+  }
+  const publicJson = ({ id, name, modifiedTime, webViewLink, canEdit }: DriveJsonFile) => ({ id, name, modifiedTime, webViewLink, canEdit })
   let signedIn = false
   let settings: UserSettings | null = null
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
@@ -145,7 +171,31 @@ export function createMockServices(): Services {
             .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
             .map(({ id, name, modifiedTime, webViewLink, thumbnailLink }) => ({ id, name, modifiedTime, webViewLink, thumbnailLink })),
         ),
+      async findSharedDrive(ref) {
+        const match = ref.id ? ref.id === CATALOGUE_DRIVE.id : ref.name === CATALOGUE_DRIVE.name
+        return delay(match ? { ...CATALOGUE_DRIVE, canAddChildren: mode !== 'lecteur' } : null, 200)
+      },
+      async findRootFile(driveId, name) {
+        const f = [...json.values()].find((x) => x.parent === driveId && x.name === name)
+        return delay(f ? { ...publicJson(f), canEdit: mode !== 'lecteur' } : null, 200)
+      },
+      async createJsonFile(parentId, name, data) {
+        const id = `catalogue-${json.size + 1}`
+        const f = { id, name, parent: parentId, canEdit: true, granted: true, modifiedTime: new Date().toISOString(), webViewLink: '#demo', data: JSON.stringify(data) }
+        json.set(id, f)
+        return delay(publicJson(f), 300)
+      },
+      async updateJsonFile(id, data) {
+        const f = json.get(id)
+        if (!f) throw new DriveApiError(404, 'file not found')
+        if (!f.granted || mode === 'lecteur') throw new DriveApiError(403, 'The user has not granted the app write access to the file')
+        f.data = JSON.stringify(data)
+        f.modifiedTime = new Date().toISOString()
+        return delay(publicJson(f), 300)
+      },
       async readJson(id) {
+        const j = json.get(id)
+        if (j) return delay(JSON.parse(j.data), 200)
         const f = files.get(id)
         if (!f) throw new Error('file not found')
         return JSON.parse(await f.data.text())
@@ -159,6 +209,12 @@ export function createMockServices(): Services {
       },
     },
     picker: {
+      async pickFile(drive) {
+        // Démo : le sélecteur « choisit » le catalogue, ce qui autorise Collimo à le modifier.
+        const f = [...json.values()].find((x) => x.parent === drive.id)
+        if (f) f.granted = true
+        return delay(f ? { id: f.id } : null, 300)
+      },
       async pickImage(drive) {
         // Démo : la dernière photo du premier dossier de ce Drive.
         const f = Object.values(folders).find((x) => x.driveId === drive.id)

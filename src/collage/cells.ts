@@ -5,7 +5,7 @@
  */
 import { cellBoxes, drawingArea, isolatedCells, MAX_SPACING, type CellBox } from './geometry'
 import { mapPath, parsePath, pathBBox, polyPath, serializePath, type Pt, type Seg } from './path'
-import { SHAPES, type CellDef } from './shapes'
+import { polyCutPath, SHAPES, type CellDef } from './shapes'
 import type { Borders, Layout, Rect } from './types'
 
 export interface CellGeom {
@@ -41,7 +41,7 @@ function segs(d: string): Seg[] {
 /** Chemin d'une case en forme, en coordonnées du cadre (0–1), à partir d'un cadre de rapport `aspect`. */
 export function cellPathFrame(c: CellDef, aspect: number, scale = 1): { segs: Seg[]; evenodd?: boolean } | null {
   if (c.kind === 'rect') return null
-  if (c.kind === 'poly') return { segs: segs(polyPath(c.points)) }
+  if (c.kind === 'poly') return { segs: segs(c.cuts?.some(Boolean) ? polyCutPath(c.points, c.cuts) : polyPath(c.points)) }
   if (c.kind === 'path') return { segs: segs(c.d), evenodd: c.evenodd }
   // Forme : carré unité posé dans le rectangle, proportions gardées en pixels (sauf stretch).
   let w = c.w
@@ -96,7 +96,7 @@ export function cellGeometry(layout: Layout, width: number, height: number, bord
   return layout.geo.map((c, i) => {
     if (c.kind === 'rect') return { box: rectBoxes[i] }
     // Forme posée sur une autre photo (médaillon) : contour tracé, pour que l'anneau d'écart se voie.
-    if (c.kind === 'shape' && overlapsEarlier(i)) {
+    if (c.kind === 'shape' && (c.over || overlapsEarlier(i))) {
       const px = toPx(cellPathFrame(c, aspect)!.segs)
       return { box: { ...pathBBox(px), radius: 0 }, path: serializePath(px) }
     }

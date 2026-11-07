@@ -6,6 +6,7 @@ interface Props {
   user: SignedInUser | null
   onLangChange: (lang: Lang) => void
   onChangeLocation?: () => void
+  onOpenFactory?: () => void
   onSignOut?: () => void
 }
 
@@ -20,7 +21,7 @@ export function Logo() {
   )
 }
 
-export function Header({ user, onLangChange, onChangeLocation, onSignOut }: Props) {
+export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, onSignOut }: Props) {
   const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -92,6 +93,18 @@ export function Header({ user, onLangChange, onChangeLocation, onSignOut }: Prop
                     }}
                   >
                     {t('menu.changeLocation')}
+                  </button>
+                )}
+                {onOpenFactory && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false)
+                      onOpenFactory()
+                    }}
+                  >
+                    {t('menu.factory')}
                   </button>
                 )}
                 {onSignOut && (
