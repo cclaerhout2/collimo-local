@@ -1,0 +1,80 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 13 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
+import type { LayoutDef } from '../types'
+
+/** Dispositions en rectangles pour 13 photo(s), dans l'ordre des captures de référence. */
+export const P13: LayoutDef[] = [
+  { id: 'p13-01', photos: 13, family: 'grille', split: 'r(c(x,x,x,x), c(x,x,x,x,x), c(x,x,x,x))' },
+  { id: 'p13-02', photos: 13, family: 'mixte', split: 'r(2*c(r(x,x), 2*x, r(x,x)), c(x,x,x,x), c(x,x,x,x))' },
+  { id: 'p13-03', photos: 13, family: 'mixte', split: 'r(2*c(x, r(c(x,x),c(x,x))), c(x,x,x,x), c(x,x,x,x))' },
+  { id: 'p13-04', photos: 13, family: 'mixte', split: 'r(c(x,x,x,x), c(x,x,x,x), 2*c(r(c(x,x),c(x,x)), x))' },
+  { id: 'p13-05', photos: 13, family: 'grille', split: 'r(25*c(x,x), 26*c(x,x,x), 26*c(x,x,x), 22*c(x,x,x,x,x))' },
+  { id: 'p13-07', photos: 13, family: 'mixte', split: 'r(c(x,x,x,x), 2*c(r(x,x), 2*x, r(x,x)), c(x,x,x,x))' },
+  { id: 'p13-11', photos: 13, family: 'mixte', split: 'c(r(x,x,x,x,x), 3*r(x,x,x), r(x,x,x,x,x))' },
+  {
+    id: 'p13-12',
+    photos: 13,
+    family: 'grille',
+    split: 'r(c(56*x,54*x,66*x,43*x), c(88*x,68*x,63*x), c(68*x,65*x,86*x), c(78*x,78*x,63*x))',
+  },
+  {
+    id: 'p13-14',
+    photos: 13,
+    family: 'fond',
+    rects: [
+      { x: 0.182, y: 0.04, w: 0.2, h: 0.151 },
+      { x: 0.613, y: 0.04, w: 0.204, h: 0.151 },
+      { x: 0.04, y: 0.231, w: 0.151, h: 0.151 },
+      { x: 0.236, y: 0.231, w: 0.151, h: 0.151 },
+      { x: 0.427, y: 0.231, w: 0.151, h: 0.151 },
+      { x: 0.622, y: 0.231, w: 0.151, h: 0.151 },
+      { x: 0.813, y: 0.231, w: 0.151, h: 0.151 },
+      { x: 0.142, y: 0.427, w: 0.213, h: 0.151 },
+      { x: 0.396, y: 0.427, w: 0.213, h: 0.151 },
+      { x: 0.649, y: 0.427, w: 0.209, h: 0.151 },
+      { x: 0.28, y: 0.618, w: 0.191, h: 0.151 },
+      { x: 0.52, y: 0.618, w: 0.2, h: 0.151 },
+      { x: 0.427, y: 0.809, w: 0.151, h: 0.151 },
+    ],
+  },
+  {
+    id: 'p13-16',
+    photos: 13,
+    family: 'mixte',
+    rects: [
+      { x: 0, y: 0, w: 0.196, h: 0.241 },
+      { x: 0.196, y: 0, w: 0.516, h: 0.173 },
+      { x: 0.712, y: 0, w: 0.288, h: 0.173 },
+      { x: 0, y: 0.241, w: 0.196, h: 0.5 },
+      { x: 0.196, y: 0.173, w: 0.411, h: 0.204 },
+      { x: 0.607, y: 0.173, w: 0.197, h: 0.409 },
+      { x: 0.804, y: 0.173, w: 0.196, h: 0.545 },
+      { x: 0.196, y: 0.377, w: 0.206, h: 0.387 },
+      { x: 0.402, y: 0.377, w: 0.205, h: 0.205 },
+      { x: 0.402, y: 0.582, w: 0.402, h: 0.182 },
+      { x: 0, y: 0.741, w: 0.196, h: 0.259 },
+      { x: 0.196, y: 0.764, w: 0.608, h: 0.236 },
+      { x: 0.804, y: 0.718, w: 0.196, h: 0.282 },
+    ],
+  },
+  { id: 'p13-17', photos: 13, family: 'mixte', split: 'r(c(x,x,x,x,x), 2*c(x,2*x,x), c(x,x,x,x,x))' },
+  {
+    id: 'p13-18',
+    photos: 13,
+    family: 'mixte',
+    split: 'c(r(63*c(38*r(x,x),62*x), 55*x, 52*c(x,x), 50*x), r(53*x, 57*c(x,x), 53*x, 57*c(x,x)))',
+  },
+  {
+    id: 'p13-19',
+    photos: 13,
+    family: 'mixte',
+    split: 'c(r(63*x,87*x,70*x), r(46*x,60*x,57*x,57*x), r(76*x,52*x,92*x), r(88*x,62*x,70*x))',
+  },
+  { id: 'p13-21', photos: 13, family: 'mixte', split: 'r(48*c(18*r(x,x), 82*x), 25*c(x,x,x,x,x), 27*c(x,x,x,x,x))' },
+  { id: 'p13-22', photos: 13, family: 'mixte', split: 'r(c(x,x,x,x,x), c(x,x,x,x,x), 2*c(79*x, 21*r(x,x)))' },
+  { id: 'p13-23', photos: 13, family: 'mixte', split: 'r(32*c(x,3*x,x), 34*c(x,x,x,x,x), 34*c(x,x,x,x,x))' },
+  { id: 'p13-24', photos: 13, family: 'mixte', split: 'r(c(x,x,x,x,x), c(x,x,x,x,x), c(x,3*x,x))' },
+  { id: 'p13-25', photos: 13, family: 'grille', split: 'r(21*c(x,x,x,x,x), 29*c(x,x), 25*c(x,x,x), 25*c(x,x,x))' },
+]

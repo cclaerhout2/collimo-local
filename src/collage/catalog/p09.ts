@@ -1,0 +1,103 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 9 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
+import type { LayoutDef, Rect } from '../types'
+
+/**
+ * Rectangle donné par deux coins opposés, en coordonnées du cadre (0–1).
+ * @param x0 - bord gauche
+ * @param y0 - bord haut
+ * @param x1 - bord droit
+ * @param y1 - bord bas
+ * @returns le rectangle (x, y, w, h)
+ */
+const box = (x0: number, y0: number, x1: number, y1: number): Rect => ({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
+
+/** Dispositions en rectangles pour 9 photo(s), dans l'ordre des captures de référence. */
+export const P09: LayoutDef[] = [
+  { id: 'p09-01', photos: 9, family: 'grille', split: 'r(c(x,x,x), c(x,x,x), c(x,x,x))' },
+  { id: 'p09-02', photos: 9, family: 'mixte', split: 'c(r(x,2*x,x), 2*r(x,2*x,x), r(x,2*x,x))' },
+  {
+    id: 'p09-03',
+    photos: 9,
+    family: 'mixte',
+    rects: [
+      box(0, 0, 0.33, 0.25),
+      box(0.33, 0, 0.7, 0.25),
+      box(0.7, 0, 1, 0.34),
+      box(0, 0.25, 0.25, 0.65),
+      box(0.25, 0.25, 0.7, 0.72),
+      box(0.7, 0.34, 1, 0.72),
+      box(0, 0.65, 0.25, 1),
+      box(0.25, 0.72, 0.62, 1),
+      box(0.62, 0.72, 1, 1),
+    ],
+  },
+  { id: 'p09-04', photos: 9, family: 'mixte', split: 'r(x, c(x,x,x,x), c(x,x,x,x))' },
+  {
+    id: 'p09-07',
+    photos: 9,
+    family: 'fond',
+    rects: (
+      [
+        [3, 0],
+        [2, 1],
+        [3, 1],
+        [1, 2],
+        [2, 2],
+        [3, 2],
+        [0, 3],
+        [1, 3],
+        [3, 3],
+      ] as const
+    ).map(([c, r]) => ({ x: c / 4, y: r / 4, w: 0.25, h: 0.25 })),
+  },
+  { id: 'p09-09', photos: 9, family: 'mixte', split: 'r(c(x,x,x,x), x, c(x,x,x,x))' },
+  { id: 'p09-10', photos: 9, family: 'mixte', split: 'r(2*c(2*x, r(x,x)), c(x,x,x), c(x,x,x))' },
+  { id: 'p09-11', photos: 9, family: 'mixte', split: 'r(5*c(r(x,x), 2*x, r(x,x)), 2*c(x,x,x,x))' },
+  { id: 'p09-12', photos: 9, family: 'mixte', split: 'r(c(x,x), c(x,x,x), c(x,x,x,x))' },
+  { id: 'p09-13', photos: 9, family: 'mixte', split: 'r(c(2*x,x,x), c(x,x,2*x), c(2*x,x,x))' },
+  { id: 'p09-16', photos: 9, family: 'mixte', split: 'c(x, 4*r(c(x,x,x,x), c(x,x,x,x)))' },
+  {
+    id: 'p09-19',
+    photos: 9,
+    family: 'fond',
+    rects: [
+      box(0.18, 0.12, 0.35, 0.28),
+      box(0.05, 0.34, 0.35, 0.55),
+      box(0.18, 0.58, 0.35, 0.76),
+      box(0.4, 0.2, 0.6, 0.41),
+      box(0.4, 0.45, 0.6, 0.65),
+      box(0.4, 0.69, 0.6, 0.91),
+      box(0.65, 0.12, 0.82, 0.28),
+      box(0.65, 0.34, 0.95, 0.55),
+      box(0.65, 0.58, 0.82, 0.76),
+    ],
+  },
+  {
+    id: 'p09-20',
+    photos: 9,
+    family: 'fond',
+    rects: [
+      box(0.31, 0.04, 0.48, 0.27),
+      box(0.52, 0.12, 0.69, 0.27),
+      box(0.04, 0.31, 0.27, 0.48),
+      box(0.12, 0.52, 0.27, 0.69),
+      box(0.31, 0.31, 0.69, 0.69),
+      box(0.73, 0.31, 0.88, 0.48),
+      box(0.73, 0.52, 0.96, 0.69),
+      box(0.31, 0.73, 0.48, 0.96),
+      box(0.52, 0.73, 0.69, 0.88),
+    ],
+  },
+  { id: 'p09-24', photos: 9, family: 'mixte', split: 'c(r(5*x,4*x,5*x), r(3*x,6*x,3*x), r(5*x,4*x,5*x))' },
+  { id: 'p09-25', photos: 9, family: 'mixte', split: 'c(r(56*x,92*x,48*x), r(74*x,58*x,66*x), r(56*x,92*x,48*x))' },
+  { id: 'p09-26', photos: 9, family: 'mixte', split: 'r(c(r(c(x,x), c(x,x)), x), c(x, r(x, c(x,x))))' },
+  { id: 'p09-27', photos: 9, family: 'mixte', split: 'r(c(4*x,5*x,4*x), c(x,x), c(x,x,x,x))' },
+  { id: 'p09-28', photos: 9, family: 'mixte', split: 'r(4*x, 3*c(x,x), 3*c(x,x), 3*c(x,x), 3*c(x,x))' },
+  { id: 'p09-29', photos: 9, family: 'mixte', split: 'r(2*x, c(x,x,x,x), c(x,x,x,x))' },
+  { id: 'p09-30', photos: 9, family: 'mixte', split: 'c(r(56*x,60*x,80*x), r(74*x,60*x,63*x), r(92*x,59*x,45*x))' },
+  { id: 'p09-31', photos: 9, family: 'mixte', split: 'c(r(x,x,x,x), x, r(x,x,x,x))' },
+  { id: 'p09-32', photos: 9, family: 'mixte', split: 'r(c(84*x,62*x,52*x), c(68*x,66*x,66*x), c(54*x,60*x,86*x))' },
+]

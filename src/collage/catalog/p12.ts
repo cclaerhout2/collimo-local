@@ -1,0 +1,92 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 12 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
+import type { LayoutDef } from '../types'
+
+/** Dispositions en rectangles pour 12 photo(s), dans l'ordre des captures de référence. */
+export const P12: LayoutDef[] = [
+  { id: 'p12-01', photos: 12, family: 'grille', split: 'r(c(x,x,x,x), c(x,x,x,x), c(x,x,x,x))' },
+  { id: 'p12-02', photos: 12, family: 'mixte', split: 'c(r(x,x,x,x), 2*r(x,x,x,x), r(x,x,x,x))' },
+  { id: 'p12-03', photos: 12, family: 'mixte', split: 'r(c(x,x,x,x), 2*c(x, 2*r(x,x), x), c(x,x,x,x))' },
+  { id: 'p12-04', photos: 12, family: 'mixte', split: 'r(c(x,x,x,x,x), 2*c(x,x), c(x,x,x,x,x))' },
+  { id: 'p12-06', photos: 12, family: 'grille', split: 'r(c(x,x,x,x), c(x,x), c(x,x), c(x,x,x,x))' },
+  { id: 'p12-07', photos: 12, family: 'mixte', split: 'r(c(x,x,x,x), c(x,x,x,x), 2*c(x, 2*r(x, c(x,x))))' },
+  {
+    id: 'p12-08',
+    photos: 12,
+    family: 'mixte',
+    split: 'c(r(45*x,45*x,60*c(x,x),67*c(x,x)), r(67*c(x,x),63*c(x,x),45*x,42*x))',
+  },
+  {
+    id: 'p12-09',
+    photos: 12,
+    family: 'mixte',
+    split: 'c(36*r(67*x,72*c(x,x),78*c(x,x)), 30*r(x,x), 34*r(67*x,72*c(x,x),78*c(x,x)))',
+  },
+  { id: 'p12-10', photos: 12, family: 'mixte', split: 'c(r(x,x,x,x,x), 2*r(x,x), r(x,x,x,x,x))' },
+  {
+    id: 'p12-12',
+    photos: 12,
+    family: 'fond',
+    rects: [
+      { x: 0.146, y: 0.101, w: 0.233, h: 0.138 },
+      { x: 0.434, y: 0.078, w: 0.132, h: 0.194 },
+      { x: 0.621, y: 0.101, w: 0.233, h: 0.138 },
+      { x: 0.196, y: 0.295, w: 0.137, h: 0.198 },
+      { x: 0.384, y: 0.323, w: 0.233, h: 0.138 },
+      { x: 0.667, y: 0.295, w: 0.137, h: 0.198 },
+      { x: 0.146, y: 0.548, w: 0.233, h: 0.138 },
+      { x: 0.434, y: 0.516, w: 0.132, h: 0.194 },
+      { x: 0.621, y: 0.548, w: 0.233, h: 0.138 },
+      { x: 0.196, y: 0.737, w: 0.137, h: 0.198 },
+      { x: 0.384, y: 0.765, w: 0.233, h: 0.134 },
+      { x: 0.667, y: 0.737, w: 0.137, h: 0.198 },
+    ],
+  },
+  { id: 'p12-13', photos: 12, family: 'mixte', split: 'r(21*c(x,x,x,x), 60*c(x, r(x, c(x,x))), 19*c(x,x,x,x))' },
+  {
+    id: 'p12-15',
+    photos: 12,
+    family: 'fond',
+    rects: [
+      { x: 0.298, y: 0.217, w: 0.294, h: 0.323 },
+      { x: 0.298, y: 0.083, w: 0.294, h: 0.092 },
+      { x: 0.628, y: 0.166, w: 0.17, h: 0.138 },
+      { x: 0.174, y: 0.217, w: 0.078, h: 0.12 },
+      { x: 0.078, y: 0.373, w: 0.174, h: 0.166 },
+      { x: 0.628, y: 0.346, w: 0.298, h: 0.194 },
+      { x: 0.124, y: 0.58, w: 0.22, h: 0.161 },
+      { x: 0.381, y: 0.58, w: 0.161, h: 0.184 },
+      { x: 0.578, y: 0.58, w: 0.298, h: 0.184 },
+      { x: 0.243, y: 0.788, w: 0.101, h: 0.083 },
+      { x: 0.381, y: 0.811, w: 0.211, h: 0.12 },
+      { x: 0.628, y: 0.811, w: 0.11, h: 0.083 },
+    ],
+  },
+  {
+    id: 'p12-17',
+    photos: 12,
+    family: 'mixte',
+    split: 'c(r(57*x, 43*c(58*r(x,x), 50*r(x,x,x))), r(41*c(60*r(x,x), 49*r(x,x,x)), 59*x))',
+  },
+  {
+    id: 'p12-18',
+    photos: 12,
+    family: 'mixte',
+    rects: [
+      { x: 0, y: 0, w: 0.397, h: 0.243 },
+      { x: 0.397, y: 0, w: 0.356, h: 0.243 },
+      { x: 0.753, y: 0, w: 0.247, h: 0.404 },
+      { x: 0, y: 0.243, w: 0.251, h: 0.353 },
+      { x: 0.251, y: 0.243, w: 0.192, h: 0.239 },
+      { x: 0.443, y: 0.243, w: 0.31, h: 0.239 },
+      { x: 0.251, y: 0.482, w: 0.306, h: 0.252 },
+      { x: 0.557, y: 0.482, w: 0.196, h: 0.252 },
+      { x: 0.753, y: 0.404, w: 0.247, h: 0.33 },
+      { x: 0, y: 0.596, w: 0.251, h: 0.404 },
+      { x: 0.251, y: 0.734, w: 0.352, h: 0.266 },
+      { x: 0.603, y: 0.734, w: 0.397, h: 0.266 },
+    ],
+  },
+]
