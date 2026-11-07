@@ -2,12 +2,21 @@
 
 Application web interne de collages photo à partir de Google Drive. Réservée au domaine Workspace de l'entreprise, sans serveur de données : photos, collages et exports restent dans Drive. Le site est statique, hébergé sur Firebase Hosting dans le projet GCP existant, cloisonné du reste du projet.
 
+> **Deux versions, deux dépôts.** Ce dépôt est la **version web** (photos dans Google Drive, compte de l'entreprise). La **version Windows**, application de bureau qui travaille sur les dossiers du PC sans compte ni serveur, est dans [cclaerhout2/collimo-windows](https://github.com/cclaerhout2/collimo-windows). Les deux partagent le même éditeur ; une évolution du moteur faite ici se reporte là-bas (et inversement) en copiant les dossiers `src/collage`, `src/ui`, `src/stickers`, `src/i18n` et `src/lib`.
+
+| | Version web (ce dépôt) | Version Windows |
+| --- | --- | --- |
+| Photos | Mon Drive, Drive partagés | dossiers du PC (et `G:` de Google Drive pour ordinateur) |
+| Compte | Google Workspace du domaine | aucun |
+| Installation | aucune (site web) | installeur ou `.exe` portable, sans droits d'administrateur |
+| Mise en place | projet Google Cloud, Firebase Hosting | aucune |
+
 Cahier des charges complet : document « [Collimo — Cahier des charges](https://claude.ai/artifact/1aj7VEJHhgdgBSEEJ72PVZ) ».
 
 ## Sommaire
 
 - [Fonctionnalités](#fonctionnalités)
-- [Installation sous Windows](#installation-sous-windows)
+- [Mise en ligne du site depuis Windows](#mise-en-ligne-du-site-depuis-windows)
 - [Mise en place manuelle (autres systèmes)](#mise-en-place-manuelle-autres-systèmes)
 - [Sécurité et cloisonnement](#sécurité-et-cloisonnement)
 - [Développement](#développement)
@@ -68,9 +77,9 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 
 Le catalogue de l'usine est le fichier `collimo-catalogue.json` à la racine du Drive partagé. Il est lu par tous au démarrage et vérifié à la lecture : une disposition invalide est ignorée. Chaque enregistrement relit d'abord le fichier, pour ne pas écraser le travail d'un autre admin ; Drive garde l'historique des versions. Sans ce Drive partagé, Collimo fonctionne avec les dispositions intégrées.
 
-## Installation sous Windows
+## Mise en ligne du site depuis Windows
 
-Trois scripts, à la racine du projet, se lancent d'un double-clic, sans ligne de commande ni droits d'administrateur :
+Ces scripts servent à **publier le site web** (pour l'application de bureau, voir [collimo-windows](https://github.com/cclaerhout2/collimo-windows)). Trois scripts, à la racine du projet, se lancent d'un double-clic, sans ligne de commande ni droits d'administrateur :
 
 | Script | Quand | Ce qu'il fait |
 | --- | --- | --- |
@@ -196,7 +205,7 @@ export function sizeForLongSide(ratio: number, long: number): { width: number; h
 ## Structure du projet
 
 ```
-install.bat, sync.bat, deploy.bat   installation et publication sous Windows
+install.bat, sync.bat, deploy.bat   mise en ligne du site, depuis un PC Windows
 firebase.json, .firebaserc          hébergement : la seule cible « collimo »
 .env.example, .env.production       configuration (modèle, et valeurs écrites par install.bat)
 src/
