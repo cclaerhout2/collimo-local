@@ -28,12 +28,24 @@ export function toUiError(e: unknown): UiError {
 }
 
 /**
- * Indique si le compte appartient au domaine autorisé.
+ * Liste des domaines autorisés.
+ * @param allowedDomain - un domaine, ou plusieurs séparés par des virgules ; vide = aucun
+ * @returns les domaines, en minuscules, sans espaces ni doublons
+ */
+export function allowedDomains(allowedDomain: string): string[] {
+  const list = allowedDomain.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean)
+  return [...new Set(list)]
+}
+
+/**
+ * Indique si le compte appartient à l'un des domaines autorisés.
  * @param email - adresse du compte
- * @param allowedDomain - domaine autorisé, en minuscules ; vide = pas de contrôle
+ * @param allowedDomain - un domaine, ou plusieurs séparés par des virgules ; vide = pas de contrôle
  * @returns `true` si le compte est accepté
  */
 export function isAllowedEmail(email: string, allowedDomain: string): boolean {
-  if (!allowedDomain) return true
-  return email.toLowerCase().endsWith(`@${allowedDomain}`)
+  const domains = allowedDomains(allowedDomain)
+  if (domains.length === 0) return true
+  const address = email.toLowerCase()
+  return domains.some((d) => address.endsWith(`@${d}`))
 }

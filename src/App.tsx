@@ -13,7 +13,7 @@ import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } fr
 import { createServices } from './google/services'
 import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
-import { isAllowedEmail, toUiError, type UiError } from './lib/errors'
+import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
 import { EditorScreen } from './ui/editor/EditorScreen'
 
 /** L'usine (admins seulement) n'est chargée qu'à l'ouverture. */
@@ -124,7 +124,7 @@ export default function App() {
       const me = await services.drive.currentUser()
       if (!isAllowedEmail(me.email, config.allowedDomain)) {
         services.auth.signOut()
-        setError({ key: 'error.domain', vars: { email: me.email, domain: config.allowedDomain } })
+        setError({ key: 'error.domain', vars: { email: me.email, domain: allowedDomains(config.allowedDomain).join(', ') } })
         return
       }
       setUser(me)

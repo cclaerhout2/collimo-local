@@ -11,7 +11,7 @@ export interface AppConfig {
   apiKey: string
   /** Numéro du projet Google Cloud, pour le Picker (VITE_GOOGLE_APP_ID). */
   appId: string
-  /** Domaine Workspace autorisé, en minuscules ; vide = pas de contrôle côté app. */
+  /** Domaine(s) Workspace autorisé(s), séparés par des virgules, en minuscules ; vide = pas de contrôle côté app. */
   allowedDomain: string
   /** Mode démo : Drive simulé, aucun appel à Google. */
   mock: boolean
