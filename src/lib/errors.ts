@@ -33,7 +33,10 @@ export function toUiError(e: unknown): UiError {
  * @returns les domaines, en minuscules, sans espaces ni doublons
  */
 export function allowedDomains(allowedDomain: string): string[] {
-  const list = allowedDomain.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean)
+  const list = allowedDomain
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean)
   return [...new Set(list)]
 }
 
