@@ -192,6 +192,12 @@ export const en: Record<MessageKey, string> = {
 
   'background.custom': 'Other colour',
 
+  'privacy.title': 'Before you share a collage',
+  'privacy.confidential': 'No confidential information: screens, whiteboards, documents, badges, plans.',
+  'privacy.background': 'Always check the background of every photo.',
+  'privacy.people': 'Crop the photos on the people.',
+  'export.privacyCheck': 'I checked that no confidential information appears in the collage, background included.',
+  'export.privacyRequired': 'Tick the check box to save.',
   'export.title': 'Export the collage',
   'export.format': 'Format',
   'export.size': 'Size',

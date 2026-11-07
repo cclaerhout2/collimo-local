@@ -8,6 +8,7 @@ import type { FolderPath, Shortcut } from '../google/types'
 import { useI18n } from '../i18n'
 import { currentFolder, folderLabel, shortcutLabel } from '../lib/locations'
 import { FolderIcon } from './icons'
+import { PrivacyNote } from './PrivacyNote'
 
 /** Propriétés du panneau des emplacements. */
 interface Props {
@@ -223,6 +224,8 @@ export function LocationsPanel({ shortcuts, recents, open, onOpen, onRemove, onR
           </ul>
         </>
       )}
+
+      <PrivacyNote className="privacy-in-panel" />
     </nav>
   )
 }

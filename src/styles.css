@@ -706,6 +706,77 @@ p {
   }
 }
 
+/* Rappel de confidentialité */
+.privacy-note {
+  margin: 1.5rem 0.25rem 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #5a4a1f;
+  border-radius: 10px;
+  background: #2b2617;
+  color: #f1dfa8;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.privacy-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  font-weight: 700;
+}
+
+.privacy-title .icon {
+  flex: none;
+  color: #f5c451;
+}
+
+.privacy-note ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.privacy-note li + li {
+  margin-top: 0.25rem;
+}
+
+.privacy-in-gallery {
+  display: none;
+  margin: 0 0 1rem;
+}
+
+.privacy-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.25rem 0 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #5a4a1f;
+  border-radius: 10px;
+  background: #2b2617;
+  color: #f1dfa8;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.privacy-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 0.1rem;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 699px) {
+  .privacy-in-panel {
+    display: none;
+  }
+
+  .privacy-in-gallery {
+    display: block;
+  }
+}
+
 /* Fenêtre d'ajout d'un emplacement */
 .drive-group {
   margin: 0.75rem 0 0.1rem;

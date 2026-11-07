@@ -9,6 +9,7 @@ import { useI18n } from '../i18n'
 import { currentFolder, folderLabel } from '../lib/locations'
 import { pruneSelection, toggleSelection } from '../lib/selection'
 import { FolderIcon } from './icons'
+import { PrivacyNote } from './PrivacyNote'
 import { ProjectsList, type ProjectEntry } from './ProjectsList'
 import { Thumbnail } from './Thumbnail'
 
@@ -145,6 +146,8 @@ export function GalleryScreen({
           </button>
         </div>
       </div>
+
+      <PrivacyNote className="privacy-in-gallery" />
 
       {!open.canAddChildren && <div className="banner banner-info">{t('gallery.readOnly')}</div>}
 

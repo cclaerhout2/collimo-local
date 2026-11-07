@@ -196,6 +196,12 @@ export const fr = {
 
   'background.custom': 'Autre couleur',
 
+  'privacy.title': 'Avant de partager un collage',
+  'privacy.confidential': 'Aucune information confidentielle : écrans, tableaux blancs, documents, badges, plans.',
+  'privacy.background': 'Regardez toujours l’arrière-plan de chaque photo.',
+  'privacy.people': 'Recadrez les photos sur les personnes.',
+  'export.privacyCheck': 'J’ai vérifié qu’aucune information confidentielle n’apparaît dans le collage, y compris en arrière-plan.',
+  'export.privacyRequired': 'Cochez la case de vérification pour enregistrer.',
   'export.title': 'Exporter le collage',
   'export.format': 'Format',
   'export.size': 'Taille',

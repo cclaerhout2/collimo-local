@@ -76,6 +76,7 @@ export function ExportSheet({
   const [quality, setQuality] = useState(DEFAULT_JPEG_QUALITY)
   const [status, setStatus] = useState<Status>({ name: 'idle' })
   const [error, setError] = useState<UiError | null>(null)
+  const [checked, setChecked] = useState(false)
 
   const sizes = {
     standard: exportSize('standard', ratio, doc, layout, apple),
@@ -98,6 +99,7 @@ export function ExportSheet({
    * @returns une promesse résolue une fois l'enregistrement fini ou l'erreur affichée
    */
   async function save() {
+    if (!checked) return
     setError(null)
     try {
       const saved = await saveCollage({
@@ -211,6 +213,11 @@ export function ExportSheet({
               </fieldset>
             )}
 
+            <label className="privacy-check">
+              <input type="checkbox" checked={checked} disabled={busy} onChange={(e) => setChecked(e.target.checked)} />
+              <span>{t('export.privacyCheck')}</span>
+            </label>
+
             {status.name === 'rendering' && <p className="progress">{t('export.rendering', { done: status.done, total: status.total })}</p>}
             {status.name === 'uploading' && <p className="progress">{t('export.uploading')}</p>}
             {error && <ErrorBanner error={error} onReconnect={onReconnect} />}
@@ -219,7 +226,13 @@ export function ExportSheet({
               <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
                 {t('export.cancel')}
               </button>
-              <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={busy}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void save()}
+                disabled={busy || !checked}
+                title={checked ? undefined : t('export.privacyRequired')}
+              >
                 {t('export.save')}
               </button>
             </div>
