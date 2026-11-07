@@ -15,8 +15,6 @@ interface Props {
   onChangeLocation?: () => void
   /** Ouvre l'usine à dispositions (admins seulement). */
   onOpenFactory?: () => void
-  /** Change le dossier du catalogue de l'usine (application Windows). */
-  onChooseCatalogue?: () => void
   /** Déconnecte l'utilisateur. */
   onSignOut?: () => void
 }
@@ -40,7 +38,7 @@ export function Logo() {
  * Barre du haut, présente sur tous les écrans.
  * @returns l'en-tête
  */
-export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, onChooseCatalogue, onSignOut }: Props) {
+export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, onSignOut }: Props) {
   const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -129,18 +127,6 @@ export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, on
                     }}
                   >
                     {t('menu.factory')}
-                  </button>
-                )}
-                {onChooseCatalogue && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setOpen(false)
-                      onChooseCatalogue()
-                    }}
-                  >
-                    {t('menu.catalogueFolder')}
                   </button>
                 )}
                 {onSignOut && (

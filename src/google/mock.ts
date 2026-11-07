@@ -154,7 +154,6 @@ export function createMockServices(): Services {
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
 
   return {
-    kind: 'mock',
     auth: {
       async signIn() {
         await delay(null, 500)
@@ -194,7 +193,6 @@ export function createMockServices(): Services {
         const stored = files.get(id)
         return stored ? stored.data : fakeOriginal(id)
       },
-      folderLink: (folderId) => `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`,
       listFolderFiles: (folderId, namePrefix) =>
         delay(
           [...files.values()]

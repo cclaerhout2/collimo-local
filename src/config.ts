@@ -15,8 +15,6 @@ export interface AppConfig {
   allowedDomain: string
   /** Mode démo : Drive simulé, aucun appel à Google. */
   mock: boolean
-  /** Application Windows : fichiers du PC, sans compte Google (pont posé par Electron avant le chargement de la page). */
-  desktop: boolean
   /** Drive partagé du catalogue de l'usine à dispositions : identifiant (prioritaire) ou nom exact. */
   catalogueDriveId: string
   /** Nom exact du Drive partagé du catalogue, utilisé si `catalogueDriveId` est vide. */
@@ -32,7 +30,6 @@ export const config: AppConfig = {
   appId: env.VITE_GOOGLE_APP_ID ?? '',
   allowedDomain: (env.VITE_ALLOWED_DOMAIN ?? '').trim().toLowerCase(),
   mock: env.VITE_MOCK === '1',
-  desktop: typeof globalThis === 'object' && 'collimoDesktop' in globalThis,
   catalogueDriveId: (env.VITE_CATALOGUE_DRIVE_ID ?? '').trim(),
   catalogueDriveName: (env.VITE_CATALOGUE_DRIVE_NAME ?? '').trim() || 'Collimo – Catalogue',
 }
@@ -70,7 +67,7 @@ export const HEIC_TYPES = ['image/heic', 'image/heif'] as const
  * @returns les noms des variables manquantes, vide si tout est en place
  */
 export function missingConfig(c: AppConfig): string[] {
-  if (c.mock || c.desktop) return []
+  if (c.mock) return []
   const missing: string[] = []
   if (!c.clientId) missing.push('VITE_GOOGLE_CLIENT_ID')
   if (!c.apiKey) missing.push('VITE_GOOGLE_API_KEY')

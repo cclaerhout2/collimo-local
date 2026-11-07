@@ -45,9 +45,8 @@ async function decode(blob: Blob, mimeType: string): Promise<ImageBitmap> {
     // Safari décode le HEIC nativement.
     return await createImageBitmap(blob)
   } catch {
-    // Ailleurs : décodeur chargé seulement quand une photo HEIC est utilisée. Version « csp », sans
-    // `new Function` : elle reste permise par la politique de sécurité de l'application Windows.
-    const { heicTo } = await import('heic-to/csp')
+    // Ailleurs : décodeur chargé seulement quand une photo HEIC est utilisée.
+    const { heicTo } = await import('heic-to')
     return heicTo({ blob, type: 'bitmap' })
   }
 }

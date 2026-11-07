@@ -72,9 +72,7 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
       <ProjectsList services={services} collimoFolderId={location.collimoFolderId} onOpen={onOpenProject} onError={onError} />
       <div className="gallery-head">
         <div>
-          <p className="crumbs">
-            {t('gallery.location', { drive: driveName, folder: services.kind === 'desktop' ? location.folder.id : location.folder.name })}
-          </p>
+          <p className="crumbs">{t('gallery.location', { drive: driveName, folder: location.folder.name })}</p>
           {photos && <p className="muted">{t('gallery.count', { count: photos.length })}</p>}
         </div>
         <button

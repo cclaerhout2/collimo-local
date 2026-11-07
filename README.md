@@ -2,15 +2,12 @@
 
 Application web interne de collages photo à partir de Google Drive. Réservée au domaine Workspace de l'entreprise, sans serveur de données : photos, collages et exports restent dans Drive. Le site est statique, hébergé sur Firebase Hosting dans le projet GCP existant, cloisonné du reste du projet.
 
-Collimo existe aussi en **application Windows** : le même éditeur, sur les photos du PC, sans compte Google ni serveur (voir [Application Windows](#application-windows)).
-
 Cahier des charges complet : document « [Collimo — Cahier des charges](https://claude.ai/artifact/1aj7VEJHhgdgBSEEJ72PVZ) ».
 
 ## Sommaire
 
 - [Fonctionnalités](#fonctionnalités)
-- [Application Windows](#application-windows)
-- [Site web : installation et publication depuis Windows](#site-web--installation-et-publication-depuis-windows)
+- [Installation sous Windows](#installation-sous-windows)
 - [Mise en place manuelle (autres systèmes)](#mise-en-place-manuelle-autres-systèmes)
 - [Sécurité et cloisonnement](#sécurité-et-cloisonnement)
 - [Développement](#développement)
@@ -71,41 +68,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 
 Le catalogue de l'usine est le fichier `collimo-catalogue.json` à la racine du Drive partagé. Il est lu par tous au démarrage et vérifié à la lecture : une disposition invalide est ignorée. Chaque enregistrement relit d'abord le fichier, pour ne pas écraser le travail d'un autre admin ; Drive garde l'historique des versions. Sans ce Drive partagé, Collimo fonctionne avec les dispositions intégrées.
 
-## Application Windows
-
-Collimo tourne aussi en application de bureau Windows (Electron), construite depuis le même code. L'éditeur, les 541 dispositions, les textes, stickers, filtres, l'export et l'usine sont identiques ; seul l'accès aux fichiers change : **les photos et les collages sont des fichiers du PC**. Pas de compte Google, pas de serveur, rien à configurer dans Google Cloud.
-
-**Installer** (sans droits d'administrateur) :
-
-- `Collimo-Setup-X.Y.Z.exe` : installeur, en français. Installe pour l'utilisateur seul dans `%LOCALAPPDATA%\Programs\Collimo`, avec raccourcis sur le Bureau et dans le menu Démarrer ; désinstallation par « Ajouter ou supprimer des programmes » ;
-- `Collimo-X.Y.Z-portable.exe` : un seul fichier, à lancer sans installation (depuis une clé USB, par exemple).
-
-Les deux fichiers se téléchargent dans l'onglet **Actions** du dépôt (« Application Windows », dernière exécution, rubrique *Artifacts*), ou dans **Releases** pour une version publiée. Ils ne sont pas signés : au premier lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur » ; cliquer sur « Informations complémentaires », puis « Exécuter quand même ».
-
-**Utilisation** : au premier lancement, choisir le dossier des photos. Tout dossier convient : Images, un dossier réseau, OneDrive, ou un dossier Google Drive via [Google Drive pour ordinateur](https://www.google.com/drive/download/) (lecteur `G:`), qui garde ainsi les collages dans Drive. Collimo y crée le sous-dossier `Collimo` pour les collages (image + `.collimo.json`, jamais écrasés). Dossier et langue sont retrouvés au lancement suivant.
-
-| | Version web | Application Windows |
-| --- | --- | --- |
-| Photos | Mon Drive, Drive partagés (sélecteur Google) | dossiers du PC (sélecteur Windows) |
-| Compte | Google Workspace du domaine | session Windows, aucun compte |
-| Miniatures | fournies par Drive | calculées par Windows, comme dans l'Explorateur |
-| HEIC (iPhone) | décodées dans le navigateur | décodées par Collimo ; miniatures par Windows si l'extension HEIF est installée, sinon par Collimo |
-| Usine à dispositions | admins du Drive partagé « Collimo – Catalogue » | tout utilisateur ; catalogue dans `%APPDATA%\Collimo\catalogue`, ou dans un dossier partagé choisi par le menu « Dossier du catalogue… » (qui peut y écrire est admin) |
-| Polices Google | chargées depuis Google | idem (connexion internet nécessaire pour les polices ; le reste marche hors ligne) |
-
-**Sécurité** : la page n'a aucun accès à Windows ni à Node (isolation, bac à sable de Chromium) ; elle passe par un pont limité qui n'ouvre que les dossiers et fichiers choisis par l'utilisateur avec les sélecteurs de Windows (liste gardée dans `%APPDATA%\Collimo\desktop.json`, que la page ne peut ni lire ni modifier) et le dossier du catalogue. Collimo ne crée que des images JPG/PNG et des fichiers JSON, n'écrase jamais un collage, et ne fait ouvrir par Windows que des dossiers, images et JSON, jamais un programme. Aucun contenu extérieur n'est chargé, sauf les polices Google ; les liens s'ouvrent dans le navigateur par défaut. Une photo introuvable (dossier déplacé, collage venu d'un autre PC) est cherchée sous le même nom dans le dossier en cours. En cas d'erreur inattendue, le détail est noté dans `%TEMP%\collimo-erreurs.log`. `F12` ouvre les outils de développement, pour le diagnostic.
-
-**Développement** :
-
-| Commande | Rôle |
-| --- | --- |
-| `npm run desktop:start` | construit et lance l'application sur ce PC |
-| `npm run desktop:pack` | construit l'installeur et la version portable dans `release/` (sous Windows ; sous Linux, Wine 32 et 64 bits est nécessaire) |
-| `npm run test:e2e` | test de bout en bout de l'application (après `desktop:build`) : dossier, galerie (HEIC compris), collage, enregistrement, réouverture, usine, relancement, dossier déplacé, cloisonnement ; `--exe chemin\Collimo.exe` pour tester un exécutable construit ou installé |
-
-Le workflow `.github/workflows/windows.yml` fait tout cela à chaque envoi, sur une vraie machine Windows : tests, construction, test de bout en bout de l'exécutable, puis installation silencieuse, test de l'application installée et désinstallation. **Publier une version** : augmenter `version` dans `package.json` et l'envoyer sur `main` : le workflow crée la Release GitHub `vX.Y.Z` avec les deux `.exe` (une version déjà publiée n'est jamais remplacée).
-
-## Site web : installation et publication depuis Windows
+## Installation sous Windows
 
 Trois scripts, à la racine du projet, se lancent d'un double-clic, sans ligne de commande ni droits d'administrateur :
 
@@ -233,16 +196,12 @@ export function sizeForLongSide(ratio: number, long: number): { width: number; h
 ## Structure du projet
 
 ```
-install.bat, sync.bat, deploy.bat   installation et publication du site web, sous Windows
+install.bat, sync.bat, deploy.bat   installation et publication sous Windows
 firebase.json, .firebaserc          hébergement : la seule cible « collimo »
 .env.example, .env.production       configuration (modèle, et valeurs écrites par install.bat)
-electron/              application Windows : fenêtre, protocole collimo://, accès aux fichiers (files.ts)
-build-resources/       icônes de l'application Windows
-.github/workflows/     construction et tests de l'application Windows sur une machine Windows
 src/
   config.ts            configuration et constantes (autorisations, 20 photos max…)
   google/              connexion (GIS), client Drive, sélecteur Picker, Drive simulé
-  desktop/             services de l'application Windows (fichiers du PC) et contrat avec electron/
   catalogue/           lecture et écriture du catalogue de l'usine sur le Drive partagé, droits admin
   collage/             moteur : modèle, géométrie, rendu, couleurs, export, projet, validation
   collage/catalog/     les 541 dispositions intégrées et le format du catalogue de l'usine
@@ -257,9 +216,8 @@ src/
   docs.test.ts         contrôle de la documentation du code
 public/data/           catalogues de stickers et de polices, chargés à la demande
 tools/gen-assets.mjs   génération de public/data
-tools/build-electron.mjs, tools/e2e-desktop.mjs   construction et test de bout en bout de l'application Windows
 ```
 
 ## Licences
 
-L'application Windows embarque Electron (MIT) et Chromium (licences dans `LICENSES.chromium.html`, à côté de `Collimo.exe`). Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0 ; il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée. Icônes Phosphor (MIT) et Fluent Emoji (MIT) ; polices Google Fonts (licences libres, chargées depuis Google).
+Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0 ; il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée. Icônes Phosphor (MIT) et Fluent Emoji (MIT) ; polices Google Fonts (licences libres, chargées depuis Google).
