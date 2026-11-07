@@ -36,6 +36,9 @@ export const fr = {
   'locations.title': 'Mes emplacements',
   'locations.add': 'Ajouter un emplacement',
   'locations.remove': 'Retirer « {name} » de la liste',
+  'locations.rename': 'Renommer « {name} »',
+  'locations.renameLabel': 'Nouveau nom pour « {name} »',
+  'locations.reorderHint': 'Glissez-déposez pour changer l’ordre (ou Alt + flèches). Double-clic pour renommer.',
   'locations.recents': 'Récents',
   'locations.emptyTitle': 'Ajoutez votre premier emplacement',
   'locations.emptyText':

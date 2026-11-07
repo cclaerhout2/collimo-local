@@ -50,6 +50,50 @@ export function removeShortcut(shortcuts: Shortcut[], folderId: string): Shortcu
 }
 
 /**
+ * Nom affiché d'un raccourci : le nom choisi par l'utilisateur, sinon celui du dossier.
+ * @param shortcut - raccourci
+ * @param myDriveLabel - libellé de Mon Drive dans la langue choisie
+ * @returns le nom à afficher
+ */
+export function shortcutLabel(shortcut: Shortcut, myDriveLabel: string): string {
+  return shortcut.label ?? folderLabel(shortcut.folder, myDriveLabel)
+}
+
+/**
+ * Renomme un raccourci (le dossier Drive garde son nom). Un nom vide, ou identique à celui du
+ * dossier, revient au nom du dossier.
+ * @param shortcuts - raccourcis actuels
+ * @param folderId - dossier du raccourci
+ * @param label - nouveau nom
+ * @param myDriveLabel - libellé de Mon Drive, pour reconnaître le nom par défaut de sa racine
+ * @returns la nouvelle liste
+ */
+export function renameShortcut(shortcuts: Shortcut[], folderId: string, label: string, myDriveLabel: string): Shortcut[] {
+  const clean = label.trim().replace(/\s+/g, ' ').slice(0, 60)
+  return shortcuts.map((s) => {
+    if (s.folder.id !== folderId) return s
+    const { label: _old, ...rest } = s
+    return clean && clean !== folderLabel(s.folder, myDriveLabel) ? { ...rest, label: clean } : rest
+  })
+}
+
+/**
+ * Déplace un raccourci dans la liste.
+ * @param shortcuts - raccourcis actuels
+ * @param from - position actuelle
+ * @param to - nouvelle position (bornée à la liste)
+ * @returns la nouvelle liste, ou la même si rien ne bouge
+ */
+export function moveShortcut(shortcuts: Shortcut[], from: number, to: number): Shortcut[] {
+  const target = Math.max(0, Math.min(shortcuts.length - 1, to))
+  if (from === target || from < 0 || from >= shortcuts.length) return shortcuts
+  const next = [...shortcuts]
+  const [moved] = next.splice(from, 1)
+  next.splice(target, 0, moved)
+  return next
+}
+
+/**
  * Indique si un dossier a déjà son raccourci.
  * @param shortcuts - raccourcis actuels
  * @param folderId - dossier

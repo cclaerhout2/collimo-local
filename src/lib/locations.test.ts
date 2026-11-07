@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderPath, Shortcut } from '../google/types'
-import { addShortcut, currentFolder, folderLabel, isPinned, MAX_RECENTS, migrateSettings, pushRecent, removeShortcut } from './locations'
+import {
+  addShortcut,
+  currentFolder,
+  folderLabel,
+  isPinned,
+  MAX_RECENTS,
+  migrateSettings,
+  moveShortcut,
+  pushRecent,
+  removeShortcut,
+  renameShortcut,
+  shortcutLabel,
+} from './locations'
 
 const drive = { id: 'd1', name: 'Com' }
 const sc = (id: string): Shortcut => ({ drive, folder: { id, name: id.toUpperCase() } })
@@ -22,6 +34,29 @@ describe('raccourcis', () => {
   it('affiche la racine de Mon Drive avec le libellé traduit', () => {
     expect(folderLabel({ id: 'root', name: 'My Drive' }, 'Mon Drive')).toBe('Mon Drive')
     expect(folderLabel({ id: 'x', name: 'Photos' }, 'Mon Drive')).toBe('Photos')
+  })
+})
+
+describe('renommage et ordre', () => {
+  it('renomme un raccourci et revient au nom du dossier si le nom est vide ou identique', () => {
+    const named = renameShortcut([sc('a'), sc('b')], 'a', '  Mes   photos ', 'Mon Drive')
+    expect(shortcutLabel(named[0], 'Mon Drive')).toBe('Mes photos')
+    expect(named[1]).toEqual(sc('b'))
+    expect(renameShortcut(named, 'a', '   ', 'Mon Drive')[0]).toEqual(sc('a'))
+    expect(renameShortcut(named, 'a', 'A', 'Mon Drive')[0]).toEqual(sc('a'))
+    const root: Shortcut = { drive: { id: null, name: 'Mon Drive' }, folder: { id: 'root', name: 'My Drive' } }
+    expect(renameShortcut([root], 'root', 'Mon Drive', 'Mon Drive')[0].label).toBeUndefined()
+    expect(renameShortcut([sc('a')], 'a', 'x'.repeat(100), 'Mon Drive')[0].label).toHaveLength(60)
+  })
+
+  it('déplace un raccourci, avec une position bornée', () => {
+    const ids = (l: Shortcut[]) => l.map((s) => s.folder.id)
+    const list = [sc('a'), sc('b'), sc('c')]
+    expect(ids(moveShortcut(list, 0, 2))).toEqual(['b', 'c', 'a'])
+    expect(ids(moveShortcut(list, 2, 0))).toEqual(['c', 'a', 'b'])
+    expect(ids(moveShortcut(list, 1, 9))).toEqual(['a', 'c', 'b'])
+    expect(moveShortcut(list, 1, 1)).toBe(list)
+    expect(moveShortcut(list, 0, -3)).toBe(list)
   })
 })
 

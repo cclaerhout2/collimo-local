@@ -14,7 +14,16 @@ import { createServices } from './google/services'
 import type { FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
-import { addShortcut, currentFolder, isPinned, migrateSettings, pushRecent, removeShortcut } from './lib/locations'
+import {
+  addShortcut,
+  currentFolder,
+  isPinned,
+  migrateSettings,
+  moveShortcut,
+  pushRecent,
+  removeShortcut,
+  renameShortcut,
+} from './lib/locations'
 import { AddLocationDialog } from './ui/AddLocationDialog'
 import { EditorScreen } from './ui/editor/EditorScreen'
 
@@ -311,6 +320,10 @@ export default function App() {
             open={open}
             onOpen={(fp) => void openFolder(fp)}
             onRemove={removeLocation}
+            onRename={(id, label) =>
+              updateSettings((s) => ({ ...s, shortcuts: renameShortcut(s.shortcuts ?? [], id, label, t('setup.myDrive')) }))
+            }
+            onMove={(from, to) => updateSettings((s) => ({ ...s, shortcuts: moveShortcut(s.shortcuts ?? [], from, to) }))}
             onAdd={() => setAdding(true)}
           />
           {opening && !open && (

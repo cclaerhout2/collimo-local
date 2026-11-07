@@ -20,7 +20,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 **Connexion et Drive**
 
 - connexion Google (SSO de l'entreprise), refus des comptes hors domaine ;
-- panneau « Mes emplacements » : raccourcis vers Mon Drive, un Drive partagé entier ou un dossier précis, ajoutés et retirés d'un clic (retirer un raccourci ne touche pas au Drive) ; « Épingler ce dossier » ajoute le dossier ouvert ; les 5 derniers dossiers ouverts sont proposés en « Récents » ; sur mobile, le panneau devient une barre défilante ;
+- panneau « Mes emplacements » : raccourcis vers Mon Drive, un Drive partagé entier ou un dossier précis, ajoutés et retirés d'un clic (retirer un raccourci ne touche pas au Drive), renommés (crayon, double-clic ou F2) et réordonnés par glisser-déposer (ou Alt + flèches) ; « Épingler ce dossier » ajoute le dossier ouvert ; les 5 derniers dossiers ouverts sont proposés en « Récents » ; sur mobile, le panneau devient une barre défilante ;
 - navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
 - raccourcis, dernier dossier ouvert et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
 - galerie de miniatures, sélection ordonnée de 1 à 20 photos ; photos HEIC des iPhone décodées dans le navigateur ;

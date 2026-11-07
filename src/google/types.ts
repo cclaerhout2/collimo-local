@@ -65,6 +65,8 @@ export interface Shortcut {
   drive: DriveRef
   /** Dossier de départ (racine du Drive ou dossier précis). */
   folder: FolderRef
+  /** Nom choisi par l'utilisateur ; absent = nom du dossier. */
+  label?: string
 }
 
 /** Chemin d'un dossier ouvert : du dossier de départ (raccourci) jusqu'au dossier affiché, inclus. */

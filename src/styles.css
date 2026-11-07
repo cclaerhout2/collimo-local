@@ -480,6 +480,7 @@ p {
 }
 
 .location {
+  position: relative;
   display: flex;
   align-items: center;
   border-radius: 10px;
@@ -524,11 +525,34 @@ p {
   white-space: nowrap;
 }
 
-.location-remove {
-  flex: none;
-  width: 32px;
+.location-tools {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: flex;
+  border-radius: 8px;
+  background: var(--panel);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.location.active .location-tools {
+  background: #1d2f2a;
+}
+
+.location:hover .location-tools,
+.location:focus-within .location-tools {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.location-tool {
+  display: grid;
+  place-items: center;
+  width: 28px;
   height: 32px;
-  margin-right: 4px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: none;
@@ -536,24 +560,68 @@ p {
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
-  opacity: 0;
-}
-
-.location:hover .location-remove,
-.location.active .location-remove,
-.location-remove:focus-visible {
-  opacity: 1;
-}
-
-.location-remove:hover {
-  background: var(--panel-2);
-  color: var(--text);
 }
 
 @media (hover: none) {
-  .location-remove {
+  .location-tools {
+    position: static;
+    transform: none;
+    background: none;
     opacity: 1;
+    pointer-events: auto;
   }
+
+  .location.active .location-tools {
+    background: none;
+  }
+}
+
+.location.dragging {
+  opacity: 0.45;
+}
+
+.location.drag-over {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.location[draggable='true'] .location-open {
+  cursor: grab;
+}
+
+.location-edit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+}
+
+.location-edit .icon {
+  flex: none;
+}
+
+.location-edit input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.locations-hint {
+  margin: 0.5rem 0.6rem 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.location-tool:hover {
+  background: var(--panel-2);
+  color: var(--text);
 }
 
 .location-add {
@@ -615,6 +683,14 @@ p {
 
   .location-name {
     max-width: 11rem;
+  }
+
+  .location.drag-over {
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
+  .locations-hint {
+    display: none;
   }
 
   .location-add {

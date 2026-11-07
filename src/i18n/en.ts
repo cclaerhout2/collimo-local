@@ -33,6 +33,9 @@ export const en: Record<MessageKey, string> = {
   'locations.title': 'Your locations',
   'locations.add': 'Add a location',
   'locations.remove': 'Remove “{name}” from the list',
+  'locations.rename': 'Rename “{name}”',
+  'locations.renameLabel': 'New name for “{name}”',
+  'locations.reorderHint': 'Drag and drop to reorder (or Alt + arrows). Double-click to rename.',
   'locations.recents': 'Recent',
   'locations.emptyTitle': 'Add your first location',
   'locations.emptyText':
