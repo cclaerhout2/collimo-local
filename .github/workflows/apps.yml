@@ -212,7 +212,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             adb install -r release/Collimo-*-android-test.apk
-            node tools/e2e-android.mjs
+            node tools/e2e-android.mjs || (adb logcat -d | grep -iE "collimo|chromium|AndroidRuntime|FATAL|crash|lowmemory|am_kill|WebView" | tail -150; exit 1)
             adb install -r release/Collimo-*-android.apk
             adb shell am start -W -n fr.collimo.app/fr.collimo.app.MainActivity
             sleep 15

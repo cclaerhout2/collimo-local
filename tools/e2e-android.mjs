@@ -57,6 +57,36 @@ async function launch() {
 }
 
 /**
+ * Écrit dans le journal l'état de la page au moment d'un échec (taille, barre de sélection, élément
+ * sous son centre) et une petite capture en base64 : les fichiers joints au workflow ne sont pas toujours
+ * consultables, le journal l'est.
+ * @param {import('playwright-core').Page} page - page de Collimo
+ */
+async function diagnose(page) {
+  try {
+    const info = await page.evaluate(() => {
+      const bar = document.querySelector('.selection-bar')
+      const r = bar?.getBoundingClientRect()
+      const hit = r ? document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) : null
+      return {
+        url: location.href,
+        viewport: [innerWidth, innerHeight, devicePixelRatio],
+        visualViewport: [visualViewport?.width, visualViewport?.height],
+        bar: r && [r.x, r.y, r.width, r.height],
+        barClass: bar?.className,
+        hit: hit && `${hit.tagName}.${hit.className}`,
+        ua: navigator.userAgent,
+      }
+    })
+    console.log('DIAGNOSTIC', JSON.stringify(info))
+    const shot = await page.screenshot({ type: 'jpeg', quality: 35, scale: 'css' })
+    console.log(`CAPTURE-BASE64-DEBUT\n${shot.toString('base64')}\nCAPTURE-BASE64-FIN`)
+  } catch (err) {
+    console.log('DIAGNOSTIC impossible :', err.message)
+  }
+}
+
+/**
  * Appuie sur le bouton Retour d'Android.
  */
 const back = () => adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
@@ -164,6 +194,7 @@ try {
   }
 } catch (e) {
   await page.screenshot({ path: path.join(OUT, 'android-echec.png') }).catch(() => {})
+  await diagnose(page)
   throw e
 } finally {
   await browser.close().catch(() => {})
