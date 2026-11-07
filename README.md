@@ -89,11 +89,11 @@ Les deux fichiers se téléchargent dans l'onglet **Actions** du dépôt (« App
 | Photos | Mon Drive, Drive partagés (sélecteur Google) | dossiers du PC (sélecteur Windows) |
 | Compte | Google Workspace du domaine | session Windows, aucun compte |
 | Miniatures | fournies par Drive | calculées par Windows, comme dans l'Explorateur |
-| HEIC (iPhone) | décodées dans le navigateur | idem ; miniatures par Windows si l'extension HEIF est installée, sinon par Collimo |
+| HEIC (iPhone) | décodées dans le navigateur | décodées par Collimo ; miniatures par Windows si l'extension HEIF est installée, sinon par Collimo |
 | Usine à dispositions | admins du Drive partagé « Collimo – Catalogue » | tout utilisateur ; catalogue dans `%APPDATA%\Collimo\catalogue`, ou dans un dossier partagé choisi par le menu « Dossier du catalogue… » (qui peut y écrire est admin) |
 | Polices Google | chargées depuis Google | idem (connexion internet nécessaire pour les polices ; le reste marche hors ligne) |
 
-**Sécurité** : la page n'a aucun accès à Windows ni à Node (isolation, bac à sable de Chromium) ; elle passe par un pont limité qui n'ouvre que les dossiers et fichiers choisis par l'utilisateur avec les sélecteurs de Windows (liste gardée dans `%APPDATA%\Collimo\desktop.json`) et les données de l'app. Aucun contenu extérieur n'est chargé, sauf les polices Google ; les liens s'ouvrent dans le navigateur par défaut. En cas d'erreur inattendue, le détail est noté dans `%TEMP%\collimo-erreurs.log`. `F12` ouvre les outils de développement, pour le diagnostic.
+**Sécurité** : la page n'a aucun accès à Windows ni à Node (isolation, bac à sable de Chromium) ; elle passe par un pont limité qui n'ouvre que les dossiers et fichiers choisis par l'utilisateur avec les sélecteurs de Windows (liste gardée dans `%APPDATA%\Collimo\desktop.json`, que la page ne peut ni lire ni modifier) et le dossier du catalogue. Collimo ne crée que des images JPG/PNG et des fichiers JSON, n'écrase jamais un collage, et ne fait ouvrir par Windows que des dossiers, images et JSON, jamais un programme. Aucun contenu extérieur n'est chargé, sauf les polices Google ; les liens s'ouvrent dans le navigateur par défaut. Une photo introuvable (dossier déplacé, collage venu d'un autre PC) est cherchée sous le même nom dans le dossier en cours. En cas d'erreur inattendue, le détail est noté dans `%TEMP%\collimo-erreurs.log`. `F12` ouvre les outils de développement, pour le diagnostic.
 
 **Développement** :
 
@@ -101,7 +101,7 @@ Les deux fichiers se téléchargent dans l'onglet **Actions** du dépôt (« App
 | --- | --- |
 | `npm run desktop:start` | construit et lance l'application sur ce PC |
 | `npm run desktop:pack` | construit l'installeur et la version portable dans `release/` (sous Windows ; sous Linux, Wine 32 et 64 bits est nécessaire) |
-| `npm run test:e2e` | test de bout en bout de l'application (après `desktop:build`) : dossier, galerie, collage, enregistrement, réouverture, usine, relancement, cloisonnement ; `--exe chemin\Collimo.exe` pour tester un exécutable construit ou installé |
+| `npm run test:e2e` | test de bout en bout de l'application (après `desktop:build`) : dossier, galerie (HEIC compris), collage, enregistrement, réouverture, usine, relancement, dossier déplacé, cloisonnement ; `--exe chemin\Collimo.exe` pour tester un exécutable construit ou installé |
 
 Le workflow `.github/workflows/windows.yml` fait tout cela à chaque envoi, sur une vraie machine Windows : tests, construction, test de bout en bout de l'exécutable, puis installation silencieuse, test de l'application installée et désinstallation. **Publier une version** : changer `version` dans `package.json`, puis créer l'étiquette correspondante (`git tag v0.2.0 && git push origin v0.2.0`) : les deux `.exe` sont joints à une Release GitHub.
 
