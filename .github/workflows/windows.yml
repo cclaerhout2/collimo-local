@@ -2,7 +2,8 @@
 # puis test de bout en bout sur l'application réellement installée (installation silencieuse, sans droits
 # d'administrateur), sur une machine Windows de GitHub.
 # Les fichiers produits sont téléchargeables dans l'onglet « Actions », rubrique « Artifacts ».
-# Une étiquette v* (ex. v0.2.0) publie en plus une « Release » GitHub avec les deux .exe.
+# Sur main, la version de package.json est publiée en « Release » GitHub (vX.Y.Z, avec les deux .exe)
+# si elle ne l'est pas déjà : pour publier une nouvelle version, il suffit d'augmenter `version`.
 name: Application Windows
 
 on:
@@ -79,9 +80,15 @@ jobs:
             release/Collimo-Setup-*.exe
             release/Collimo-*-portable.exe
 
-      - name: Publication (étiquette v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publication de la version (main)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: gh release create $env:GITHUB_REF_NAME (Get-ChildItem release -Filter 'Collimo-*.exe').FullName --title "Collimo $env:GITHUB_REF_NAME" --generate-notes
+        run: |
+          $v = 'v' + (node -p "require('./package.json').version")
+          gh release view $v *> $null
+          if ($LASTEXITCODE -eq 0) { "Version $v déjà publiée : rien à faire."; exit 0 }
+          $files = (Get-ChildItem release -Filter 'Collimo-*.exe').FullName
+          gh release create $v $files --target $env:GITHUB_SHA --title "Collimo $v" --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw "Publication de $v impossible" }
