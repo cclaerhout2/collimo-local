@@ -10,10 +10,12 @@ import { loadCatalogue, type CatalogueState } from './catalogue/store'
 import { parseProject, ProjectFormatError } from './collage/project'
 import { DEFAULT_RATIO } from './collage/ratios'
 import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } from './collage/types'
+import { DriveApiError, FOLDER_MIME } from './google/drive'
 import { createServices } from './google/services'
-import type { FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
+import type { DriveRef, FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
+import { FOLDER_PARAM, parseFolderParam, type LinkTarget } from './lib/folderLink'
 import {
   addShortcut,
   currentFolder,
@@ -33,12 +35,31 @@ import { ErrorBanner } from './ui/ErrorBanner'
 import { GalleryScreen } from './ui/GalleryScreen'
 import type { ProjectEntry } from './ui/ProjectsList'
 import { Header } from './ui/Header'
+import { LinkProblem } from './ui/LinkProblem'
 import { LocationsPanel } from './ui/LocationsPanel'
 import { SignInScreen } from './ui/SignInScreen'
 
 /** Phase de l'application, c'est-à-dire l'écran affiché ; l'éditeur porte le collage ouvert. */
 type Phase =
   { name: 'signin' } | { name: 'loading' } | { name: 'gallery' } | { name: 'editor'; doc: CollageDoc; key: number } | { name: 'factory' }
+
+/**
+ * Lit le dossier demandé dans l'adresse (`?folder=…`).
+ * @returns l'élément désigné, `invalid` si le paramètre est présent mais illisible, ou `null`
+ */
+function readFolderParam(): LinkTarget | 'invalid' | null {
+  const raw = new URLSearchParams(window.location.search).get(FOLDER_PARAM)
+  if (raw === null) return null
+  return parseFolderParam(raw) ?? 'invalid'
+}
+
+/** Retire `?folder=…` de l'adresse, une fois le dossier ouvert ou le lien abandonné. */
+function clearFolderParam() {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has(FOLDER_PARAM)) return
+  url.searchParams.delete(FOLDER_PARAM)
+  window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+}
 
 /** Réglages d'un utilisateur qui n'a encore rien enregistré. */
 const EMPTY_SETTINGS: UserSettings = { version: 1 }
@@ -85,6 +106,8 @@ export default function App() {
   const [open, setOpen] = useState<OpenFolder | null>(null)
   const [opening, setOpening] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [link, setLink] = useState<LinkTarget | 'invalid' | null>(readFolderParam)
+  const [linkProblem, setLinkProblem] = useState(false)
   /** Réglages les plus récents, pour enchaîner les modifications sans attendre un nouveau rendu. */
   const settingsRef = useRef<UserSettings>(EMPTY_SETTINGS)
   /** Numéro de la dernière ouverture de dossier demandée : une réponse plus ancienne est ignorée. */
@@ -155,6 +178,45 @@ export default function App() {
   )
 
   /**
+   * Ouvre le dossier d'un lien Collimo (`?folder=…`). Un lien de fichier ouvre le dossier qui le
+   * contient. Sans accès, Drive répond « introuvable » : l'écran propose alors de demander l'accès.
+   * @param target - élément désigné par le lien
+   */
+  async function openLink(target: LinkTarget) {
+    setOpening(true)
+    setLinkProblem(false)
+    setError(null)
+    try {
+      const item = await services.drive.getItem(target.id)
+      const folder = item.mimeType === FOLDER_MIME ? item : item.parentId ? await services.drive.getFolder(item.parentId) : null
+      if (!folder) throw new DriveApiError(404, 'Parent folder not visible')
+      let drive: DriveRef = { id: null, name: t('setup.myDrive') }
+      if (folder.driveId) {
+        const shared = await services.drive.findSharedDrive({ id: folder.driveId })
+        drive = { id: folder.driveId, name: shared?.name ?? folder.name }
+      }
+      setLink(null)
+      clearFolderParam()
+      await openFolder({ drive, path: [{ id: folder.id, name: folder.id === folder.driveId ? drive.name : folder.name }] })
+    } catch (e) {
+      if (e instanceof DriveApiError && !e.isRateLimit && (e.status === 404 || e.status === 403)) {
+        setOpen(null)
+        setLinkProblem(true)
+      } else handleError(e)
+      setOpening(false)
+    }
+  }
+
+  /** Abandonne le lien (invalide ou sans accès) et revient au dernier dossier ouvert. */
+  function dismissLink() {
+    setLink(null)
+    setLinkProblem(false)
+    clearFolderParam()
+    const current = settingsRef.current.current
+    if (current) void openFolder(current, true)
+  }
+
+  /**
    * Ouvre un projet enregistré dans l'éditeur.
    * Un fichier projet illisible donne un message dédié plutôt qu'une erreur générique.
    * @param entry - projet choisi dans la liste de la galerie
@@ -200,7 +262,8 @@ export default function App() {
       setSettings(migrated)
       if (saved.location) services.drive.saveSettings(migrated).catch(handleError)
       setPhase({ name: 'gallery' })
-      if (migrated.current) void openFolder(migrated.current, true)
+      if (link && link !== 'invalid') void openLink(link)
+      else if (migrated.current) void openFolder(migrated.current, true)
       else if (!migrated.shortcuts?.length) setAdding(true)
     } catch (e) {
       handleError(e)
@@ -229,6 +292,7 @@ export default function App() {
     setOpen(null)
     setOpening(false)
     setAdding(false)
+    setLinkProblem(false)
     settingsRef.current = EMPTY_SETTINGS
     setSettings(EMPTY_SETTINGS)
     setSelection([])
@@ -303,6 +367,15 @@ export default function App() {
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
       {(configError ?? error) && <ErrorBanner error={(configError ?? error)!} onReconnect={() => void reconnect()} />}
+      {link && link !== 'invalid' && phase.name === 'signin' && <div className="banner banner-info">{t('link.signinHint')}</div>}
+      {link === 'invalid' && (
+        <div className="banner banner-error" role="alert">
+          <span>{t('link.invalid')}</span>
+          <button type="button" className="btn btn-ghost btn-small" onClick={dismissLink}>
+            {t('link.dismiss')}
+          </button>
+        </div>
+      )}
 
       {phase.name === 'signin' && <SignInScreen busy={busy} disabled={!!configError} onSignIn={() => void signIn()} />}
 
@@ -326,12 +399,15 @@ export default function App() {
             onMove={(from, to) => updateSettings((s) => ({ ...s, shortcuts: moveShortcut(s.shortcuts ?? [], from, to) }))}
             onAdd={() => setAdding(true)}
           />
-          {opening && !open && (
+          {linkProblem && link && link !== 'invalid' && user && (
+            <LinkProblem target={link} email={user.email} busy={opening} onRetry={() => void openLink(link)} onDismiss={dismissLink} />
+          )}
+          {!linkProblem && opening && !open && (
             <main className="screen screen-center">
               <div className="spinner" aria-label={t('locations.opening')} />
             </main>
           )}
-          {!opening && !open && (
+          {!linkProblem && !opening && !open && (
             <main className="screen screen-center">
               <div className="empty locations-empty">
                 <p>
@@ -346,7 +422,7 @@ export default function App() {
               </div>
             </main>
           )}
-          {open && (
+          {!linkProblem && open && (
             <GalleryScreen
               key={currentFolder(open).id}
               services={services}

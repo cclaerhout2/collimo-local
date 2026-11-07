@@ -25,6 +25,13 @@ export interface FolderInfo {
   canAddChildren: boolean
 }
 
+/** Élément Drive (dossier ou fichier) désigné par un lien. */
+export interface DriveItem extends FolderInfo {
+  mimeType: string
+  /** Dossier parent, s'il est visible. */
+  parentId: string | null
+}
+
 /** Photo d'un dossier Drive. */
 export interface Photo {
   id: string
@@ -174,6 +181,8 @@ export interface DriveService {
   listSharedDrives(): Promise<DriveRef[]>
   /** Un dossier par son identifiant, avec les droits de l'utilisateur. */
   getFolder(id: string): Promise<FolderInfo>
+  /** Un élément quelconque (dossier ou fichier), avec son type et son dossier parent ; erreur 404 si l'utilisateur n'y a pas accès. */
+  getItem(id: string): Promise<DriveItem>
   /** Images directement dans un dossier, dans l'ordre naturel des noms. */
   listPhotos(folder: { id: string }, driveId: string | null): Promise<Photo[]>
   /** Une photo par son identifiant (après un choix dans le sélecteur). */

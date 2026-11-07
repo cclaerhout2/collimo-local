@@ -706,6 +706,42 @@ p {
   }
 }
 
+/* Lien Collimo vers un dossier */
+.link-problem h1 {
+  font-size: 1.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.link-steps {
+  margin: 0.75rem 0;
+  padding-left: 1.2rem;
+}
+
+.link-steps li + li {
+  margin-top: 0.4rem;
+}
+
+.copy-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+
+.copy-fallback input {
+  flex: 1;
+  min-width: 16rem;
+  min-height: 36px;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
 /* Rappel de confidentialité */
 .privacy-note {
   margin: 1.5rem 0.25rem 0;

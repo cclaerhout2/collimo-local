@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } 
 import { MAX_PHOTOS } from '../config'
 import type { FolderPath, FolderRef, OpenFolder, Photo, Services } from '../google/types'
 import { useI18n } from '../i18n'
+import { collimoFolderLink } from '../lib/folderLink'
 import { currentFolder, folderLabel } from '../lib/locations'
 import { pruneSelection, toggleSelection } from '../lib/selection'
 import { FolderIcon } from './icons'
@@ -57,6 +58,19 @@ export function GalleryScreen({
   const folder = currentFolder(open)
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [subfolders, setSubfolders] = useState<FolderRef[] | null>(null)
+  const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle')
+  const shareLink = collimoFolderLink(`${window.location.origin}${window.location.pathname}`, folder.id)
+
+  /** Copie le lien Collimo du dossier ouvert ; si le navigateur refuse, le lien s'affiche pour une copie à la main. */
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setCopied('done')
+      window.setTimeout(() => setCopied('idle'), 2500)
+    } catch {
+      setCopied('failed')
+    }
+  }
   const [limitHint, setLimitHint] = useState(false)
 
   const folderId = folder.id
@@ -129,6 +143,9 @@ export function GalleryScreen({
           {photos && <p className="muted">{t('gallery.count', { count: photos.length })}</p>}
         </div>
         <div className="gallery-tools">
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => void copyLink()}>
+            <LinkIcon /> {copied === 'done' ? t('gallery.linkCopied') : t('gallery.copyLink')}
+          </button>
           <button type="button" className="btn btn-ghost btn-small" onClick={onPin} disabled={pinned} aria-pressed={pinned}>
             <span aria-hidden="true">{pinned ? '★' : '☆'}</span> {pinned ? t('gallery.pinned') : t('gallery.pin')}
           </button>
@@ -146,6 +163,13 @@ export function GalleryScreen({
           </button>
         </div>
       </div>
+
+      {copied === 'failed' && (
+        <p className="copy-fallback">
+          {t('gallery.linkCopyFailed')}{' '}
+          <input readOnly value={shareLink} onFocus={(e) => e.target.select()} aria-label={t('gallery.copyLink')} />
+        </p>
+      )}
 
       <PrivacyNote className="privacy-in-gallery" />
 
@@ -238,5 +262,23 @@ export function GalleryScreen({
         </div>
       </div>
     </main>
+  )
+}
+
+/**
+ * Icône de lien du bouton « Copier le lien Collimo ».
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function LinkIcon() {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }

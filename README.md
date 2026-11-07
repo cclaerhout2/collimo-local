@@ -21,6 +21,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 
 - connexion Google (SSO de l'entreprise), refus des comptes hors domaine ;
 - panneau « Mes emplacements » : raccourcis vers Mon Drive, un Drive partagé entier ou un dossier précis, ajoutés et retirés d'un clic (retirer un raccourci ne touche pas au Drive), renommés (crayon, double-clic ou F2) et réordonnés par glisser-déposer (ou Alt + flèches) ; « Épingler ce dossier » ajoute le dossier ouvert ; les 5 derniers dossiers ouverts sont proposés en « Récents » ; sur mobile, le panneau devient une barre défilante ;
+- lien direct vers un dossier : `https://SITE.web.app/?folder=ID` (ou `?folder=` suivi d'un lien Google Drive de dossier ou de photo) ouvre ce dossier après la connexion ; bouton « Copier le lien Collimo » dans la galerie ; sans accès, Collimo le signale (Drive ne distingue pas « introuvable » de « sans accès ») et renvoie vers la page Drive du dossier pour « Demander l'accès », puis « Réessayer » ;
 - navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
 - raccourcis, dernier dossier ouvert et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
 - galerie de miniatures, sélection ordonnée de 1 à 20 photos ; photos HEIC des iPhone décodées dans le navigateur ;

@@ -3,7 +3,7 @@
  * Aucune donnée réelle : les « photos » sont des images générées.
  */
 import { COLLIMO_FOLDER_NAME } from '../config'
-import { DriveApiError } from './drive'
+import { DriveApiError, FOLDER_MIME } from './drive'
 import type { DriveFileInfo, DriveJsonFile, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
 /** Couleurs des dégradés des fausses photos. */
@@ -191,8 +191,24 @@ export function createMockServices(): Services {
       listSharedDrives: () => delay(sharedDrives),
       async getFolder(id) {
         const f = folders[id]
-        if (!f) throw new Error('folder not found')
+        if (!f) throw new DriveApiError(404, 'File not found')
         return delay({ id: f.id, name: f.name, driveId: f.driveId, canAddChildren: f.canAddChildren })
+      },
+      async getItem(id) {
+        const f = folders[id]
+        if (f)
+          return delay({
+            id: f.id,
+            name: f.name,
+            driveId: f.driveId,
+            canAddChildren: f.canAddChildren,
+            mimeType: FOLDER_MIME,
+            parentId: f.parent,
+          })
+        const owner = Object.values(folders).find((x) => x.photos.some((p) => p.id === id))
+        const p = owner?.photos.find((x) => x.id === id)
+        if (!owner || !p) throw new DriveApiError(404, 'File not found')
+        return delay({ id: p.id, name: p.name, driveId: owner.driveId, canAddChildren: false, mimeType: p.mimeType, parentId: owner.id })
       },
       listPhotos: (folder) => delay(folders[folder.id]?.photos ?? [], 600),
       async getPhoto(id) {

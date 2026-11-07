@@ -392,6 +392,30 @@ export function createDriveClient(
       return info
     },
 
+    async getItem(id) {
+      const f = await call<{
+        id: string
+        name: string
+        mimeType: string
+        driveId?: string
+        parents?: string[]
+        capabilities?: { canAddChildren?: boolean }
+      }>(
+        url(`/files/${encodeURIComponent(id)}`, {
+          fields: 'id,name,mimeType,driveId,parents,capabilities(canAddChildren)',
+          supportsAllDrives: 'true',
+        }),
+      )
+      return {
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        driveId: f.driveId ?? null,
+        parentId: f.parents?.[0] ?? null,
+        canAddChildren: f.capabilities?.canAddChildren ?? false,
+      }
+    },
+
     async listPhotos(folder, driveId) {
       const files = await listAll<RawFile>('/files', 'files', {
         ...listScope(driveId),
