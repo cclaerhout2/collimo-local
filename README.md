@@ -90,6 +90,30 @@ Les catalogues d'icônes et de polices sont générés dans `public/assets` par 
 - interface en français et en anglais.
 
 
+## Installation simplifiée (Windows)
+
+Trois scripts, lancés d'un double-clic, sans ligne de commande ni droits d'administrateur :
+
+| Script | Quand | Ce qu'il fait |
+| --- | --- | --- |
+| `install.bat` | une fois par PC | installe Node.js et Git en version portable si besoin, télécharge le projet depuis GitHub, installe l'outil Firebase, connecte le compte Google ; la première fois seulement, configure le site (projet GCP, site d'hébergement dédié, identifiants), puis partage cette configuration via GitHub |
+| `sync.bat` | en arrivant sur un PC | met la copie du PC à jour depuis GitHub, sans perdre de travail local |
+| `deploy.bat` | pour publier | envoie le travail sur GitHub, construit le site, publie une version de test (adresse fixe tant qu'elle sert au moins tous les 30 jours ; la première fois, le script indique comment l'autoriser pour la connexion Google), puis le site pour tout le domaine après confirmation |
+
+**Premier PC** : télécharger `install.bat` depuis GitHub (bouton « Download raw file »), double-clic, répondre aux questions. Les pages de la console Google Cloud à régler s'ouvrent une par une, avec les valeurs exactes à saisir ; le script vérifie le format de ce qu'on colle.
+
+**PC suivants** : même `install.bat` ; la configuration est déjà sur GitHub, il n'y a que les outils et le compte à installer.
+
+**Cloisonnement dans le projet GCP partagé** :
+
+- Collimo n'utilise qu'un site d'hébergement dédié. `install.bat` affiche les sites existants et propose d'en créer un nouveau. Il ne réutilise un site existant qu'après une double confirmation (retaper son nom), pour ne pas écraser une autre application.
+- `deploy.bat` ne publie que la cible `hosting:collimo` : jamais de déploiement global, ni règles Firestore ou Storage, ni Functions.
+- `install.bat` ne modifie rien dans la console Google Cloud. Il ouvre les pages et donne les valeurs à saisir ; c'est toi qui valides.
+- L'écran de consentement est seulement vérifié, jamais modifié.
+- Les outils (Node.js, Git, Firebase) s'installent dans le profil Windows de l'utilisateur, sans toucher au système.
+
+La configuration est enregistrée dans `.firebaserc` et `.env.production`, versionnés : ces valeurs ne sont pas secrètes (elles sont visibles dans le site publié). `deploy.bat` ne publie que la cible `hosting:collimo` : les autres sites et bases du projet ne sont jamais touchés.
+
 ## Démarrer en local
 
 ```bash
