@@ -84,7 +84,7 @@ export const CATEGORY_LABELS: Record<string, [string, string]> = {
 }
 
 /** Dossier des catalogues générés. */
-const ASSETS = '/data'
+const ASSETS = `${import.meta.env.BASE_URL}data`
 /** Fichiers JSON déjà demandés, par chemin. */
 const cache = new Map<string, Promise<unknown>>()
 

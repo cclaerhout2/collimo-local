@@ -205,6 +205,7 @@ export const fr = {
     'L’image et le fichier projet sont dans le dossier Collimo. Le collage reste ouvert : chaque nouvel enregistrement crée un nouveau collage.',
   'export.openImage': 'Ouvrir l’image',
   'export.openFolder': 'Ouvrir le dossier Collimo',
+  'export.share': 'Partager…',
   'export.download': 'Télécharger',
   'export.close': 'Fermer',
 

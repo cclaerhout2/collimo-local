@@ -202,6 +202,7 @@ export const en: Record<MessageKey, string> = {
     'The image and the project file are in the Collimo folder. The collage stays open: each new save creates a new collage.',
   'export.openImage': 'Open the image',
   'export.openFolder': 'Open the Collimo folder',
+  'export.share': 'Share…',
   'export.download': 'Download',
   'export.close': 'Close',
 

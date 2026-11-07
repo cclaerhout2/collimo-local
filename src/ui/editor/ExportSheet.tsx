@@ -125,7 +125,30 @@ export function ExportSheet({
   }
 
   const folderUrl = drive.folderLink(collimoFolderId)
-  const onAndroid = getDesktopBridge()?.platform === 'android'
+  const bridge = getDesktopBridge()
+  // Téléphones et version web locale : pas de téléchargement utile, mais la feuille de partage du système.
+  const mobile = bridge?.platform === 'android' || bridge?.platform === 'ios'
+  const canShare =
+    !!bridge?.share ||
+    (bridge?.platform === 'web' &&
+      typeof navigator.canShare === 'function' &&
+      navigator.canShare({ files: [new File([new Uint8Array(1)], 'x.jpg', { type: 'image/jpeg' })] }))
+
+  /**
+   * Ouvre la feuille de partage du système sur le collage enregistré (Enregistrer dans Photos, Messages…).
+   * Une annulation par l'utilisateur n'est pas une erreur.
+   * @param saved - collage enregistré
+   * @param fmt - format de l'image
+   */
+  async function share(saved: SavedCollage, fmt: ExportFormat) {
+    const name = `${saved.baseName}.${fmt === 'png' ? 'png' : 'jpg'}`
+    try {
+      if (bridge?.share) await bridge.share(saved.image.id, name)
+      else await navigator.share({ files: [new File([saved.blob], name, { type: saved.blob.type })], title: name })
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') setError(toUiError(e))
+    }
+  }
 
   return (
     <div className="sheet-backdrop" role="presentation" onClick={busy ? undefined : onClose}>
@@ -150,8 +173,13 @@ export function ExportSheet({
                   {t('export.openFolder')}
                 </a>
               )}
-              {/* Sur Android, la WebView ne sait pas télécharger : le collage est déjà dans le dossier choisi. */}
-              {!onAndroid && (
+              {canShare && (
+                <button type="button" className="btn" onClick={() => void share(status.saved, format)}>
+                  {t('export.share')}
+                </button>
+              )}
+              {/* Sur téléphone, la WebView ne sait pas télécharger : le collage est déjà enregistré, et Partager le sort. */}
+              {!mobile && (
                 <a className="btn" href={status.url} download={`${status.saved.baseName}.${format === 'png' ? 'png' : 'jpg'}`}>
                   {t('export.download')}
                 </a>

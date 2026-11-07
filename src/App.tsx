@@ -71,6 +71,8 @@ export default function App() {
   const missing = useMemo(() => missingConfig(config), [])
 
   const desktop = services.kind === 'desktop'
+  // iPhone et version web locale : un album au lieu de dossiers (pas de dossier du catalogue à choisir).
+  const hasFolders = !['ios', 'web'].includes(getDesktopBridge()?.platform ?? '')
   // Application Windows : pas d'écran de connexion, l'app s'ouvre directement.
   const [phase, setPhase] = useState<Phase>(desktop ? { name: 'loading' } : { name: 'signin' })
   const [user, setUser] = useState<SignedInUser | null>(null)
@@ -270,7 +272,7 @@ export default function App() {
         onLangChange={changeLang}
         onChangeLocation={user && phase.name === 'gallery' ? () => setPhase({ name: 'setup' }) : undefined}
         onOpenFactory={catalogue?.isAdmin && location && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
-        onChooseCatalogue={desktop && user && phase.name === 'gallery' ? () => void chooseCatalogue() : undefined}
+        onChooseCatalogue={desktop && hasFolders && user && phase.name === 'gallery' ? () => void chooseCatalogue() : undefined}
         onSignOut={user && !desktop ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}

@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { MAX_PHOTOS } from '../config'
+import { getDesktopBridge } from '../desktop/services'
 import type { Location, Photo, Services } from '../google/types'
 import { useI18n } from '../i18n'
 import { pruneSelection, toggleSelection } from '../lib/selection'
@@ -65,6 +66,9 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
   }
 
   const driveName = location.drive.id ? location.drive.name : t('setup.myDrive')
+  // Sur ordinateur, le chemin complet du dossier ; ailleurs (téléphone, album, Drive), son nom.
+  const platform = getDesktopBridge()?.platform
+  const showPath = platform === 'win32' || platform === 'darwin' || platform === 'linux'
   const byId = new Map((photos ?? []).map((p) => [p.id, p]))
 
   return (
@@ -75,8 +79,7 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
           <p className="crumbs">
             {t('gallery.location', {
               drive: driveName,
-              folder:
-                services.kind === 'desktop' && !location.folder.id.startsWith('content://') ? location.folder.id : location.folder.name,
+              folder: showPath ? location.folder.id : location.folder.name,
             })}
           </p>
           {photos && <p className="muted">{t('gallery.count', { count: photos.length })}</p>}

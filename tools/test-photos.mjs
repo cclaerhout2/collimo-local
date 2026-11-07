@@ -56,3 +56,14 @@ export function gradientPng(w, h, seed) {
     chunk('IEND', Buffer.alloc(0)),
   ])
 }
+
+// En ligne de commande : `node tools/test-photos.mjs dossier` y écrit les photos de test (dont une HEIC).
+if (process.argv[1]?.endsWith('test-photos.mjs') && process.argv[2]) {
+  const { copyFile, mkdir, writeFile } = await import('node:fs/promises')
+  const path = await import('node:path')
+  const dir = path.resolve(process.argv[2])
+  await mkdir(dir, { recursive: true })
+  for (let i = 1; i <= 6; i++) await writeFile(path.join(dir, `IMG_${i}.png`), gradientPng(i % 2 ? 640 : 480, i % 2 ? 480 : 640, i))
+  await copyFile(new URL('./fixtures/iphone.heic', import.meta.url), path.join(dir, 'IMG_7.HEIC'))
+  console.log(`photos de test dans ${dir}`)
+}

@@ -51,7 +51,7 @@ let catalog: Promise<FontEntry[]> | null = null
  * @returns les polices disponibles
  */
 export function loadFontCatalog(): Promise<FontEntry[]> {
-  catalog ??= fetch('/data/fonts.json')
+  catalog ??= fetch(`${import.meta.env.BASE_URL}data/fonts.json`)
     .then((r) => {
       if (!r.ok) throw new Error(`fonts.json : ${r.status}`)
       return r.json() as Promise<{ f: string; c: string; w: number[]; i: boolean }[]>

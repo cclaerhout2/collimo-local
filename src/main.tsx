@@ -1,9 +1,9 @@
 /**
  * Point d'entrée de l'app : monte `App` dans la page, entourée de la traduction, en mode strict de React.
- * Dans les applications (ordinateur, Android), les libellés qui parlent de Google Drive sont remplacés.
+ * Dans les applications (ordinateur, Android, iPhone, web locale), les libellés qui parlent de Google Drive sont remplacés.
  */
-// En premier : le pont Android doit exister avant la lecture de la configuration.
-import './android/install'
+// En premier : le pont (Android, iPhone, web locale) doit exister avant la lecture de la configuration.
+import './native/install'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'

@@ -45,6 +45,8 @@ export interface LocalFile {
   width?: number
   /** Hauteur affichée (rotation EXIF appliquée), pour une image dont l'en-tête est lisible. */
   height?: number
+  /** Adresse déjà prête du contenu (version web : adresse `blob:`), pour les aperçus de « Mes collages ». */
+  url?: string
 }
 
 /** Dossier local, avec le droit d'y écrire. */
@@ -72,7 +74,7 @@ export type PickFilter = 'image' | 'json'
  * le processus principal refuse les autres.
  */
 export interface DesktopBridge {
-  /** Système d'exploitation (`win32`, `darwin`, `linux`). */
+  /** Système : `win32`, `darwin`, `linux` (ordinateur), `android`, `ios`, ou `web` (navigateur). */
   platform: string
   /** Utilisateur Windows de la session. */
   userInfo(): Promise<LocalUser>
@@ -103,8 +105,9 @@ export interface DesktopBridge {
   /** Fait choisir un autre dossier pour le catalogue (dossier réseau partagé, par exemple) ; null si annulé. */
   chooseCatalogueDir(title: string): Promise<LocalFolder | null>
 
-  // Fonctions propres à Android, où un dossier est une adresse `content://` : on ne peut pas y
-  // construire le chemin d'un fichier en ajoutant son nom. Absentes sur ordinateur.
+  // Fonctions propres aux téléphones et à la version web, où l'on ne peut pas construire le chemin d'un
+  // fichier en ajoutant son nom à celui du dossier (adresse `content://` d'Android, album de l'iPhone ou
+  // du navigateur). Absentes sur ordinateur.
 
   /** Retrouve ou crée un sous-dossier ; renvoie son chemin. */
   ensureChildDir?(dir: string, name: string): Promise<string>
@@ -114,6 +117,10 @@ export interface DesktopBridge {
   fileUrl?(path: string): string
   /** Adresse d'une miniature calculée à la demande (plus grand côté `size`). */
   thumbnail?(path: string, size: number, version: string): Promise<string>
+  /** Contenu d'un fichier, quand il n'est pas servi par une adresse (version web). */
+  readFile?(path: string): Promise<Blob>
+  /** Ouvre la feuille de partage du système sur un fichier (iPhone, Android) : Enregistrer dans Photos, Messages… */
+  share?(path: string, title: string): Promise<void>
 }
 
 /**

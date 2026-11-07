@@ -1,14 +1,15 @@
 /**
- * Pont de l'application Android : les mêmes fonctions que celles de l'application de bureau
- * (voir `desktop/bridge.ts`), assurées par le module natif `CollimoStorage` (Storage Access Framework).
- * L'éditeur et les services sont ainsi les mêmes sur téléphone et sur ordinateur.
+ * Pont des applications Android et iPhone : les mêmes fonctions que celles de l'application de bureau
+ * (voir `desktop/bridge.ts`), assurées par le module natif `CollimoStorage` (Storage Access Framework
+ * sur Android, album de l'app et photothèque sur iPhone). L'éditeur et les services sont ainsi les mêmes
+ * sur téléphone et sur ordinateur.
  * Le contenu des fichiers est lu par le serveur local de Capacitor ; seules les écritures passent par
  * le module, en morceaux.
  */
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import type { DesktopBridge, LocalFile, LocalFolder, PickFilter } from '../desktop/bridge'
 
-/** Fonctions du module natif (voir `android/app/src/main/java/fr/collimo/app/CollimoStoragePlugin.java`). */
+/** Fonctions du module natif (Android : `CollimoStoragePlugin.java` ; iPhone : `CollimoStoragePlugin.swift`). */
 interface CollimoStorage {
   userInfo(): Promise<{ name: string; email: string }>
   pickFolder(o: { title: string }): Promise<{ folder?: LocalFolder }>
@@ -26,6 +27,8 @@ interface CollimoStorage {
   saveSettings(o: { data: string }): Promise<void>
   catalogueDir(): Promise<LocalFolder>
   chooseCatalogueDir(o: { title: string }): Promise<{ folder?: LocalFolder }>
+  share(o: { path: string; title: string }): Promise<void>
+  testMode(): Promise<{ folder?: string }>
 }
 
 /** Taille des morceaux envoyés au module (multiple de 3, pour un base64 sans remplissage intermédiaire). */
@@ -45,12 +48,16 @@ export function toBase64(bytes: Uint8Array): string {
 /** Comparateur « naturel » : IMG_2 avant IMG_10, sans tenir compte des majuscules ni des accents. */
 const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' })
 
+/** Module natif de l'app, enregistré une fois. */
+export const nativePlugin = registerPlugin<CollimoStorage>('CollimoStorage')
+
 /**
- * Crée le pont Android.
+ * Crée le pont d'une application mobile.
+ * @param platform - `android` ou `ios`
  * @param plugin - module natif (remplaçable dans les tests)
  * @returns le pont, au format de l'application de bureau
  */
-export function createAndroidBridge(plugin: CollimoStorage = registerPlugin<CollimoStorage>('CollimoStorage')): DesktopBridge {
+export function createNativeBridge(platform: 'android' | 'ios', plugin: CollimoStorage = nativePlugin): DesktopBridge {
   let uploads = 0
 
   /**
@@ -66,7 +73,7 @@ export function createAndroidBridge(plugin: CollimoStorage = registerPlugin<Coll
   }
 
   return {
-    platform: 'android',
+    platform,
     userInfo: () => plugin.userInfo(),
     pickFolder: async ({ title }) => (await plugin.pickFolder({ title })).folder ?? null,
     pickFile: async ({ title, filter }) => (await plugin.pickFile({ title, filter })).file ?? null,
@@ -82,7 +89,7 @@ export function createAndroidBridge(plugin: CollimoStorage = registerPlugin<Coll
       return plugin.commitTemp({ id: await upload(data), replace: path })
     },
     async ensureDir() {
-      throw new Error('ensureDir : utiliser ensureChildDir sur Android')
+      throw new Error('ensureDir : utiliser ensureChildDir sur téléphone')
     },
     async loadSettings() {
       const { data } = await plugin.loadSettings()
@@ -100,5 +107,6 @@ export function createAndroidBridge(plugin: CollimoStorage = registerPlugin<Coll
     findChild: async (dir, name) => (await plugin.findChild({ dir, name })).path ?? null,
     fileUrl: (path) => Capacitor.convertFileSrc(path),
     thumbnail: async (path, size, version) => Capacitor.convertFileSrc((await plugin.thumbnail({ path, size, version })).path),
+    share: (path, title) => plugin.share({ path, title }),
   }
 }

@@ -75,6 +75,7 @@ export const DESKTOP_URLS: LocalUrls = { file: localFileUrl, thumb: localThumbUr
  * @returns les adresses à utiliser
  */
 export function urlsFor(bridge: DesktopBridge): LocalUrls {
+  if (bridge.readFile) return { file: () => '', thumb: () => undefined, open: () => undefined }
   if (!bridge.fileUrl) return DESKTOP_URLS
   return { file: bridge.fileUrl, thumb: () => undefined, open: () => undefined }
 }
@@ -110,7 +111,7 @@ export function toFileInfo(f: LocalFile, urls: LocalUrls = DESKTOP_URLS): DriveF
     name: f.name,
     modifiedTime: f.modifiedTime,
     webViewLink: urls.open('open', f.path),
-    thumbnailLink: image ? (urls.thumb(f.path, 320, f.modifiedTime) ?? urls.file(f.path)) : undefined,
+    thumbnailLink: image ? (f.url ?? urls.thumb(f.path, 320, f.modifiedTime) ?? (urls.file(f.path) || undefined)) : undefined,
   }
 }
 
@@ -136,10 +137,12 @@ export class MissingFileError extends Error {
  * Lit un fichier local par le protocole de l'app.
  * @param path - chemin complet
  * @param urls - adresses du système
+ * @param bridge - pont, s'il lit lui-même les fichiers (version web)
  * @returns le contenu, avec son type MIME
  * @throws {@link MissingFileError} si le fichier est absent ou hors des dossiers autorisés
  */
-async function readBlob(path: string, urls: LocalUrls = DESKTOP_URLS): Promise<Blob> {
+async function readBlob(path: string, urls: LocalUrls = DESKTOP_URLS, bridge?: DesktopBridge): Promise<Blob> {
+  if (bridge?.readFile) return bridge.readFile(path).catch(() => Promise.reject(new MissingFileError(path, 404)))
   let res: Response
   try {
     res = await fetch(urls.file(path))
@@ -238,10 +241,10 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
         return raw && typeof raw === 'object' && raw.version === 1 ? (raw as UserSettings) : null
       },
       saveSettings: (s) => call(() => bridge.saveSettings(s)),
-      fetchFileBlob: (id) => withMoved(id, (p) => readBlob(p, urls)),
+      fetchFileBlob: (id) => withMoved(id, (p) => readBlob(p, urls, bridge)),
       listFolderFiles: async (folderId, namePrefix) =>
         (await call(() => bridge.listFiles(folderId, namePrefix))).map((f) => toFileInfo(f, urls)),
-      readJson: async (id) => JSON.parse(await (await readBlob(id, urls)).text()) as unknown,
+      readJson: async (id) => JSON.parse(await (await readBlob(id, urls, bridge)).text()) as unknown,
       async uploadFile(folderId, name, data) {
         const bytes = new Uint8Array(await data.arrayBuffer())
         return toFileInfo(await call(() => bridge.writeNewFile(folderId, name, bytes)), urls)

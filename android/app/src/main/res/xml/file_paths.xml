@@ -2,4 +2,6 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-path name="my_images" path="." />
     <cache-path name="my_cache_images" path="." />
+    <!-- Collages de l'app (dossier de test, catalogue), partagés par la feuille de partage d'Android. -->
+    <files-path name="collimo_files" path="." />
 </paths>

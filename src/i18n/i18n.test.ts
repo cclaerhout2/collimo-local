@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { desktopTexts } from './desktop'
+import { albumTexts, androidTexts, desktopTexts } from './desktop'
 import { en } from './en'
 import { fr } from './fr'
 import { detectLang, enableDesktopTexts, translate } from './index'
@@ -47,13 +47,14 @@ describe('libellés de l’application Windows', () => {
   it('ne remplacent que des clés existantes, avec les mêmes variables (ou moins)', () => {
     for (const lang of ['fr', 'en'] as const) {
       const base = lang === 'fr' ? fr : en
-      for (const [key, value] of Object.entries(desktopTexts[lang])) {
+      const all = [...Object.entries(desktopTexts[lang]), ...Object.entries(androidTexts[lang]), ...Object.entries(albumTexts[lang])]
+      for (const [key, value] of all) {
         expect(key in base, key).toBe(true)
         const allowed = placeholders(base[key as keyof typeof fr])
         for (const v of placeholders(value!)) expect(allowed, `${lang} ${key}`).toContain(v)
       }
     }
-    expect(Object.keys(desktopTexts.en).sort()).toEqual(Object.keys(desktopTexts.fr).sort())
+    for (const set of [desktopTexts, androidTexts, albumTexts]) expect(Object.keys(set.en).sort()).toEqual(Object.keys(set.fr).sort())
   })
 
   it('ne parlent plus de Google Drive', () => {

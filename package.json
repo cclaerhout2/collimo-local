@@ -1,7 +1,7 @@
 {
   "name": "collimo",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,10 @@
     "desktop:pack:linux": "npm run desktop:build && electron-builder --linux --x64 --publish never",
     "android:sync": "vite build && cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew --no-daemon assembleRelease",
-    "test:e2e:android": "node tools/e2e-android.mjs"
+    "test:e2e:android": "node tools/e2e-android.mjs",
+    "web:build": "vite build --mode localweb --outDir dist-web",
+    "test:e2e:web": "node tools/e2e-web.mjs",
+    "ios:sync": "vite build && cap sync ios"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",
@@ -32,6 +35,7 @@
   "devDependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/cli": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@iconify-json/fluent-emoji-flat": "^1.2.6",
     "@iconify-json/ph": "^1.2.2",
     "@phosphor-icons/core": "^2.1.1",

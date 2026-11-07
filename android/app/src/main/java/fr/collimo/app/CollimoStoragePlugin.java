@@ -18,6 +18,7 @@ import android.util.Base64;
 import android.util.Size;
 import android.webkit.MimeTypeMap;
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
 import androidx.exifinterface.media.ExifInterface;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -646,6 +647,34 @@ public class CollimoStoragePlugin extends Plugin {
             dir.mkdirs();
             c.resolve(describeFolder(dir.getAbsolutePath()));
         });
+    }
+
+    /** Feuille de partage d'Android sur un collage : Messages, mail, Drive, galerie… */
+    @PluginMethod
+    public void share(PluginCall call) {
+        async(call, c -> {
+            String path = required(c, "path");
+            Uri uri = isContent(path)
+                ? Uri.parse(path)
+                : FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", new File(path));
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(describeFile(path, false).getString("mimeType", "image/jpeg"));
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, c.getString("title", "Collimo"));
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().runOnUiThread(() -> getContext().startActivity(chooser));
+            c.resolve();
+        });
+    }
+
+    /** Version de test avec un dossier imposé : la page peut lancer son auto-test. Toujours vide en version finale. */
+    @PluginMethod
+    public void testMode(PluginCall call) {
+        String folder = testOverride("debug.collimo.selftest");
+        JSObject o = new JSObject();
+        if (folder != null) o.put("folder", folder);
+        call.resolve(o);
     }
 
     @PluginMethod

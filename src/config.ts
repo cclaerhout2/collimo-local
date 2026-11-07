@@ -32,7 +32,10 @@ export const config: AppConfig = {
   appId: env.VITE_GOOGLE_APP_ID ?? '',
   allowedDomain: (env.VITE_ALLOWED_DOMAIN ?? '').trim().toLowerCase(),
   mock: env.VITE_MOCK === '1',
-  desktop: typeof globalThis === 'object' && 'collimoDesktop' in globalThis,
+  // Lu à chaque usage : le pont (Electron, téléphone, web locale) peut être posé après le chargement de ce module.
+  get desktop() {
+    return typeof globalThis === 'object' && 'collimoDesktop' in globalThis
+  },
   catalogueDriveId: (env.VITE_CATALOGUE_DRIVE_ID ?? '').trim(),
   catalogueDriveName: (env.VITE_CATALOGUE_DRIVE_NAME ?? '').trim() || 'Collimo – Catalogue',
 }

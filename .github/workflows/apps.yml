@@ -1,6 +1,7 @@
-# Collimo pour ordinateur et Android : sur de vraies machines (Windows, Linux, macOS) et un émulateur
-# Android, tests automatiques, construction des paquets, test de bout en bout de l'application construite,
-# puis de l'application installée comme le ferait un utilisateur.
+# Collimo local : ordinateur (Windows, Linux, macOS), Android, iPhone et version web locale. Sur de vraies
+# machines, un émulateur Android et un simulateur d'iPhone : tests automatiques, construction des paquets,
+# test de bout en bout de l'application construite, puis de l'application installée comme le ferait un
+# utilisateur. La version web est testée dans WebKit (moteur de Safari) et Chromium, au format téléphone.
 # Les paquets sont téléchargeables dans l'onglet « Actions », rubrique « Artifacts ».
 # Sur main, la version de package.json est publiée en « Release » GitHub (vX.Y.Z, avec tous les paquets)
 # si elle ne l'est pas déjà : pour publier une nouvelle version, il suffit d'augmenter `version`.
@@ -14,6 +15,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   windows:
@@ -233,9 +236,122 @@ jobs:
           name: Collimo-Android
           path: release/Collimo-*-android.apk
 
+  ios:
+    name: iPhone
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Modules
+        run: npm ci --no-audit --no-fund
+      - name: Construction de l'IPA (non signée, pour SideStore, AltStore ou Sideloadly)
+        run: |
+          npm run ios:sync
+          v="$(node -p "require('./package.json').version")"
+          code="$(node -p "const [a,b,c]=require('./package.json').version.split('.').map(Number);a*10000+b*100+c")"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -derivedDataPath build/ios \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$v" CURRENT_PROJECT_VERSION="$code" -quiet build
+          mkdir -p release Payload
+          cp -R build/ios/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "release/Collimo-$v-ios.ipa" Payload
+          ls -la release
+      - name: Auto-test sur le simulateur d'iPhone (photos, miniatures, collage enregistré, réglages)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO -quiet build
+          DEVICE="$(xcrun simctl list devices available -j | node -e "const d=JSON.parse(require('fs').readFileSync(0)).devices;const all=Object.entries(d).filter(([k])=>k.includes('iOS')).flatMap(([,v])=>v);console.log((all.find(x=>/^iPhone 1[5-7]( |$)/.test(x.name))||all.find(x=>x.name.startsWith('iPhone'))).udid)")"
+          echo "Simulateur : $DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/sim/Build/Products/Debug-iphonesimulator/App.app
+          DATA="$(xcrun simctl get_app_container "$DEVICE" fr.collimo.app data)"
+          node tools/test-photos.mjs "$DATA/Documents/TestPhotos"
+          mkdir -p test-results
+          xcrun simctl launch --console-pty "$DEVICE" fr.collimo.app -collimoSelfTest "$DATA/Documents/TestPhotos" > test-results/ios.log 2>&1 &
+          for i in $(seq 1 120); do grep -q "COLLIMO-SELFTEST \(OK\|ECHEC\)" test-results/ios.log && break; sleep 2; done
+          xcrun simctl io "$DEVICE" screenshot test-results/ios-simulateur.png || true
+          grep "COLLIMO-SELFTEST" test-results/ios.log || tail -60 test-results/ios.log
+          grep -q "COLLIMO-SELFTEST OK" test-results/ios.log
+          ls "$DATA/Documents/TestPhotos/Collimo"
+      - name: Captures et journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-ios
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Paquets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Collimo-iOS
+          path: release/Collimo-*-ios.ipa
+
+  web:
+    name: Version web (iPhone, navigateur)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Modules et navigateurs de test
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright-core install --with-deps webkit chromium
+      - name: Construction
+        run: npm run web:build
+      - name: Test de bout en bout dans WebKit (iPhone 13 simulé)
+        run: node tools/e2e-web.mjs --browser webkit
+      - name: Test de bout en bout dans Chromium (Pixel 7 simulé)
+        run: node tools/e2e-web.mjs --browser chromium
+      - name: Archive du site
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          mkdir -p release
+          (cd dist-web && zip -qr "../release/Collimo-$v-web.zip" .)
+      - name: Captures d'écran des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-web
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Paquets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Collimo-Web
+          path: release/Collimo-*-web.zip
+      - name: Site pour GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-web
+
+  pages:
+    # Publication sur GitHub Pages, si elle est activée dans les réglages du dépôt (Settings › Pages ›
+    # Source : GitHub Actions). Sinon cette étape échoue sans bloquer le reste.
+    name: Publication du site (GitHub Pages)
+    needs: web
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
   release:
     name: Publication de la version
-    needs: [windows, linux, mac, android]
+    needs: [windows, linux, mac, android, ios, web]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

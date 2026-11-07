@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CHUNK, createAndroidBridge, toBase64 } from './bridge'
+import { CHUNK, createNativeBridge, toBase64 } from './bridge'
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: { convertFileSrc: (p: string) => `https://localhost/_capacitor_file_${p}` },
@@ -45,7 +45,7 @@ function fakePlugin() {
   return { plugin, written }
 }
 
-describe('pont Android', () => {
+describe('pont des applications mobiles', () => {
   it('encode en base64 comme le navigateur, même au-delà de 32 Kio', () => {
     const big = Uint8Array.from({ length: 100_000 }, (_, i) => (i * 7) % 256)
     const back = Uint8Array.from(atob(toBase64(big)), (c) => c.charCodeAt(0))
@@ -55,7 +55,7 @@ describe('pont Android', () => {
 
   it('envoie un collage par morceaux, sans rien perdre', async () => {
     const { plugin, written } = fakePlugin()
-    const bridge = createAndroidBridge(plugin as never)
+    const bridge = createNativeBridge('android', plugin as never)
     const data = Uint8Array.from({ length: CHUNK * 2 + 123 }, (_, i) => i % 251)
     await bridge.writeNewFile('content://dossier', 'Collimo_1.jpg', data)
     expect(plugin.appendTemp).toHaveBeenCalledTimes(3)
@@ -65,14 +65,14 @@ describe('pont Android', () => {
   })
 
   it('trie les photos dans l’ordre naturel et les fichiers du plus récent au plus ancien', async () => {
-    const bridge = createAndroidBridge(fakePlugin().plugin as never)
+    const bridge = createNativeBridge('android', fakePlugin().plugin as never)
     expect((await bridge.listImages('content://x')).map((f) => f.name)).toEqual(['IMG_1.jpg', 'img_2.jpg', 'IMG_10.jpg'])
     expect((await bridge.listFiles('content://x')).map((f) => f.name)).toEqual(['b', 'a'])
   })
 
   it('lit et écrit les réglages en JSON, et rend null pour un choix annulé', async () => {
     const { plugin } = fakePlugin()
-    const bridge = createAndroidBridge(plugin as never)
+    const bridge = createNativeBridge('android', plugin as never)
     expect(await bridge.loadSettings()).toEqual({ version: 1, lang: 'en' })
     await bridge.saveSettings({ version: 1 })
     expect(plugin.saveSettings).toHaveBeenCalledWith({ data: '{"version":1}' })
@@ -83,7 +83,7 @@ describe('pont Android', () => {
   })
 
   it('sert fichiers et miniatures par le serveur local de Capacitor', async () => {
-    const bridge = createAndroidBridge(fakePlugin().plugin as never)
+    const bridge = createNativeBridge('android', fakePlugin().plugin as never)
     expect(bridge.platform).toBe('android')
     expect(bridge.fileUrl!('/data/files/a.jpg')).toBe('https://localhost/_capacitor_file_/data/files/a.jpg')
     expect(await bridge.thumbnail!('content://x/a.jpg', 400, 'v')).toBe('https://localhost/_capacitor_file_/data/cache/miniatures/abc.jpg')
