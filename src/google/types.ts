@@ -49,12 +49,51 @@ export interface Location {
   collimoFolderId: string
 }
 
+/** Dossier Drive, réduit à ce qu'il faut pour l'afficher et y revenir. */
+export interface FolderRef {
+  id: string
+  name: string
+}
+
+/**
+ * Raccourci vers un emplacement : un Drive entier ou un dossier précis, sous lequel l'utilisateur
+ * navigue jusqu'au dossier de photos. La racine de Mon Drive a l'identifiant `root`, celle d'un
+ * Drive partagé l'identifiant du Drive.
+ */
+export interface Shortcut {
+  /** Drive qui contient le dossier. */
+  drive: DriveRef
+  /** Dossier de départ (racine du Drive ou dossier précis). */
+  folder: FolderRef
+}
+
+/** Chemin d'un dossier ouvert : du dossier de départ (raccourci) jusqu'au dossier affiché, inclus. */
+export interface FolderPath {
+  drive: DriveRef
+  /** Dossiers traversés ; le premier est le départ, le dernier le dossier affiché. Jamais vide. */
+  path: FolderRef[]
+}
+
+/** Dossier ouvert dans la galerie : son chemin, les droits de l'utilisateur et son dossier Collimo. */
+export interface OpenFolder extends FolderPath {
+  /** L'utilisateur peut-il ajouter des fichiers dans ce dossier (et donc y enregistrer des collages) ? */
+  canAddChildren: boolean
+  /** Sous-dossier « Collimo », s'il existe déjà ; créé au premier collage. */
+  collimoFolderId: string | null
+}
+
 /** Réglages propres à chaque utilisateur, stockés dans son espace caché Drive (appDataFolder). */
 export interface UserSettings {
   /** Version du format, pour ignorer un fichier d'un format futur. */
   version: 1
-  /** Dernier emplacement de travail. */
+  /** Ancien format : un seul emplacement. Repris en raccourci au chargement, puis abandonné. */
   location?: Location
+  /** Raccourcis vers les emplacements, dans l'ordre d'ajout. */
+  shortcuts?: Shortcut[]
+  /** Dernier dossier ouvert, rouvert à la connexion. */
+  current?: FolderPath
+  /** Derniers dossiers ouverts, du plus récent au plus ancien. */
+  recents?: FolderPath[]
   /** Langue choisie. */
   lang?: Lang
 }
@@ -137,6 +176,10 @@ export interface DriveService {
   listPhotos(folder: { id: string }, driveId: string | null): Promise<Photo[]>
   /** Une photo par son identifiant (après un choix dans le sélecteur). */
   getPhoto(id: string): Promise<Photo>
+  /** Sous-dossiers directs d'un dossier, dans l'ordre naturel des noms, sans le dossier « Collimo ». */
+  listSubfolders(folderId: string, driveId: string | null): Promise<FolderRef[]>
+  /** Sous-dossier « Collimo » d'un dossier, sans le créer ; null s'il n'existe pas. */
+  findCollimoFolder(folderId: string): Promise<string | null>
   /** Retrouve ou crée le sous-dossier « Collimo » ; renvoie son identifiant. */
   ensureCollimoFolder(folderId: string): Promise<string>
   /** Réglages de l'utilisateur ; null s'il n'en a pas encore, ou dans un format inconnu. */

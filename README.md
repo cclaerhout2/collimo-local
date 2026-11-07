@@ -20,8 +20,9 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 **Connexion et Drive**
 
 - connexion Google (SSO de l'entreprise), refus des comptes hors domaine ;
-- chaque utilisateur choisit Mon Drive ou un Drive partagé, puis son dossier de photos ; un sous-dossier `Collimo` y est créé pour les collages ;
-- emplacement et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
+- panneau « Mes emplacements » : raccourcis vers Mon Drive, un Drive partagé entier ou un dossier précis, ajoutés et retirés d'un clic (retirer un raccourci ne touche pas au Drive) ; « Épingler ce dossier » ajoute le dossier ouvert ; les 5 derniers dossiers ouverts sont proposés en « Récents » ; sur mobile, le panneau devient une barre défilante ;
+- navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
+- raccourcis, dernier dossier ouvert et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
 - galerie de miniatures, sélection ordonnée de 1 à 20 photos ; photos HEIC des iPhone décodées dans le navigateur ;
 - interface en français et en anglais.
 
@@ -126,7 +127,7 @@ Ce que fait `install.bat`, à la main, avec Node.js, Git et `firebase-tools` ins
 | --- | --- |
 | `drive.readonly` | parcourir les Drive, lire les photos et le catalogue de l'usine |
 | `drive.file` | créer et modifier les seuls fichiers de Collimo : dossier `Collimo`, collages, catalogue de l'usine ; aucun autre fichier n'est modifiable |
-| `drive.appdata` | mémoriser l'emplacement et la langue de chaque utilisateur |
+| `drive.appdata` | mémoriser les raccourcis, le dernier dossier ouvert et la langue de chaque utilisateur |
 
 L'usine ne demande aucune autorisation de plus. L'admin qui crée le fichier du catalogue peut le modifier directement ; un autre admin doit, une seule fois, choisir ce fichier dans le sélecteur Google que Collimo lui ouvre : c'est ce choix qui autorise Collimo à le modifier pour lui.
 
@@ -206,7 +207,7 @@ src/
   collage/             moteur : modèle, géométrie, rendu, couleurs, export, projet, validation
   collage/catalog/     les 541 dispositions intégrées et le format du catalogue de l'usine
   collage/factory/     opérations de l'usine (séparations, sommets, coupes, ordre)
-  ui/                  écrans : connexion, emplacement, galerie
+  ui/                  écrans : connexion, emplacements, galerie
   ui/editor/           écran du collage (aperçu, gestes, panneaux, export)
   ui/factory/          usine à dispositions
   i18n/                libellés FR et EN

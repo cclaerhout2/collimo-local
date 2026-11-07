@@ -10,6 +10,7 @@ import {
   type DriveRef,
   type DriveService,
   type FolderInfo,
+  type FolderRef,
   type Photo,
   type UserSettings,
 } from './types'
@@ -48,6 +49,15 @@ export function photosQuery(folderId: string): string {
  */
 export function collimoFolderQuery(parentId: string): string {
   return `name = ${quote(COLLIMO_FOLDER_NAME)} and mimeType = '${FOLDER_MIME}' and ${quote(parentId)} in parents and trashed = false`
+}
+
+/**
+ * Requête Drive des sous-dossiers directs d'un dossier (hors corbeille).
+ * @param parentId - dossier parent
+ * @returns la requête `q`
+ */
+export function subfoldersQuery(parentId: string): string {
+  return `mimeType = '${FOLDER_MIME}' and ${quote(parentId)} in parents and trashed = false`
 }
 
 /**
@@ -278,6 +288,21 @@ export function createDriveClient(
     }
   }
 
+  /**
+   * Sous-dossier « Collimo » d'un dossier, sans le créer.
+   * @param folderId - dossier de photos
+   * @returns l'identifiant du sous-dossier, ou null s'il n'existe pas
+   */
+  async function findCollimoFolder(folderId: string): Promise<string | null> {
+    const existing = await listAll<{ id: string }>('/files', 'files', {
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+      q: collimoFolderQuery(folderId),
+      fields: 'nextPageToken, files(id)',
+    })
+    return existing[0]?.id ?? null
+  }
+
   return {
     async findSharedDrive(ref) {
       type RawDrive = { id: string; name: string; capabilities?: { canAddChildren?: boolean } }
@@ -388,14 +413,22 @@ export function createDriveClient(
       return toPhoto(f)
     },
 
-    async ensureCollimoFolder(folderId) {
-      const existing = await listAll<{ id: string }>('/files', 'files', {
-        supportsAllDrives: 'true',
-        includeItemsFromAllDrives: 'true',
-        q: collimoFolderQuery(folderId),
-        fields: 'nextPageToken, files(id)',
+    async listSubfolders(folderId, driveId) {
+      const folders = await listAll<FolderRef>('/files', 'files', {
+        ...listScope(driveId),
+        q: subfoldersQuery(folderId),
+        orderBy: 'name_natural',
+        pageSize: '1000',
+        fields: 'nextPageToken, files(id,name)',
       })
-      if (existing[0]) return existing[0].id
+      return folders.filter((f) => f.name !== COLLIMO_FOLDER_NAME).map(({ id, name }) => ({ id, name }))
+    },
+
+    findCollimoFolder,
+
+    async ensureCollimoFolder(folderId) {
+      const existing = await findCollimoFolder(folderId)
+      if (existing) return existing
       const created = await call<{ id: string }>(url('/files', { supportsAllDrives: 'true', fields: 'id' }), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

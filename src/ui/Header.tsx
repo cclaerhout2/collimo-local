@@ -11,8 +11,6 @@ interface Props {
   user: SignedInUser | null
   /** Change la langue de l'interface. */
   onLangChange: (lang: Lang) => void
-  /** Ouvre le choix de l'emplacement de travail. */
-  onChangeLocation?: () => void
   /** Ouvre l'usine à dispositions (admins seulement). */
   onOpenFactory?: () => void
   /** Déconnecte l'utilisateur. */
@@ -38,7 +36,7 @@ export function Logo() {
  * Barre du haut, présente sur tous les écrans.
  * @returns l'en-tête
  */
-export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, onSignOut }: Props) {
+export function Header({ user, onLangChange, onOpenFactory, onSignOut }: Props) {
   const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -105,18 +103,6 @@ export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, on
                   <strong>{user.name}</strong>
                   <span>{user.email}</span>
                 </div>
-                {onChangeLocation && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setOpen(false)
-                      onChangeLocation()
-                    }}
-                  >
-                    {t('menu.changeLocation')}
-                  </button>
-                )}
                 {onOpenFactory && (
                   <button
                     type="button"

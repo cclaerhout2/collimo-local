@@ -1,9 +1,9 @@
 /**
- * Composant racine de Collimo : enchaîne les phases de l'application (connexion, choix de
- * l'emplacement, galerie, éditeur de collage, usine à dispositions) et détient l'état partagé
- * entre les écrans (utilisateur, réglages, sélection de photos, erreur affichée, catalogue).
+ * Composant racine de Collimo : enchaîne les phases de l'application (connexion, galerie avec ses
+ * emplacements, éditeur de collage, usine à dispositions) et détient l'état partagé entre les écrans
+ * (utilisateur, réglages, dossier ouvert, sélection de photos, erreur affichée, catalogue).
  */
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { config, missingConfig } from './config'
 import { defaultLayoutFor, setCustomCatalogue } from './collage/catalog'
 import { loadCatalogue, type CatalogueState } from './catalogue/store'
@@ -11,9 +11,11 @@ import { parseProject, ProjectFormatError } from './collage/project'
 import { DEFAULT_RATIO } from './collage/ratios'
 import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } from './collage/types'
 import { createServices } from './google/services'
-import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './google/types'
+import type { FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
+import { addShortcut, currentFolder, isPinned, migrateSettings, pushRecent, removeShortcut } from './lib/locations'
+import { AddLocationDialog } from './ui/AddLocationDialog'
 import { EditorScreen } from './ui/editor/EditorScreen'
 
 /** L'usine (admins seulement) n'est chargée qu'à l'ouverture. */
@@ -22,17 +24,12 @@ import { ErrorBanner } from './ui/ErrorBanner'
 import { GalleryScreen } from './ui/GalleryScreen'
 import type { ProjectEntry } from './ui/ProjectsList'
 import { Header } from './ui/Header'
-import { SetupScreen } from './ui/SetupScreen'
+import { LocationsPanel } from './ui/LocationsPanel'
 import { SignInScreen } from './ui/SignInScreen'
 
 /** Phase de l'application, c'est-à-dire l'écran affiché ; l'éditeur porte le collage ouvert. */
 type Phase =
-  | { name: 'signin' }
-  | { name: 'loading' }
-  | { name: 'setup' }
-  | { name: 'gallery' }
-  | { name: 'editor'; doc: CollageDoc; key: number }
-  | { name: 'factory' }
+  { name: 'signin' } | { name: 'loading' } | { name: 'gallery' } | { name: 'editor'; doc: CollageDoc; key: number } | { name: 'factory' }
 
 /** Réglages d'un utilisateur qui n'a encore rien enregistré. */
 const EMPTY_SETTINGS: UserSettings = { version: 1 }
@@ -76,6 +73,13 @@ export default function App() {
   const [error, setError] = useState<UiError | null>(null)
   const [busy, setBusy] = useState(false)
   const [catalogue, setCatalogue] = useState<CatalogueState | null>(null)
+  const [open, setOpen] = useState<OpenFolder | null>(null)
+  const [opening, setOpening] = useState(false)
+  const [adding, setAdding] = useState(false)
+  /** Réglages les plus récents, pour enchaîner les modifications sans attendre un nouveau rendu. */
+  const settingsRef = useRef<UserSettings>(EMPTY_SETTINGS)
+  /** Numéro de la dernière ouverture de dossier demandée : une réponse plus ancienne est ignorée. */
+  const openRequest = useRef(0)
 
   /**
    * Retient le catalogue de l'usine et le transmet au moteur de collage.
@@ -92,6 +96,54 @@ export default function App() {
    * @param e - erreur attrapée
    */
   const handleError = useCallback((e: unknown) => setError(toUiError(e)), [])
+
+  /**
+   * Modifie les réglages et les enregistre sur Drive en arrière-plan.
+   * @param change - transformation à appliquer aux réglages actuels
+   */
+  const updateSettings = useCallback(
+    (change: (s: UserSettings) => UserSettings) => {
+      const next = change(settingsRef.current)
+      settingsRef.current = next
+      setSettings(next)
+      services.drive.saveSettings(next).catch(handleError)
+    },
+    [services, handleError],
+  )
+
+  /**
+   * Ouvre un dossier dans la galerie : vérifie qu'il est accessible, lit ses droits et cherche son
+   * dossier Collimo (sans le créer), puis le retient comme dossier courant et récent.
+   * @param fp - chemin du dossier à ouvrir
+   * @param quiet - `true` pour ne rien afficher si le dossier n'est plus accessible (réouverture à la connexion)
+   */
+  const openFolder = useCallback(
+    async (fp: FolderPath, quiet = false) => {
+      const request = ++openRequest.current
+      setOpening(true)
+      setError(null)
+      try {
+        const target = currentFolder(fp)
+        const [info, collimoFolderId] = await Promise.all([
+          services.drive.getFolder(target.id),
+          services.drive.findCollimoFolder(target.id),
+        ])
+        if (request !== openRequest.current) return
+        const path = [...fp.path.slice(0, -1), { id: target.id, name: target.id === 'root' ? target.name : info.name }]
+        const next: FolderPath = { drive: fp.drive, path }
+        setOpen({ ...next, canAddChildren: info.canAddChildren, collimoFolderId })
+        setSelection([])
+        updateSettings((s) => ({ ...s, current: next, recents: pushRecent(s.recents ?? [], next) }))
+      } catch (e) {
+        if (request !== openRequest.current) return
+        if (!quiet) handleError(e)
+        updateSettings((s) => ({ ...s, current: undefined }))
+      } finally {
+        if (request === openRequest.current) setOpening(false)
+      }
+    },
+    [services, updateSettings, handleError],
+  )
 
   /**
    * Ouvre un projet enregistré dans l'éditeur.
@@ -134,19 +186,13 @@ export default function App() {
         .catch((e) => console.warn('Catalogue des dispositions indisponible', e))
       const saved = (await services.drive.loadSettings()) ?? EMPTY_SETTINGS
       if (saved.lang) setLang(saved.lang)
-      if (saved.location) {
-        try {
-          const folder = await services.drive.getFolder(saved.location.folder.id)
-          const location = { ...saved.location, folder: { id: folder.id, name: folder.name } }
-          setSettings({ ...saved, location })
-          setPhase({ name: 'gallery' })
-          return
-        } catch {
-          // Dossier supprimé, déplacé ou plus accessible : on redemande l'emplacement.
-        }
-      }
-      setSettings({ ...saved, location: undefined })
-      setPhase({ name: 'setup' })
+      const migrated = migrateSettings(saved)
+      settingsRef.current = migrated
+      setSettings(migrated)
+      if (saved.location) services.drive.saveSettings(migrated).catch(handleError)
+      setPhase({ name: 'gallery' })
+      if (migrated.current) void openFolder(migrated.current, true)
+      else if (!migrated.shortcuts?.length) setAdding(true)
     } catch (e) {
       handleError(e)
       setPhase((p) => (p.name === 'loading' ? { name: 'signin' } : p))
@@ -170,6 +216,11 @@ export default function App() {
     services.auth.signOut()
     applyCatalogue(null)
     setUser(null)
+    openRequest.current++
+    setOpen(null)
+    setOpening(false)
+    setAdding(false)
+    settingsRef.current = EMPTY_SETTINGS
     setSettings(EMPTY_SETTINGS)
     setSelection([])
     setError(null)
@@ -177,22 +228,44 @@ export default function App() {
   }
 
   /**
-   * Enregistre l'emplacement de travail choisi, puis ouvre la galerie.
-   * Le sous-dossier Collimo, où vont les collages et projets, est créé au besoin.
-   * @param drive - Drive (personnel ou partagé) qui contient le dossier
-   * @param folder - dossier de photos choisi
+   * Ajoute un raccourci, l'ouvre et ferme la fenêtre d'ajout.
+   * @param shortcut - raccourci choisi
    */
-  async function saveLocation(drive: DriveRef, folder: FolderInfo) {
-    const collimoFolderId = await services.drive.ensureCollimoFolder(folder.id)
-    const next: UserSettings = {
-      ...settings,
-      location: { drive, folder: { id: folder.id, name: folder.name }, collimoFolderId },
+  function addLocation(shortcut: Shortcut) {
+    updateSettings((s) => ({ ...s, shortcuts: addShortcut(s.shortcuts ?? [], shortcut) }))
+    setAdding(false)
+    void openFolder({ drive: shortcut.drive, path: [shortcut.folder] })
+  }
+
+  /** Ajoute le dossier ouvert aux raccourcis. */
+  function pinOpenFolder() {
+    if (!open) return
+    const folder = currentFolder(open)
+    updateSettings((s) => ({ ...s, shortcuts: addShortcut(s.shortcuts ?? [], { drive: open.drive, folder }) }))
+  }
+
+  /**
+   * Retire un raccourci de la liste ; le dossier ouvert reste affiché.
+   * @param folderId - dossier du raccourci
+   */
+  function removeLocation(folderId: string) {
+    updateSettings((s) => ({ ...s, shortcuts: removeShortcut(s.shortcuts ?? [], folderId) }))
+  }
+
+  /**
+   * Crée un collage à partir de la sélection. Le sous-dossier Collimo du dossier ouvert, où vont
+   * collages et projets, est créé à ce moment-là s'il n'existe pas encore.
+   * @param photos - photos choisies, dans l'ordre de sélection
+   */
+  async function createCollage(photos: Photo[]) {
+    if (!open?.canAddChildren) return
+    try {
+      const collimoFolderId = open.collimoFolderId ?? (await services.drive.ensureCollimoFolder(currentFolder(open).id))
+      setOpen({ ...open, collimoFolderId })
+      setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })
+    } catch (e) {
+      handleError(e)
     }
-    await services.drive.saveSettings(next)
-    setSettings(next)
-    setSelection([])
-    setError(null)
-    setPhase({ name: 'gallery' })
   }
 
   /**
@@ -202,12 +275,13 @@ export default function App() {
   function changeLang(lang: Lang) {
     setLang(lang)
     if (!user) return
-    const next = { ...settings, lang }
-    setSettings(next)
-    services.drive.saveSettings(next).catch(handleError)
+    updateSettings((s) => ({ ...s, lang }))
   }
 
-  const location = settings.location
+  /** Emplacement de travail de l'éditeur : le dossier ouvert, une fois son dossier Collimo connu. */
+  const location: Location | null =
+    open && open.collimoFolderId ? { drive: open.drive, folder: currentFolder(open), collimoFolderId: open.collimoFolderId } : null
+  const shortcuts = settings.shortcuts ?? []
   const configError: UiError | null = missing.length ? { key: 'error.config', vars: { vars: missing.join(', ') } } : null
 
   return (
@@ -215,8 +289,7 @@ export default function App() {
       <Header
         user={user}
         onLangChange={changeLang}
-        onChangeLocation={user && phase.name === 'gallery' ? () => setPhase({ name: 'setup' }) : undefined}
-        onOpenFactory={catalogue?.isAdmin && location && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
+        onOpenFactory={catalogue?.isAdmin && open && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
         onSignOut={user ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
@@ -230,29 +303,59 @@ export default function App() {
         </main>
       )}
 
-      {phase.name === 'setup' && (
-        <SetupScreen
-          services={services}
-          current={location}
-          onDone={saveLocation}
-          onCancel={location ? () => setPhase({ name: 'gallery' }) : undefined}
-          onError={handleError}
-        />
+      {phase.name === 'gallery' && (
+        <div className="workspace">
+          <LocationsPanel
+            shortcuts={shortcuts}
+            recents={settings.recents ?? []}
+            open={open}
+            onOpen={(fp) => void openFolder(fp)}
+            onRemove={removeLocation}
+            onAdd={() => setAdding(true)}
+          />
+          {opening && !open && (
+            <main className="screen screen-center">
+              <div className="spinner" aria-label={t('locations.opening')} />
+            </main>
+          )}
+          {!opening && !open && (
+            <main className="screen screen-center">
+              <div className="empty locations-empty">
+                <p>
+                  <strong>{shortcuts.length ? t('locations.pick') : t('locations.emptyTitle')}</strong>
+                </p>
+                {!shortcuts.length && <p className="muted">{t('locations.emptyText')}</p>}
+                {!shortcuts.length && (
+                  <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+                    + {t('locations.add')}
+                  </button>
+                )}
+              </div>
+            </main>
+          )}
+          {open && (
+            <GalleryScreen
+              key={currentFolder(open).id}
+              services={services}
+              open={open}
+              pinned={isPinned(shortcuts, currentFolder(open).id)}
+              onNavigate={(fp) => void openFolder(fp)}
+              onPin={pinOpenFolder}
+              selection={selection}
+              onSelectionChange={setSelection}
+              onCreate={(photos) => void createCollage(photos)}
+              onOpenProject={(entry) => void openProject(entry)}
+              onError={handleError}
+            />
+          )}
+        </div>
       )}
 
-      {phase.name === 'gallery' && location && (
-        <GalleryScreen
-          services={services}
-          location={location}
-          selection={selection}
-          onSelectionChange={setSelection}
-          onCreate={(photos) => setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })}
-          onOpenProject={(entry) => void openProject(entry)}
-          onError={handleError}
-        />
+      {adding && user && (
+        <AddLocationDialog services={services} shortcuts={shortcuts} onAdd={addLocation} onClose={() => setAdding(false)} />
       )}
 
-      {phase.name === 'factory' && location && catalogue && user && (
+      {phase.name === 'factory' && open && catalogue && user && (
         <Suspense
           fallback={
             <main className="screen screen-center">
@@ -262,7 +365,7 @@ export default function App() {
         >
           <FactoryScreen
             services={services}
-            location={location}
+            location={{ drive: open.drive, folder: currentFolder(open) }}
             catalogue={catalogue}
             userEmail={user.email}
             onCatalogueChange={applyCatalogue}

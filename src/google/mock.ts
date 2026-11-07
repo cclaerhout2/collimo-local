@@ -37,13 +37,20 @@ function fakePhoto(i: number, portrait: boolean): Photo {
   }
 }
 
-/** Dossiers simulés, par identifiant : un dans Mon Drive, deux dans un Drive partagé (dont un en lecture seule). */
-const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
+/**
+ * Dossiers simulés, par identifiant, avec leur parent : les racines des Drive, un dossier dans Mon Drive,
+ * deux dans un Drive partagé (dont un en lecture seule), et un sous-dossier.
+ */
+const folders: Record<string, FolderInfo & { parent: string | null; photos: Photo[] }> = {
+  root: { id: 'root', name: 'Mon Drive', driveId: null, canAddChildren: true, parent: null, photos: [] },
+  'shared-com': { id: 'shared-com', name: 'Communication', driveId: 'shared-com', canAddChildren: true, parent: null, photos: [] },
+  'shared-rh': { id: 'shared-rh', name: 'Ressources humaines', driveId: 'shared-rh', canAddChildren: false, parent: null, photos: [] },
   seminaire: {
     id: 'seminaire',
     name: 'Séminaire 2026',
     driveId: null,
     canAddChildren: true,
+    parent: 'root',
     photos: [
       ...Array.from({ length: 23 }, (_, i) => fakePhoto(i, i % 3 === 0)),
       { id: 'tiff-1', name: 'SCAN_0001.TIF', mimeType: 'image/tiff', supported: false },
@@ -54,13 +61,23 @@ const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
     name: 'Photos équipe',
     driveId: 'shared-com',
     canAddChildren: true,
+    parent: 'shared-com',
     photos: Array.from({ length: 8 }, (_, i) => fakePhoto(i + 40, i % 2 === 0)),
+  },
+  'equipe-2025': {
+    id: 'equipe-2025',
+    name: 'Soirée 2025',
+    driveId: 'shared-com',
+    canAddChildren: true,
+    parent: 'equipe',
+    photos: Array.from({ length: 5 }, (_, i) => fakePhoto(i + 80, i % 2 === 1)),
   },
   archives: {
     id: 'archives',
     name: 'Archives (lecture seule)',
     driveId: 'shared-com',
     canAddChildren: false,
+    parent: 'shared-com',
     photos: Array.from({ length: 4 }, (_, i) => fakePhoto(i + 60, false)),
   },
 }
@@ -152,6 +169,8 @@ export function createMockServices(): Services {
   let signedIn = false
   let settings: UserSettings | null = null
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
+  /** Dossiers de photos dont le sous-dossier « Collimo » a déjà été créé. */
+  const collimoFolders = new Set<string>()
 
   return {
     auth: {
@@ -183,7 +202,18 @@ export function createMockServices(): Services {
         if (!p) throw new Error('photo not found')
         return delay(p, 150)
       },
-      ensureCollimoFolder: (folderId) => delay(`${folderId}/${COLLIMO_FOLDER_NAME}`),
+      listSubfolders: (folderId) =>
+        delay(
+          Object.values(folders)
+            .filter((f) => f.parent === folderId)
+            .map(({ id, name }) => ({ id, name })),
+          250,
+        ),
+      findCollimoFolder: (folderId) => delay(collimoFolders.has(folderId) ? `${folderId}/${COLLIMO_FOLDER_NAME}` : null, 150),
+      async ensureCollimoFolder(folderId) {
+        collimoFolders.add(folderId)
+        return delay(`${folderId}/${COLLIMO_FOLDER_NAME}`)
+      },
       loadSettings: () => delay(settings),
       async saveSettings(s) {
         settings = s
@@ -255,13 +285,13 @@ export function createMockServices(): Services {
       },
       async pickImage(drive) {
         // Démo : la dernière photo du premier dossier de ce Drive.
-        const f = Object.values(folders).find((x) => x.driveId === drive.id)
+        const f = Object.values(folders).find((x) => x.driveId === drive.id && x.photos.length > 0)
         const p = f?.photos.filter((x) => x.supported).at(-1)
         return delay(p ? { id: p.id } : null, 300)
       },
       async pickFolder(drive) {
         // Le vrai sélecteur Google est une fenêtre ; ici on choisit le premier dossier du Drive.
-        const match = Object.values(folders).find((f) => f.driveId === drive.id)
+        const match = Object.values(folders).find((f) => f.driveId === drive.id && f.parent !== null)
         return delay(match ? { id: match.id, name: match.name } : null, 300)
       },
     },

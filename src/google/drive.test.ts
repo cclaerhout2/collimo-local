@@ -8,6 +8,7 @@ import {
   photosQuery,
   quote,
   sizedThumbnail,
+  subfoldersQuery,
   toPhoto,
 } from './drive'
 import { SessionExpiredError } from './types'
@@ -95,6 +96,33 @@ describe('client Drive', () => {
     const post = calls.find((c) => c.init.method === 'POST')!
     expect(JSON.parse(String(post.init.body))).toEqual({ name: 'Collimo', mimeType: FOLDER_MIME, parents: ['parent'] })
     expect(post.url.searchParams.get('supportsAllDrives')).toBe('true')
+  })
+
+  it('cherche le dossier Collimo sans le créer', async () => {
+    const { impl, calls } = fakeFetch(() => ({ body: { files: [] } }))
+    const drive = createDriveClient(() => 'T', impl)
+    expect(await drive.findCollimoFolder('parent')).toBeNull()
+    expect(calls.every((c) => (c.init.method ?? 'GET') === 'GET')).toBe(true)
+  })
+
+  it('liste les sous-dossiers du bon Drive, sans le dossier Collimo', async () => {
+    const { impl, calls } = fakeFetch(() => ({
+      body: {
+        files: [
+          { id: 'a', name: '2025', mimeType: FOLDER_MIME },
+          { id: 'c', name: 'Collimo' },
+          { id: 'b', name: '2026' },
+        ],
+      },
+    }))
+    const drive = createDriveClient(() => 'T', impl)
+    expect(await drive.listSubfolders('parent', 'shared1')).toEqual([
+      { id: 'a', name: '2025' },
+      { id: 'b', name: '2026' },
+    ])
+    expect(calls[0].url.searchParams.get('q')).toBe(subfoldersQuery('parent'))
+    expect(calls[0].url.searchParams.get('driveId')).toBe('shared1')
+    expect(calls[0].url.searchParams.get('orderBy')).toBe('name_natural')
   })
 
   it('traduit un 401 en session expirée', async () => {
