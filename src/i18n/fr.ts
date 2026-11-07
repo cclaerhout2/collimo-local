@@ -179,6 +179,10 @@ export const fr = {
   'borders.margin': 'Marge extérieure',
   'borders.radius': 'Arrondi des coins',
 
+  'borders.outline': 'Contour des formes',
+  'borders.outlineColor': 'Couleur du contour',
+  'borders.radiusShapes': 'L’arrondi ne s’applique qu’aux cases rectangulaires.',
+
   'background.custom': 'Autre couleur',
 
   'export.title': 'Exporter le collage',

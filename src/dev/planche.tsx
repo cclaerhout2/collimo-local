@@ -17,10 +17,10 @@ function Icon({ layout }: { layout: Layout }) {
     <figure style={{ margin: 0, textAlign: 'center' }}>
       <svg width={S} height={S} viewBox={`0 0 ${S} ${S}`} style={{ display: 'block' }}>
         <rect width={S} height={S} fill="#767676" />
-        {cells.map(({ box: b, path, evenodd, shaped }, i) => (
+        {cells.map(({ box: b, path, evenodd, shaped, noGap }, i) => (
           <g key={i}>
             {path ? (
-              <path d={path} fillRule={evenodd ? 'evenodd' : 'nonzero'} fill="#262626" stroke="#767676" strokeWidth={shaped ? 0 : gap} strokeLinejoin="round" />
+              <path d={path} fillRule={evenodd ? 'evenodd' : 'nonzero'} fill="#262626" stroke="#767676" strokeWidth={shaped || noGap ? 0 : gap} strokeLinejoin="round" />
             ) : (
               <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="#262626" stroke="#767676" strokeWidth={1.5} />
             )}

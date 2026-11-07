@@ -323,13 +323,21 @@ export function pieDisc(n: number, cx = 0.5, cy = 0.5, r = 0.5, start = 0): Cell
   for (let i = 0; i < n; i++) {
     const a0 = ((start - 90) * Math.PI) / 180 + (i * 2 * Math.PI) / n
     const a1 = a0 + (2 * Math.PI) / n
-    // Arc approché par une Bézier par part (n ≥ 3).
-    const k = (4 / 3) * Math.tan((a1 - a0) / 4)
-    const p0: Pt = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)]
-    const p3: Pt = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)]
-    const p1: Pt = [p0[0] - k * r * Math.sin(a0), p0[1] + k * r * Math.cos(a0)]
-    const p2: Pt = [p3[0] + k * r * Math.sin(a1), p3[1] - k * r * Math.cos(a1)]
-    out.push(path(`M${cx} ${cy}L${p0[0]} ${p0[1]}C${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]} ${p3[0]} ${p3[1]}Z`))
+    // Arc découpé en segments de 45° au plus, chacun approché par une Bézier.
+    const steps = Math.max(1, Math.ceil((a1 - a0) / (Math.PI / 4)))
+    const da = (a1 - a0) / steps
+    const k = (4 / 3) * Math.tan(da / 4)
+    let d = `M${cx} ${cy}L${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)}`
+    for (let s = 0; s < steps; s++) {
+      const b0 = a0 + s * da
+      const b1 = b0 + da
+      const p0: Pt = [cx + r * Math.cos(b0), cy + r * Math.sin(b0)]
+      const p3: Pt = [cx + r * Math.cos(b1), cy + r * Math.sin(b1)]
+      const p1: Pt = [p0[0] - k * r * Math.sin(b0), p0[1] + k * r * Math.cos(b0)]
+      const p2: Pt = [p3[0] + k * r * Math.sin(b1), p3[1] - k * r * Math.cos(b1)]
+      d += `C${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]} ${p3[0]} ${p3[1]}`
+    }
+    out.push(path(d + 'Z'))
   }
   return out
 }

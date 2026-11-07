@@ -6,7 +6,19 @@ Le cahier des charges complet est dans le document « Collimo — Cahier des cha
 
 ## État
 
-**Étape 5 — filtres et réglages** (branche `etape-5`) :
+**Étape 6 — dispositions en forme** (branche `etape-6`) :
+
+- catalogue complet de 1 à 20 photos : 541 dispositions, dont 208 en forme (cœurs, ronds, fleurs, étoiles, hexagones, losanges, puzzle, découpes courbes, en zigzag ou déchirées, feuilles, illustrations) ; décompte par nombre de photos : 24, 39, 40, 40, 38, 31, 26, 34, 32, 22, 25, 18, 26, 20, 22, 20, 24, 20, 20, 20 ;
+- chaque disposition a été comparée à la capture de référence (planche de recette `/planche.html?n=N` en développement) ; l'inventaire de 8 photos est de 34 dispositions (et non 38 comme noté au départ) ;
+- la forme reste fixe ; la photo à l'intérieur se déplace, se zoome et tourne comme dans un rectangle ; sélection et gestes suivent le contour réel de la forme ;
+- Bords : « Contour des formes » (épaisseur et couleur) pour les dispositions en forme ; l'arrondi est masqué quand il n'y a que des formes ;
+- l'écart sépare les photos voisines ; les photos éparses sur le fond gardent la taille et l'espacement de la capture ;
+- médaillons (forme posée sur une autre photo) : un anneau de la couleur du fond les détache ;
+- l'export redessine les formes en pleine résolution (même moteur que l'aperçu).
+
+Vérifié dans Chrome (Drive simulé) : sélection et zoom d'une photo dans un cœur, contour, export conforme à l'aperçu, collage rouvert identique au pixel près.
+
+**Étape 5 — filtres et réglages** :
 
 - 20 filtres en 5 familles (Naturel, Chaleur, Fraîcheur, Film, Noir et blanc), aperçus sur une photo du collage, intensité de 0 à 100, appliqués à tout le collage ;
 - 11 réglages + Auto : exposition, luminosité, contraste, hautes lumières, ombres, chaleur, nuance, saturation, vibrance, netteté, vignettage ;

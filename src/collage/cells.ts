@@ -3,7 +3,7 @@
  * réduisant la case), polygones, chemins et formes (écart obtenu en traçant leur contour de la couleur
  * du fond, ce qui marche aussi entre deux formes imbriquées).
  */
-import { cellBoxes, drawingArea, MAX_SPACING, type CellBox } from './geometry'
+import { cellBoxes, drawingArea, isolatedCells, MAX_SPACING, type CellBox } from './geometry'
 import { mapPath, parsePath, pathBBox, polyPath, serializePath, type Pt, type Seg } from './path'
 import { SHAPES, type CellDef } from './shapes'
 import type { Borders, Layout, Rect } from './types'
@@ -21,6 +21,8 @@ export interface CellGeom {
    */
   shaped?: boolean
   under?: string
+  /** Case isolée (aucune voisine) : pas d'écart tracé autour. */
+  noGap?: boolean
 }
 
 /** Épaisseur maximale du contour optionnel, en part du plus petit côté. */
@@ -80,20 +82,38 @@ export function cellGeometry(layout: Layout, width: number, height: number, bord
   const gap = gapPx(width, height, borders)
   const outline = outlinePx(width, height, borders)
   const toPx = (segs: Seg[]) => mapPath(segs, ([x, y]) => [outer + x * areaW, outer + y * areaH])
+  const bboxes = layout.cells
+  const iso = isolatedCells(bboxes)
+  // Chevauchement « franc » : boîtes réduites de 15 % de chaque côté, pour que des formes voisines
+  // dont seuls les coins des boîtes se touchent (fleurs, cœurs en grille) restent des formes pleines.
+  const core = (r: Rect) => ({ x: r.x + r.w * 0.15, y: r.y + r.h * 0.15, w: r.w * 0.7, h: r.h * 0.7 })
+  const overlapsEarlier = (i: number) =>
+    bboxes.slice(0, i).some((full, j) => {
+      const a = core(bboxes[i])
+      const b = layout.geo![j].kind === 'shape' ? core(full) : full
+      return a.x < b.x + b.w - 1e-6 && b.x < a.x + a.w - 1e-6 && a.y < b.y + b.h - 1e-6 && b.y < a.y + a.h - 1e-6
+    })
   return layout.geo.map((c, i) => {
     if (c.kind === 'rect') return { box: rectBoxes[i] }
+    // Forme posée sur une autre photo (médaillon) : contour tracé, pour que l'anneau d'écart se voie.
+    if (c.kind === 'shape' && overlapsEarlier(i)) {
+      const px = toPx(cellPathFrame(c, aspect)!.segs)
+      return { box: { ...pathBBox(px), radius: 0 }, path: serializePath(px) }
+    }
     if (c.kind === 'shape') {
       // Taille de la forme en pixels (plus petit côté), pour retirer l'écart et ajouter le contour.
       const side = Math.max(1, Math.min(c.w * areaW, c.h * areaH))
-      const inner = Math.max(0.05, 1 - gap / side)
+      // Le contour est pris à l'intérieur de la forme : elle garde sa taille et ne touche pas ses voisines.
+      const full = iso[i] ? 1 : Math.max(0.05, 1 - gap / side)
+      const inner = Math.max(0.05, full - (2 * outline) / side)
       const px = toPx(cellPathFrame(c, aspect, inner)!.segs)
-      const under = outline > 0 ? serializePath(toPx(cellPathFrame(c, aspect, inner + (2 * outline) / side)!.segs)) : undefined
+      const under = outline > 0 ? serializePath(toPx(cellPathFrame(c, aspect, full)!.segs)) : undefined
       return { box: { ...pathBBox(px), radius: 0 }, path: serializePath(px), shaped: true, under }
     }
     const fp = cellPathFrame(c, aspect)!
     const px = toPx(fp.segs)
     const bb = pathBBox(px)
-    return { box: { ...bb, radius: 0 }, path: serializePath(px), evenodd: fp.evenodd }
+    return { box: { ...bb, radius: 0 }, path: serializePath(px), evenodd: fp.evenodd, noGap: iso[i] || undefined }
   })
 }
 

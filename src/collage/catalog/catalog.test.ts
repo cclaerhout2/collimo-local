@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { allLayouts, layoutsFor } from './index'
+import { cellGeometry } from '../cells'
 
 const counts = Array.from({ length: 20 }, (_, i) => i + 1)
 
@@ -25,5 +26,24 @@ describe('catalogue des dispositions', () => {
       const area = l.cells.reduce((s, c) => s + c.w * c.h, 0)
       expect(area, l.id).toBeCloseTo(1, 6)
     }
+  })
+})
+
+describe('formes composées', () => {
+  // Une forme faite de plusieurs morceaux (fleur, trèfle…) tracée en mode « médaillon » montrerait
+  // ses lignes internes : on vérifie qu'aucune n'en chevauche franchement une autre.
+  it('aucune fleur, trèfle ou nuage ne passe en mode contour', () => {
+    const compound = new Set(['flower', 'flower6', 'clover', 'club', 'bear', 'pumpkin', 'cloud'])
+    const bad: string[] = []
+    for (const n of Array.from({ length: 20 }, (_, i) => i + 1)) {
+      for (const layout of layoutsFor(n)) {
+        if (!layout.geo) continue
+        const cells = cellGeometry(layout, 1000, 1000, { spacing: 0.3, margin: 0.3, radius: 0 })
+        layout.geo.forEach((c, i) => {
+          if (c.kind === 'shape' && compound.has(c.shape) && !cells[i].shaped) bad.push(`${layout.id}#${i + 1}`)
+        })
+      }
+    }
+    expect(bad).toEqual([])
   })
 })

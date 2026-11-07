@@ -23,9 +23,22 @@ export function drawingArea(width: number, height: number, borders: Borders) {
   return { gap, outer, areaW: width - 2 * outer, areaH: height - 2 * outer }
 }
 
+/**
+ * Cases isolées : aucune autre case ne les touche (à 1 % près). L'écart sépare des photos voisines ;
+ * une case isolée (photos éparses sur le fond, photo seule) garde la taille relevée sur la capture.
+ */
+export function isolatedCells(cells: Rect[]): boolean[] {
+  const e = 0.01
+  return cells.map((a, i) =>
+    cells.every((b, j) => j === i || a.x - e >= b.x + b.w || b.x >= a.x + a.w + e || a.y - e >= b.y + b.h || b.y >= a.y + a.h + e),
+  )
+}
+
 export function cellBoxes(cells: Rect[], width: number, height: number, borders: Borders): CellBox[] {
-  const { gap, outer, areaW, areaH } = drawingArea(width, height, borders)
-  return cells.map((c) => {
+  const { gap: g, outer, areaW, areaH } = drawingArea(width, height, borders)
+  const iso = isolatedCells(cells)
+  return cells.map((c, i) => {
+    const gap = iso[i] ? 0 : g
     const x = outer + c.x * areaW + gap / 2
     const y = outer + c.y * areaH + gap / 2
     const w = Math.max(0, c.w * areaW - gap)

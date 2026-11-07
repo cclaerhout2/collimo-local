@@ -562,7 +562,13 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           {tab === 'layout' && (
             <LayoutPanel photoCount={doc.photos.length} value={layout.id} onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))} />
           )}
-          {tab === 'borders' && <BordersPanel value={doc.borders} onChange={(b) => setDoc((d) => ({ ...d, borders: b }))} />}
+          {tab === 'borders' && (
+            <BordersPanel
+              value={doc.borders}
+              onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
+              shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
+            />
+          )}
           {tab === 'background' && <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />}
           {tab === 'filters' && (
             <div className="filters-tab">

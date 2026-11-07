@@ -179,6 +179,10 @@ export const en: Record<MessageKey, string> = {
   'borders.margin': 'Outer margin',
   'borders.radius': 'Corner rounding',
 
+  'borders.outline': 'Shape outline',
+  'borders.outlineColor': 'Outline colour',
+  'borders.radiusShapes': 'Rounding only applies to rectangular cells.',
+
   'background.custom': 'Other colour',
 
   'export.title': 'Export the collage',

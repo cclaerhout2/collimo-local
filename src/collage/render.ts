@@ -101,7 +101,7 @@ export function finishCell(ctx: Ctx, cell: CellGeom, style: CellStyle) {
   const p = path2d(cell.path)
   ctx.save()
   ctx.lineJoin = 'round'
-  if (style.gap > 0) {
+  if (style.gap > 0 && !cell.noGap) {
     ctx.strokeStyle = style.background
     ctx.lineWidth = style.gap
     ctx.stroke(p)

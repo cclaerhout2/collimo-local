@@ -69,7 +69,12 @@ export function parseProject(raw: unknown): CollageDoc {
     // Disposition retirée du catalogue ou ne correspondant plus : l'éditeur en choisira une autre.
     layoutId: layout && layout.photos === photos.length ? layout.id : '',
     photos,
-    borders: { spacing: num(b.spacing, 0, 0, 1), margin: num(b.margin, 0, 0, 1), radius: num(b.radius, 0, 0, 1) },
+    borders: {
+      spacing: num(b.spacing, 0, 0, 1),
+      margin: num(b.margin, 0, 0, 1),
+      radius: num(b.radius, 0, 0, 1),
+      ...(num(b.outline, 0, 0, 1) ? { outline: num(b.outline, 0, 0, 1), outlineColor: color(b.outlineColor, '#ffffff') } : {}),
+    },
     background: typeof d.background === 'string' && /^#[0-9a-f]{6}$/i.test(d.background) ? d.background : '#ffffff',
     split,
     overlays: parseOverlays(d.overlays),

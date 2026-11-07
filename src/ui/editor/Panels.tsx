@@ -55,16 +55,17 @@ export function LayoutPanel({ photoCount, value, onChange }: { photoCount: numbe
   )
 }
 
-export function BordersPanel({ value, onChange }: { value: Borders; onChange: (b: Borders) => void }) {
+export function BordersPanel({ value, onChange, shapes = 'none' }: { value: Borders; onChange: (b: Borders) => void; shapes?: 'none' | 'some' | 'all' }) {
   const { t } = useI18n()
   const sliders: { key: 'spacing' | 'margin' | 'radius'; label: string }[] = [
     { key: 'spacing', label: t('borders.spacing') },
     { key: 'margin', label: t('borders.margin') },
     { key: 'radius', label: t('borders.radius') },
   ]
+  const shown = shapes === 'all' ? sliders.filter((s) => s.key !== 'radius') : sliders
   return (
     <div className="sliders">
-      {sliders.map((s) => (
+      {shown.map((s) => (
         <label key={s.key} className="slider">
           <span className="slider-label">{s.label}</span>
           <input
@@ -78,6 +79,23 @@ export function BordersPanel({ value, onChange }: { value: Borders; onChange: (b
           <span className="slider-value">{Math.round(value[s.key] * 100)}</span>
         </label>
       ))}
+      {shapes !== 'none' && (
+        <>
+          <label className="slider">
+            <span className="slider-label">{t('borders.outline')}</span>
+            <input type="range" min={0} max={100} step={1} value={Math.round((value.outline ?? 0) * 100)} onChange={(e) => onChange({ ...value, outline: Number(e.target.value) / 100 })} />
+            <span className="slider-value">{Math.round((value.outline ?? 0) * 100)}</span>
+          </label>
+          {(value.outline ?? 0) > 0 && (
+            <div className="outline-colors" role="radiogroup" aria-label={t('borders.outlineColor')}>
+              {['#ffffff', '#111111', '#2dd4a7', '#facc15', '#ef4444', '#3b82f6'].map((c) => (
+                <button key={c} type="button" role="radio" aria-checked={(value.outlineColor ?? '#ffffff') === c} aria-label={c} className={`swatch small${(value.outlineColor ?? '#ffffff') === c ? ' selected' : ''}`} style={{ background: c }} onClick={() => onChange({ ...value, outlineColor: c })} />
+              ))}
+            </div>
+          )}
+          {shapes === 'all' && <p className="panel-note">{t('borders.radiusShapes')}</p>}
+        </>
+      )}
     </div>
   )
 }

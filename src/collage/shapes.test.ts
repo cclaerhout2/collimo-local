@@ -94,3 +94,13 @@ describe('dispositions en forme', () => {
     expect(() => buildLayout({ id: 'p02-test', photos: 2, family: 'ronds', geo: [shape('circle', 0, 0, 1, 1)] })).toThrow()
   })
 })
+
+describe('médaillon', () => {
+  it('une forme posée sur une autre case reçoit un contour tracé (anneau visible)', () => {
+    const layout = buildLayout({ id: 'p02-medaillon', photos: 2, family: 'incrustation', geo: [{ kind: 'rect', x: 0, y: 0, w: 1, h: 1 }, shape('heart', 0.3, 0.3, 0.4, 0.4)] })
+    const [, heart] = cellGeometry(layout, 1000, 1000, { spacing: 0.5, margin: 0, radius: 0 })
+    expect(heart.shaped).toBeFalsy()
+    const free = buildLayout({ id: 'p02-libre', photos: 2, family: 'coeurs', geo: [shape('heart', 0, 0, 0.45, 0.45), shape('heart', 0.55, 0.55, 0.45, 0.45)] })
+    expect(cellGeometry(free, 1000, 1000, { spacing: 0.5, margin: 0, radius: 0 }).every((c) => c.shaped)).toBe(true)
+  })
+})
