@@ -87,6 +87,29 @@ async function diagnose(page) {
 }
 
 /**
+ * Touche un élément comme un doigt : vérifie qu'il est visible et qu'il est bien l'élément sous son
+ * centre (rien ne le recouvre), puis le clique. Les clics de Playwright passent par des coordonnées
+ * que la WebView d'Android met mal à l'échelle ; ce contrôle dans la page n'en dépend pas.
+ * @param {import('playwright-core').Locator} locator - élément à toucher
+ */
+async function tap(locator) {
+  await locator.waitFor({ state: 'visible', timeout: 60_000 })
+  await locator.scrollIntoViewIfNeeded().catch(() => {})
+  // Quelques essais : une barre ou une fenêtre peut être en train d'apparaître (animation).
+  let reachable = false
+  for (let i = 0; i < 20 && !reachable; i++) {
+    if (i) await new Promise((r) => setTimeout(r, 150))
+    reachable = await locator.evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+      return hit === el || el.contains(hit)
+    })
+  }
+  assert.ok(reachable, 'élément recouvert ou hors de l’écran')
+  await locator.evaluate((el) => el.click())
+}
+
+/**
  * Appuie sur le bouton Retour d'Android.
  */
 const back = () => adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
@@ -112,15 +135,15 @@ adb('shell', 'setprop', 'debug.collimo.folder', PHOTOS)
 let { browser, page } = await launch()
 try {
   step('premier lancement : écran de choix du dossier, sans compte')
-  await page.getByRole('button', { name: 'FR', exact: true }).click({ timeout: 60_000 })
+  await tap(page.getByRole('button', { name: 'FR', exact: true }))
   await page.getByRole('heading', { name: 'Où sont vos photos ?' }).waitFor()
   assert.equal(await page.evaluate(() => window.collimoDesktop?.platform), 'android')
   await page.screenshot({ path: path.join(OUT, 'android-1-dossier.png') })
 
   step('choix du dossier, galerie : 8 images dans l’ordre naturel, miniatures affichées')
-  await page.getByRole('button', { name: 'Choisir un dossier' }).click()
+  await tap(page.getByRole('button', { name: 'Choisir un dossier' }))
   await page.getByText('Dossier choisi : Photos').waitFor()
-  await page.getByRole('button', { name: 'Continuer' }).click()
+  await tap(page.getByRole('button', { name: 'Continuer' }))
   const tiles = page.locator('ul.grid button.tile')
   await tiles.first().waitFor({ timeout: 30_000 })
   assert.equal(await tiles.count(), 8)
@@ -138,15 +161,15 @@ try {
   await page.screenshot({ path: path.join(OUT, 'android-2-galerie.png') })
 
   step('collage de 3 photos (dont la HEIC), enregistré dans le dossier')
-  await tiles.nth(0).click()
-  await tiles.nth(1).click()
-  await tiles.nth(6).click()
-  await page.getByRole('button', { name: 'Créer un collage' }).click()
+  await tap(tiles.nth(0))
+  await tap(tiles.nth(1))
+  await tap(tiles.nth(6))
+  await tap(page.getByRole('button', { name: 'Créer un collage' }))
   await page.getByRole('button', { name: 'Exporter' }).waitFor()
   await page.waitForTimeout(2000)
   await page.screenshot({ path: path.join(OUT, 'android-3-editeur.png') })
-  await page.getByRole('button', { name: 'Exporter' }).click()
-  await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
+  await tap(page.getByRole('button', { name: 'Exporter' }))
+  await tap(page.getByRole('button', { name: 'Enregistrer', exact: true }))
   await page.getByText(/Collage enregistré : Collimo_/).waitFor({ timeout: 120_000 })
   await page.screenshot({ path: path.join(OUT, 'android-4-enregistre.png') })
   const saved = asApp(`ls ${PHOTOS}/Collimo`).trim().split(/\s+/).sort()
@@ -158,7 +181,7 @@ try {
   const size = Number(asApp(`wc -c < ${PHOTOS}/Collimo/${saved.find((f) => f.endsWith('.jpg'))}`).trim())
   assert.ok(size > 20_000, `image de ${size} octets`)
   assert.equal(await page.getByRole('link', { name: 'Enregistrer une copie sous…' }).count(), 0, 'pas de téléchargement sur Android')
-  await page.getByRole('button', { name: 'Fermer' }).click()
+  await tap(page.getByRole('button', { name: 'Fermer' }))
 
   step('bouton Retour d’Android : de l’éditeur à la galerie, « Mes collages » à jour')
   back()
@@ -169,23 +192,23 @@ try {
   await page.screenshot({ path: path.join(OUT, 'android-5-mes-collages.png') })
 
   step('réouverture du collage, puis Retour')
-  await cards.first().click()
+  await tap(cards.first())
   await page.getByRole('button', { name: 'Exporter' }).waitFor()
   back()
   await cards.first().waitFor()
 
   step('usine à dispositions')
-  await page.locator('.avatar-button').click()
-  await page.getByRole('menuitem', { name: 'Usine à dispositions' }).click()
+  await tap(page.locator('.avatar-button'))
+  await tap(page.getByRole('menuitem', { name: 'Usine à dispositions' }))
   await page.getByRole('heading', { name: 'Usine à dispositions' }).waitFor()
-  await page.getByRole('button', { name: 'Masquer', exact: true }).first().click()
+  await tap(page.getByRole('button', { name: 'Masquer', exact: true }).first())
   await page.getByRole('button', { name: 'Réafficher', exact: true }).first().waitFor()
   assert.match(asApp('cat files/catalogue/collimo-catalogue.json'), /"hiddenBuiltins": \[\s*"p04-01"/)
   back()
   await cards.first().waitFor()
 
   step('langue anglaise mémorisée')
-  await page.getByRole('button', { name: 'EN', exact: true }).click()
+  await tap(page.getByRole('button', { name: 'EN', exact: true }))
   await page.getByText('My collages').waitFor()
   // Le choix est enregistré en arrière-plan : attendre qu'il soit sur le téléphone avant d'arrêter l'app.
   for (let i = 0; !asApp('cat files/settings.json 2>/dev/null || true').includes('"lang":"en"'); i++) {
