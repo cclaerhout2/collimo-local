@@ -25,3 +25,7 @@ dist-ssr
 
 # Firebase
 .firebase/
+
+# Configuration locale (install.bat) : jamais sur GitHub
+.env.production
+.firebaserc

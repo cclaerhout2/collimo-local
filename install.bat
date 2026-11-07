@@ -172,11 +172,12 @@ goto fb_account
 echo [6/7] Configuration du site Collimo
 set "CONFIGURED=1"
 if not exist ".env.production" set "CONFIGURED=0"
+if not exist ".firebaserc" set "CONFIGURED=0"
 findstr /c:"REMPLACER" .firebaserc >nul 2>&1 && set "CONFIGURED=0"
 if "%CONFIGURED%"=="0" goto cfg_start
 call :readcfg
 echo   Configuration deja faite : projet %PROJ%, site %SITE%.
-echo   (Elle est partagee via GitHub : les autres PC n'ont rien a refaire.)
+echo   (Elle reste sur ce PC : elle n'est jamais envoyee sur GitHub.)
 set "ANS="
 <con set /p "ANS=  La modifier (O/N) ? "
 if /i not "%ANS%"=="O" goto step7
@@ -310,25 +311,14 @@ set "CATA="
 <con set /p "CATA=     Identifiant : "
 if defined CATA set "CATA=%CATA: =%"
 
->".env.production" echo # Configuration de Collimo, ecrite par install.bat (partagee via GitHub).
+>".env.production" echo # Configuration de Collimo, ecrite par install.bat (locale, jamais envoyee sur GitHub).
 >>".env.production" echo # Ces valeurs ne sont pas secretes : elles sont visibles dans le site publie.
 >>".env.production" echo VITE_GOOGLE_CLIENT_ID=%CID%
 >>".env.production" echo VITE_GOOGLE_API_KEY=%KEY%
 >>".env.production" echo VITE_GOOGLE_APP_ID=%APPID%
 >>".env.production" echo VITE_ALLOWED_DOMAIN=%DOMAIN%
 >>".env.production" echo VITE_CATALOGUE_DRIVE_ID=%CATA%
-echo   OK - configuration ecrite (.firebaserc et .env.production)
-
-echo   Envoi de la configuration sur GitHub...
-git add .firebaserc .env.production
-git diff --cached --quiet
-if errorlevel 1 git commit -q -m "Configuration de Collimo (install.bat)"
-if errorlevel 1 goto nopush
-git pull -q --rebase --autostash origin main
-if errorlevel 1 goto pullfail
-git push -q origin HEAD:main
-if errorlevel 1 goto nopush
-echo   OK - configuration partagee
+echo   OK - configuration ecrite (.firebaserc et .env.production), sur ce PC seulement
 
 :: -------------------------------------------------------------------
 :step7
@@ -421,13 +411,6 @@ goto fail
 :nologin
 echo.
 echo ERREUR - connexion Google non terminee. Relance install.bat.
-goto fail
-:pullfail
-git rebase --abort >nul 2>&1
-:nopush
-echo.
-echo ERREUR - la configuration n'a pas pu etre envoyee sur GitHub.
-echo   Elle est enregistree sur ce PC. Lance sync.bat puis deploy.bat plus tard.
 goto fail
 :nobuild
 echo.

@@ -33,6 +33,7 @@ if errorlevel 1 goto notools
 where firebase >nul 2>&1
 if errorlevel 1 goto notools
 if not exist ".env.production" goto noconfig
+if not exist ".firebaserc" goto noconfig
 findstr /c:"REMPLACER" .firebaserc >nul 2>&1 && goto noconfig
 
 set "SITE="

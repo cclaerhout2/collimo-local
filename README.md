@@ -86,7 +86,7 @@ Trois scripts, à la racine du projet, se lancent d'un double-clic, sans ligne d
 
 **Version de test** : `deploy.bat` la publie à une adresse du type `https://SITE--test-xxxx.web.app`, fixe tant qu'elle est republiée au moins tous les 30 jours. La première fois, la connexion Google n'y marche qu'après avoir ajouté cette adresse à l'ID client OAuth et à la clé API : le script affiche les lignes à ajouter et ouvre la page.
 
-La configuration est enregistrée dans `.firebaserc` et `.env.production`, versionnés. Ces valeurs ne sont pas secrètes : elles sont visibles dans le site publié.
+La configuration est enregistrée dans `.firebaserc` et `.env.production`, sur le PC seulement : ces deux fichiers sont exclus de Git et ne sont jamais envoyés sur GitHub. Chaque PC qui publie le site doit donc avoir sa configuration (relancer `install.bat`, ou copier les deux fichiers d'un PC déjà configuré). Ces valeurs restent visibles dans le site publié.
 
 **À demander une fois à l'administrateur Workspace** :
 
@@ -102,7 +102,7 @@ Ce que fait `install.bat`, à la main, avec Node.js, Git et `firebase-tools` ins
 3. **ID client OAuth** « Collimo – Web », type *Application Web*. Origines JavaScript autorisées : `https://SITE.web.app`, `https://SITE.firebaseapp.com`, `http://localhost:5173` (et l'adresse de la version de test). → `VITE_GOOGLE_CLIENT_ID`
 4. **Clé API** « Collimo – Picker », restreinte à l'API Google Picker et aux mêmes sites (`https://SITE.web.app/*`…). → `VITE_GOOGLE_API_KEY`
 5. **Numéro du projet** (Paramètres IAM) → `VITE_GOOGLE_APP_ID` ; **domaine** de l'entreprise → `VITE_ALLOWED_DOMAIN` ; Drive partagé du catalogue → `VITE_CATALOGUE_DRIVE_ID` (facultatif).
-6. **Site d'hébergement dédié** : `firebase hosting:sites:create NOM-DU-SITE --project ID-PROJET`, puis remplacer les deux valeurs `REMPLACER-PAR-…` de `.firebaserc` par l'identifiant du projet et celui du site.
+6. **Site d'hébergement dédié** : `firebase hosting:sites:create NOM-DU-SITE --project ID-PROJET`, puis copier `.firebaserc.example` en `.firebaserc` et y remplacer les deux valeurs `REMPLACER-PAR-…` par l'identifiant du projet et celui du site.
 7. Écrire les valeurs des étapes 3 à 5 dans `.env.production` (modèle : `.env.example`).
 8. Publier, toujours vers la seule cible `collimo` :
 
@@ -197,8 +197,8 @@ export function sizeForLongSide(ratio: number, long: number): { width: number; h
 
 ```
 install.bat, sync.bat, deploy.bat   installation et publication sous Windows
-firebase.json, .firebaserc          hébergement : la seule cible « collimo »
-.env.example, .env.production       configuration (modèle, et valeurs écrites par install.bat)
+firebase.json, .firebaserc.example  hébergement : la seule cible « collimo » (.firebaserc : local)
+.env.example, .env.production       configuration (modèle, et valeurs locales écrites par install.bat)
 src/
   config.ts            configuration et constantes (autorisations, 20 photos max…)
   google/              connexion (GIS), client Drive, sélecteur Picker, Drive simulé
