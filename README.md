@@ -103,7 +103,7 @@ Les deux fichiers se téléchargent dans l'onglet **Actions** du dépôt (« App
 | `npm run desktop:pack` | construit l'installeur et la version portable dans `release/` (sous Windows ; sous Linux, Wine 32 et 64 bits est nécessaire) |
 | `npm run test:e2e` | test de bout en bout de l'application (après `desktop:build`) : dossier, galerie (HEIC compris), collage, enregistrement, réouverture, usine, relancement, dossier déplacé, cloisonnement ; `--exe chemin\Collimo.exe` pour tester un exécutable construit ou installé |
 
-Le workflow `.github/workflows/windows.yml` fait tout cela à chaque envoi, sur une vraie machine Windows : tests, construction, test de bout en bout de l'exécutable, puis installation silencieuse, test de l'application installée et désinstallation. **Publier une version** : changer `version` dans `package.json`, puis créer l'étiquette correspondante (`git tag v0.2.0 && git push origin v0.2.0`) : les deux `.exe` sont joints à une Release GitHub.
+Le workflow `.github/workflows/windows.yml` fait tout cela à chaque envoi, sur une vraie machine Windows : tests, construction, test de bout en bout de l'exécutable, puis installation silencieuse, test de l'application installée et désinstallation. **Publier une version** : augmenter `version` dans `package.json` et l'envoyer sur `main` : le workflow crée la Release GitHub `vX.Y.Z` avec les deux `.exe` (une version déjà publiée n'est jamais remplacée).
 
 ## Site web : installation et publication depuis Windows
 
