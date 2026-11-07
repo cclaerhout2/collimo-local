@@ -1,8 +1,8 @@
-# Collimo pour ordinateur (Windows, macOS, Linux)
+# Collimo local (Windows, macOS, Linux, Android)
 
-Application de bureau pour créer des collages photo **à partir des dossiers de l'ordinateur** : pas de compte, pas de serveur, rien à configurer, et aucun droit d'administrateur nécessaire. Les photos restent où elles sont ; les collages sont enregistrés à côté d'elles. Une seule base de code pour Windows, macOS (Apple Silicon et Intel) et Linux.
+Application pour créer des collages photo **à partir des dossiers de l'ordinateur ou du téléphone** : pas de compte, pas de serveur, rien à configurer, et aucun droit d'administrateur nécessaire. Les photos restent où elles sont ; les collages sont enregistrés à côté d'elles. Une seule base de code pour Windows, macOS (Apple Silicon et Intel), Linux et Android.
 
-> **Deux versions, deux dépôts.** Ce dépôt est la **version pour ordinateur**. La **version web**, qui travaille dans Google Drive avec le compte de l'entreprise, est dans [cclaerhout2/collimo](https://github.com/cclaerhout2/collimo). Les deux partagent le même éditeur (dispositions, textes, stickers, filtres, export, usine) ; une évolution du moteur faite d'un côté se reporte de l'autre en copiant les dossiers `src/collage`, `src/ui`, `src/stickers`, `src/i18n` et `src/lib`.
+> **Deux versions, deux dépôts.** Ce dépôt est la **version locale** (ordinateur et Android). La **version web**, qui travaille dans Google Drive avec le compte de l'entreprise, est dans [cclaerhout2/collimo](https://github.com/cclaerhout2/collimo). Les deux partagent le même éditeur (dispositions, textes, stickers, filtres, export, usine) ; une évolution du moteur faite d'un côté se reporte de l'autre en copiant les dossiers `src/collage`, `src/ui`, `src/stickers`, `src/i18n` et `src/lib`.
 
 ## Sommaire
 
@@ -11,7 +11,8 @@ Application de bureau pour créer des collages photo **à partir des dossiers de
 - [Questions fréquentes](#questions-fréquentes)
 - [Fonctionnalités](#fonctionnalités)
 - [Sécurité](#sécurité)
-- [Téléphones et tablettes](#téléphones-et-tablettes)
+- [Android](#android)
+- [iPhone et iPad](#iphone-et-ipad)
 - [Développement](#développement)
 - [Publier une version](#publier-une-version)
 - [Conventions de code](#conventions-de-code)
@@ -19,7 +20,7 @@ Application de bureau pour créer des collages photo **à partir des dossiers de
 
 ## Installation
 
-Tous les fichiers sont dans la [dernière version](https://github.com/cclaerhout2/collimo-local/releases/latest). Aucun ne demande de droits d'administrateur, sauf le paquet `.deb` de Linux (installation pour tout l'ordinateur).
+Pour Android, voir [Android](#android). Pour l'ordinateur, tous les fichiers sont dans la [dernière version](https://github.com/cclaerhout2/collimo-local/releases/latest). Aucun ne demande de droits d'administrateur, sauf le paquet `.deb` de Linux (installation pour tout l'ordinateur).
 
 ### Windows
 
@@ -150,9 +151,25 @@ Le catalogue de l'usine est le fichier `collimo-catalogue.json`, dans `catalogue
 - Aucun contenu extérieur n'est chargé, sauf les polices Google ; les liens s'ouvrent dans le navigateur par défaut.
 - Sur Linux, l'AppImage désactive le bac à sable de Chromium seulement là où le système l'empêche de démarrer (Ubuntu 24.04 et suivants, faute du profil AppArmor que le `.deb` installe) ; la page reste isolée.
 
-## Téléphones et tablettes
+## Android
 
-Cette application est pour ordinateur. Sur iPhone, iPad et Android, la [version web](https://github.com/cclaerhout2/collimo) s'utilise déjà dans Safari ou Chrome (l'éditeur est prévu pour le tactile) et peut être ajoutée à l'écran d'accueil (« Partager › Sur l'écran d'accueil »). Une application mobile installable reprendrait le même code avec Capacitor ; elle demanderait, pour iOS, un compte développeur Apple.
+**Installer** (Android 7 ou plus récent) :
+
+1. sur le téléphone, ouvrir la [dernière version](https://github.com/cclaerhout2/collimo-local/releases/latest) et télécharger `Collimo-X.Y.Z-android.apk` (ou le copier depuis un ordinateur) ;
+2. ouvrir le fichier téléchargé : Android demande d'autoriser l'installation depuis cette source (le navigateur ou le gestionnaire de fichiers) ; l'accepter, revenir, puis **Installer** ;
+3. Google Play Protect peut avertir d'une « application inconnue » : **Plus de détails › Installer quand même**.
+
+Pour une nouvelle version, même chose : elle s'installe par-dessus la précédente, réglages et collages conservés.
+
+**Utiliser** : au premier lancement, **Choisir un dossier** ouvre le sélecteur d'Android ; choisir par exemple **DCIM › Camera** (les photos de l'appareil photo), puis **Utiliser ce dossier › Autoriser**. Android ne donne à Collimo accès qu'à ce dossier : aucune autorisation générale sur les photos ou le stockage n'est demandée. Les collages sont enregistrés dans son sous-dossier `Collimo`, visibles dans l'application Fichiers et, en général, dans la galerie du téléphone. Le bouton Retour ramène de l'éditeur aux photos.
+
+Différences avec l'ordinateur : pas de bouton « Enregistrer une copie sous… » ni « Ouvrir le dossier » (le collage est déjà dans le dossier, visible dans l'application Fichiers ou la galerie) ; Android ne permet pas de choisir la racine du stockage ni le dossier Téléchargements, il faut un sous-dossier. Les dossiers Google Drive ne sont en général pas proposés par le sélecteur d'Android.
+
+**Signature** : l'APK est signé avec une clé de démonstration gardée dans ce dépôt privé (`android/keystore/collimo-demo.jks`, mot de passe `collimo-demo`) : quiconque a accès au dépôt peut signer une version. Pour une diffusion plus large, créer une clé propre et la donner au workflow par les secrets GitHub `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` et `ANDROID_KEY_ALIAS` (une fois changée, la clé ne peut plus changer : un téléphone refuse une mise à jour signée par une autre clé). Une publication sur Google Play demanderait un compte développeur (25 $, une fois).
+
+## iPhone et iPad
+
+La [version web](https://github.com/cclaerhout2/collimo) s'utilise dans Safari (l'éditeur est prévu pour le tactile) et peut être ajoutée à l'écran d'accueil (« Partager › Sur l'écran d'accueil »). Une application iOS reprendrait le code Android (Capacitor) ; Apple ne permet de l'installer que par TestFlight ou l'App Store, avec un compte développeur Apple (99 $ par an), ou pour 7 jours depuis un Mac avec Xcode.
 
 ## Développement
 
@@ -165,6 +182,8 @@ npm run desktop:start
 | --- | --- |
 | `npm run desktop:start` | construit et lance l'application |
 | `npm run desktop:pack` | construit les paquets du système en cours dans `release/` |
+| `npm run android:apk` | construit l'APK Android dans `android/app/build/outputs/apk/release/` (Android SDK et Java 21 nécessaires) |
+| `npm run test:e2e:android` | test de bout en bout de la version de test Android (`fr.collimo.app.test`) installée sur un émulateur ou un téléphone branché (adb) |
 | `npm run desktop:pack:win`, `:mac`, `:linux` | paquets d'un système donné (macOS seulement sur un Mac ; Windows depuis Linux avec Wine 32 et 64 bits) |
 | `npm test` | tests automatiques (moteur, catalogue, accès aux fichiers, services, documentation du code) |
 | `npm run test:e2e` | test de bout en bout de l'application (après `npm run desktop:build`) : dossier, galerie (HEIC compris), collage, enregistrement, réouverture, usine, relancement, dossier déplacé, cloisonnement ; `--exe chemin/de/l/executable` pour tester une application construite ou installée (sous Linux, lancer avec `xvfb-run -a` sans écran) |
@@ -175,17 +194,18 @@ npm run desktop:start
 
 **Interface dans le navigateur** : `VITE_MOCK=1 npm run dev` affiche l'interface avec des photos simulées, pratique pour travailler sur l'éditeur sans relancer l'application ; `/planche.html?n=5` affiche toutes les dispositions de 5 photos.
 
-Le workflow `.github/workflows/desktop.yml` tourne à chaque envoi, sur trois vraies machines :
+Le workflow `.github/workflows/apps.yml` tourne à chaque envoi, sur trois vraies machines et un émulateur Android :
 
 - **Windows** : types, lint et tests, construction, test de bout en bout de `Collimo.exe`, puis installation silencieuse, test de l'application installée et désinstallation ;
 - **Linux** (Ubuntu 24.04) : tests, construction, test de bout en bout de l'application, de l'AppImage, puis du `.deb` installé, et désinstallation ;
-- **macOS** (Apple Silicon) : tests, construction pour Apple Silicon et Intel, vérification de la signature, test de bout en bout de l'application, puis de l'application installée depuis le `.dmg`.
+- **macOS** (Apple Silicon) : tests, construction pour Apple Silicon et Intel, vérification de la signature, test de bout en bout de l'application, puis de l'application installée depuis le `.dmg` ;
+- **Android** (émulateur Android 14) : tests, construction des APK, test de bout en bout de la version de test (dossier, galerie, collage, enregistrement, bouton Retour, réouverture, usine, relancement), puis démarrage de la version finale.
 
 Les paquets sont dans les *Artifacts* de chaque exécution.
 
 ## Publier une version
 
-Augmenter `version` dans `package.json` et l'envoyer sur `main` : une fois les trois systèmes au vert, le workflow crée la Release GitHub `vX.Y.Z` avec tous les paquets (une version déjà publiée n'est jamais remplacée).
+Augmenter `version` dans `package.json` et l'envoyer sur `main` : une fois tous les systèmes au vert, le workflow crée la Release GitHub `vX.Y.Z` avec tous les paquets (une version déjà publiée n'est jamais remplacée).
 
 ## Conventions de code
 
@@ -214,12 +234,15 @@ export function sizeForLongSide(ratio: number, long: number): { width: number; h
 ## Structure du projet
 
 ```
-electron/              processus principal : fenêtre, protocole collimo://, accès aux fichiers (files.ts), préchargement
+electron/              ordinateur : fenêtre, protocole collimo://, accès aux fichiers (files.ts), préchargement
+android/               Android : projet Capacitor ; module d'accès aux dossiers (app/src/main/java/fr/collimo/app/CollimoStoragePlugin.java)
+capacitor.config.json  configuration de l'application Android
 build-resources/       icônes de l'application (Windows .ico, macOS .icns, Linux .png)
-.github/workflows/     construction, tests et publication sur Windows, Linux et macOS
+.github/workflows/     construction, tests et publication sur Windows, Linux, macOS et Android
 src/
   config.ts            configuration et constantes (20 photos max…)
-  desktop/             services sur les fichiers de l’ordinateur, et contrat avec electron/ (bridge.ts)
+  desktop/             services sur les fichiers de l’appareil, et contrat avec electron/ et Android (bridge.ts)
+  android/             pont Android (même contrat que l'ordinateur), bouton Retour
   google/              interface commune des services (types.ts), Drive simulé ; client Google Drive de la version web
   catalogue/           lecture et écriture du catalogue de l'usine, droits
   collage/             moteur : modèle, géométrie, rendu, couleurs, export, projet, validation
@@ -233,7 +256,7 @@ src/
   lib/                 logique pure : nommage, sélection, erreurs
   dev/                 planche de recette (développement uniquement)
 public/data/           catalogues de stickers et de polices, chargés à la demande
-tools/                 construction (build-electron.mjs), test de bout en bout (e2e-desktop.mjs), génération des catalogues
+tools/                 construction (build-electron.mjs), tests de bout en bout (e2e-desktop.mjs, e2e-android.mjs), génération des catalogues
 ```
 
 ## Licences

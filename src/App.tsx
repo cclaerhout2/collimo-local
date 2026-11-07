@@ -169,6 +169,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desktop])
 
+  // Bouton Retour d'Android : de l'éditeur, de l'usine ou du choix du dossier, retour aux photos.
+  useEffect(() => {
+    const back = (e: Event) => {
+      const toGallery = phase.name === 'editor' || phase.name === 'factory' || (phase.name === 'setup' && !!settings.location)
+      if (!toGallery) return
+      e.preventDefault()
+      setPhase({ name: 'gallery' })
+    }
+    window.addEventListener('collimo:back', back)
+    return () => window.removeEventListener('collimo:back', back)
+  }, [phase.name, settings.location])
+
   /**
    * Fait choisir un autre dossier pour le catalogue de l'usine (application Windows), puis le recharge.
    * Un dossier réseau partagé permet de proposer les mêmes dispositions à toute l'équipe.

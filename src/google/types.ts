@@ -143,9 +143,11 @@ export interface DriveService {
   loadSettings(): Promise<UserSettings | null>
   /** Enregistre les réglages de l'utilisateur. */
   saveSettings(settings: UserSettings): Promise<void>
+  /** Miniature calculée à la demande, quand la photo n'a pas d'adresse de miniature (Android) ; `undefined` en cas d'échec. */
+  loadThumbnail?(photo: Photo): Promise<string | undefined>
   /** Contenu d'un fichier (photos originales, repli des miniatures). */
   fetchFileBlob(id: string): Promise<Blob>
-  /** Lien qui ouvre un dossier (dans Drive, ou dans l'Explorateur pour l'application Windows). */
+  /** Lien qui ouvre un dossier (dans Drive, ou dans l'Explorateur sur ordinateur) ; vide s'il n'y en a pas (Android). */
   folderLink(folderId: string): string
   /** Fichiers directement dans un dossier (hors sous-dossiers), du plus récent au plus ancien ; `namePrefix` limite aux noms qui le contiennent. */
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>

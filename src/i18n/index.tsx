@@ -3,7 +3,7 @@
  * sinon celle du navigateur), contexte React et fonction `t` pour lire les libellés.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { desktopTexts } from './desktop'
+import { androidTexts, desktopTexts } from './desktop'
 import { en } from './en'
 import { fr, type MessageKey } from './fr'
 
@@ -18,12 +18,16 @@ const dictionaries: Record<Lang, Record<MessageKey, string>> = { fr, en }
 let overrides: Partial<Record<Lang, Partial<Record<MessageKey, string>>>> = {}
 
 /**
- * Active (ou désactive) les libellés de l'application Windows, qui ne parlent plus de Google Drive.
+ * Active (ou désactive) les libellés des applications, qui ne parlent plus de Google Drive.
  * À appeler avant le premier affichage.
- * @param on - `true` pour l'application Windows
+ * @param on - `true` dans une application (ordinateur ou Android)
+ * @param platform - système ; `android` ajoute les libellés propres au téléphone
  */
-export function enableDesktopTexts(on: boolean): void {
-  overrides = on ? desktopTexts : {}
+export function enableDesktopTexts(on: boolean, platform?: string): void {
+  if (!on) overrides = {}
+  else if (platform === 'android')
+    overrides = { fr: { ...desktopTexts.fr, ...androidTexts.fr }, en: { ...desktopTexts.en, ...androidTexts.en } }
+  else overrides = desktopTexts
 }
 
 /** Clé de stockage local de la langue choisie. */

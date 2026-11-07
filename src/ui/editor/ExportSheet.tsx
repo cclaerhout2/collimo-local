@@ -11,6 +11,7 @@ import {
 } from '../../collage/export'
 import { saveCollage, type SavedCollage } from '../../collage/save'
 import type { CollageDoc, Layout, Overlay, TextOverlay } from '../../collage/types'
+import { getDesktopBridge } from '../../desktop/services'
 import type { DriveService } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
@@ -124,6 +125,7 @@ export function ExportSheet({
   }
 
   const folderUrl = drive.folderLink(collimoFolderId)
+  const onAndroid = getDesktopBridge()?.platform === 'android'
 
   return (
     <div className="sheet-backdrop" role="presentation" onClick={busy ? undefined : onClose}>
@@ -143,12 +145,17 @@ export function ExportSheet({
                   {t('export.openImage')}
                 </a>
               )}
-              <a className="btn" href={folderUrl} target="_blank" rel="noreferrer">
-                {t('export.openFolder')}
-              </a>
-              <a className="btn" href={status.url} download={`${status.saved.baseName}.${format === 'png' ? 'png' : 'jpg'}`}>
-                {t('export.download')}
-              </a>
+              {folderUrl && (
+                <a className="btn" href={folderUrl} target="_blank" rel="noreferrer">
+                  {t('export.openFolder')}
+                </a>
+              )}
+              {/* Sur Android, la WebView ne sait pas télécharger : le collage est déjà dans le dossier choisi. */}
+              {!onAndroid && (
+                <a className="btn" href={status.url} download={`${status.saved.baseName}.${format === 'png' ? 'png' : 'jpg'}`}>
+                  {t('export.download')}
+                </a>
+              )}
               <button type="button" className="btn btn-primary" onClick={onClose}>
                 {t('export.close')}
               </button>

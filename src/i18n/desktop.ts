@@ -55,3 +55,26 @@ export const desktopTexts: Record<'fr' | 'en', Partial<Record<MessageKey, string
     'error.expired': 'The folder is no longer accessible.',
   },
 }
+
+/** Libellés propres à l'application Android, qui complètent ceux de l'application de bureau. */
+export const androidTexts: Record<'fr' | 'en', Partial<Record<MessageKey, string>>> = {
+  fr: {
+    'signin.text': 'Créez des collages à partir des photos de votre téléphone.',
+    'signin.privacy':
+      'Vos photos restent sur votre téléphone. Collimo ne lit que les dossiers que vous choisissez et n’écrit que ses propres fichiers.',
+    'setup.collimoNote':
+      'Collimo créera un sous-dossier « Collimo » dans ce dossier pour y ranger vos collages. Les photos de l’appareil photo sont dans DCIM › Camera.',
+    'sticker.mineText': 'Ajoutez une image de votre téléphone, par exemple un logo en PNG transparent.',
+    'export.doneHint':
+      'L’image et le fichier projet sont dans le dossier Collimo, à côté de vos photos (application Fichiers, et en général la galerie du téléphone). Le collage reste ouvert : chaque nouvel enregistrement crée un nouveau collage.',
+  },
+  en: {
+    'signin.text': 'Create collages from the photos on your phone.',
+    'signin.privacy': 'Your photos stay on your phone. Collimo only reads the folders you choose and only writes its own files.',
+    'setup.collimoNote':
+      'Collimo will create a “Collimo” subfolder in this folder to store your collages. Camera photos are in DCIM › Camera.',
+    'sticker.mineText': 'Add an image from your phone, for example a logo as a transparent PNG.',
+    'export.doneHint':
+      'The image and the project file are in the Collimo folder, next to your photos (Files app, and usually the phone’s gallery). The collage stays open: each new save creates a new collage.',
+  },
+}

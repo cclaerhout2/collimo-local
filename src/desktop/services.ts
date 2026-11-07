@@ -56,17 +56,41 @@ export function joinPath(dir: string, name: string, platform: string): string {
   return dir.replace(/[\\/]+$/, '') + sep + name
 }
 
+/** Adresses qui servent fichiers et miniatures à la page, selon le système. */
+export interface LocalUrls {
+  /** Contenu d'un fichier. */
+  file(path: string): string
+  /** Miniature servie directement, ou `undefined` si elle se calcule à la demande (Android). */
+  thumb(path: string, size: number, version: string): string | undefined
+  /** Lien qui ouvre un fichier ou un dossier dans le système, ou `undefined` si ce n'est pas possible (Android). */
+  open(action: 'open' | 'reveal', path: string): string | undefined
+}
+
+/** Adresses sur ordinateur : protocole `collimo://` du processus principal. */
+export const DESKTOP_URLS: LocalUrls = { file: localFileUrl, thumb: localThumbUrl, open: shellUrl }
+
+/**
+ * Adresses adaptées au pont : celles du pont Android s'il en fournit, sinon celles de l'ordinateur.
+ * @param bridge - pont vers le système
+ * @returns les adresses à utiliser
+ */
+export function urlsFor(bridge: DesktopBridge): LocalUrls {
+  if (!bridge.fileUrl) return DESKTOP_URLS
+  return { file: bridge.fileUrl, thumb: () => undefined, open: () => undefined }
+}
+
 /**
  * Photo de la galerie à partir d'un fichier local.
  * @param f - fichier image
- * @returns la photo, avec l'adresse de sa miniature calculée par Windows
+ * @param urls - adresses du système
+ * @returns la photo, avec l'adresse de sa miniature calculée par le système
  */
-export function toPhoto(f: LocalFile): Photo {
+export function toPhoto(f: LocalFile, urls: LocalUrls = DESKTOP_URLS): Photo {
   return {
     id: f.path,
     name: f.name,
     mimeType: f.mimeType,
-    thumbnailUrl: localThumbUrl(f.path, THUMB_SIZE, f.modifiedTime),
+    thumbnailUrl: urls.thumb(f.path, THUMB_SIZE, f.modifiedTime),
     width: f.width,
     height: f.height,
     supported: isSupportedImage(f.mimeType),
@@ -76,25 +100,28 @@ export function toPhoto(f: LocalFile): Photo {
 /**
  * Fichier du dossier Collimo (collage, projet) à partir d'un fichier local.
  * @param f - fichier local
- * @returns le fichier ; son lien l'ouvre dans l'application par défaut de Windows
+ * @param urls - adresses du système
+ * @returns le fichier ; son lien l'ouvre dans l'application par défaut du système
  */
-export function toFileInfo(f: LocalFile): DriveFileInfo {
+export function toFileInfo(f: LocalFile, urls: LocalUrls = DESKTOP_URLS): DriveFileInfo {
+  const image = f.mimeType.startsWith('image/')
   return {
     id: f.path,
     name: f.name,
     modifiedTime: f.modifiedTime,
-    webViewLink: shellUrl('open', f.path),
-    thumbnailLink: f.mimeType.startsWith('image/') ? localThumbUrl(f.path, 320, f.modifiedTime) : undefined,
+    webViewLink: urls.open('open', f.path),
+    thumbnailLink: image ? (urls.thumb(f.path, 320, f.modifiedTime) ?? urls.file(f.path)) : undefined,
   }
 }
 
 /**
  * Fichier JSON (catalogue de l'usine) à partir d'un fichier local.
  * @param f - fichier local
+ * @param urls - adresses du système
  * @returns le fichier ; son lien le montre dans l'Explorateur
  */
-function toJsonFile(f: LocalFile): DriveJsonFile {
-  return { id: f.path, name: f.name, modifiedTime: f.modifiedTime, webViewLink: shellUrl('reveal', f.path), canEdit: true }
+function toJsonFile(f: LocalFile, urls: LocalUrls): DriveJsonFile {
+  return { id: f.path, name: f.name, modifiedTime: f.modifiedTime, webViewLink: urls.open('reveal', f.path), canEdit: true }
 }
 
 /** Photo introuvable à son chemin d'origine (supprimée, ou dossier déplacé et non retrouvé). */
@@ -108,11 +135,17 @@ export class MissingFileError extends Error {
 /**
  * Lit un fichier local par le protocole de l'app.
  * @param path - chemin complet
+ * @param urls - adresses du système
  * @returns le contenu, avec son type MIME
  * @throws {@link MissingFileError} si le fichier est absent ou hors des dossiers autorisés
  */
-async function readBlob(path: string): Promise<Blob> {
-  const res = await fetch(localFileUrl(path))
+async function readBlob(path: string, urls: LocalUrls = DESKTOP_URLS): Promise<Blob> {
+  let res: Response
+  try {
+    res = await fetch(urls.file(path))
+  } catch {
+    throw new MissingFileError(path, 404)
+  }
   if (!res.ok) throw new MissingFileError(path, res.status)
   return res.blob()
 }
@@ -138,6 +171,7 @@ const jsonBytes = (data: unknown) => new TextEncoder().encode(JSON.stringify(dat
  */
 export function createDesktopServices(bridge: DesktopBridge): Services {
   const join = (dir: string, name: string) => joinPath(dir, name, bridge.platform)
+  const urls = urlsFor(bridge)
   /** Dernier dossier de photos parcouru : on y cherche les photos d'un collage dont le dossier a bougé. */
   let photoFolder: string | null = null
 
@@ -147,8 +181,10 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
    * @param id - chemin d'origine
    * @returns le chemin de repli, ou null s'il n'y en a pas
    */
-  const moved = (id: string) => {
-    const candidate = photoFolder ? join(photoFolder, baseName(id)) : null
+  const moved = async (id: string): Promise<string | null> => {
+    if (!photoFolder) return null
+    const name = baseName(decodeURIComponent(id))
+    const candidate = bridge.findChild ? await bridge.findChild(photoFolder, name).catch(() => null) : join(photoFolder, name)
     return candidate && candidate !== id ? candidate : null
   }
 
@@ -162,7 +198,7 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
     try {
       return await read(id)
     } catch (e) {
-      const other = moved(id)
+      const other = await moved(id)
       if (!other) throw e
       return read(other).catch(() => Promise.reject(e))
     }
@@ -185,10 +221,14 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
       },
       async listPhotos(folder) {
         photoFolder = folder.id
-        return (await call(() => bridge.listImages(folder.id))).map(toPhoto)
+        return (await call(() => bridge.listImages(folder.id))).map((f) => toPhoto(f, urls))
       },
-      getPhoto: async (id) => toPhoto(await withMoved(id, (p) => call(() => bridge.fileInfo(p)))),
+      getPhoto: async (id) => toPhoto(await withMoved(id, (p) => call(() => bridge.fileInfo(p))), urls),
+      loadThumbnail: bridge.thumbnail
+        ? (photo) => call(() => bridge.thumbnail!(photo.id, THUMB_SIZE, photo.name)).catch(() => undefined)
+        : undefined,
       async ensureCollimoFolder(folderId) {
+        if (bridge.ensureChildDir) return call(() => bridge.ensureChildDir!(folderId, 'Collimo'))
         const path = join(folderId, 'Collimo')
         await call(() => bridge.ensureDir(path))
         return path
@@ -198,14 +238,15 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
         return raw && typeof raw === 'object' && raw.version === 1 ? (raw as UserSettings) : null
       },
       saveSettings: (s) => call(() => bridge.saveSettings(s)),
-      fetchFileBlob: (id) => withMoved(id, readBlob),
-      listFolderFiles: async (folderId, namePrefix) => (await call(() => bridge.listFiles(folderId, namePrefix))).map(toFileInfo),
-      readJson: async (id) => JSON.parse(await (await readBlob(id)).text()) as unknown,
+      fetchFileBlob: (id) => withMoved(id, (p) => readBlob(p, urls)),
+      listFolderFiles: async (folderId, namePrefix) =>
+        (await call(() => bridge.listFiles(folderId, namePrefix))).map((f) => toFileInfo(f, urls)),
+      readJson: async (id) => JSON.parse(await (await readBlob(id, urls)).text()) as unknown,
       async uploadFile(folderId, name, data) {
         const bytes = new Uint8Array(await data.arrayBuffer())
-        return toFileInfo(await call(() => bridge.writeNewFile(folderId, name, bytes)))
+        return toFileInfo(await call(() => bridge.writeNewFile(folderId, name, bytes)), urls)
       },
-      folderLink: (folderId) => shellUrl('open', folderId),
+      folderLink: (folderId) => urls.open('open', folderId) ?? '',
       async findSharedDrive() {
         // Le « Drive du catalogue » est un dossier : dans les données de l'app, ou un dossier partagé choisi.
         const dir = await call(() => bridge.catalogueDir())
@@ -213,10 +254,11 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
       },
       async findRootFile(driveId, name) {
         const f = (await call(() => bridge.listFiles(driveId, name))).find((x) => x.name === name)
-        return f ? toJsonFile(f) : null
+        return f ? toJsonFile(f, urls) : null
       },
-      createJsonFile: async (parentId, name, data) => toJsonFile(await call(() => bridge.writeNewFile(parentId, name, jsonBytes(data)))),
-      updateJsonFile: async (id, data) => toJsonFile(await call(() => bridge.replaceFile(id, jsonBytes(data)))),
+      createJsonFile: async (parentId, name, data) =>
+        toJsonFile(await call(() => bridge.writeNewFile(parentId, name, jsonBytes(data))), urls),
+      updateJsonFile: async (id, data) => toJsonFile(await call(() => bridge.replaceFile(id, jsonBytes(data))), urls),
     },
     picker: {
       async pickFolder(_drive, _lang, title) {

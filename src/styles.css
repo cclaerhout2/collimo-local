@@ -65,7 +65,9 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem max(1rem, env(safe-area-inset-left));
+  padding: 0.75rem max(1rem, env(safe-area-inset-right)) 0.75rem max(1rem, env(safe-area-inset-left));
+  /* Téléphone en plein écran (Android, iPhone) : sous la barre d'état. */
+  padding-top: max(0.75rem, env(safe-area-inset-top));
   background: rgba(23, 23, 27, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);

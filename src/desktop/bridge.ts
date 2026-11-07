@@ -102,6 +102,18 @@ export interface DesktopBridge {
   catalogueDir(): Promise<LocalFolder>
   /** Fait choisir un autre dossier pour le catalogue (dossier réseau partagé, par exemple) ; null si annulé. */
   chooseCatalogueDir(title: string): Promise<LocalFolder | null>
+
+  // Fonctions propres à Android, où un dossier est une adresse `content://` : on ne peut pas y
+  // construire le chemin d'un fichier en ajoutant son nom. Absentes sur ordinateur.
+
+  /** Retrouve ou crée un sous-dossier ; renvoie son chemin. */
+  ensureChildDir?(dir: string, name: string): Promise<string>
+  /** Fichier de ce nom exact dans un dossier ; null s'il n'y en a pas. */
+  findChild?(dir: string, name: string): Promise<string | null>
+  /** Adresse qui sert le contenu d'un fichier à la page. */
+  fileUrl?(path: string): string
+  /** Adresse d'une miniature calculée à la demande (plus grand côté `size`). */
+  thumbnail?(path: string, size: number, version: string): Promise<string>
 }
 
 /**

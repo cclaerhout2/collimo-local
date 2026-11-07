@@ -42,6 +42,30 @@ export function Thumbnail({
   const [src, setSrc] = useState(photo.thumbnailUrl)
   const [stage, setStage] = useState<'drive' | 'fresh' | 'blob'>('drive')
   const alive = useRef(true)
+  const placeholder = useRef<HTMLSpanElement>(null)
+  // Miniature calculée à la demande (Android) : demandée seulement quand la case devient visible.
+  const onDemand = !photo.thumbnailUrl && photo.supported && !!services.drive.loadThumbnail
+
+  useEffect(() => {
+    const el = placeholder.current
+    if (!onDemand || !el) return
+    let done = false
+    const load = () => {
+      if (done) return
+      done = true
+      void services.drive.loadThumbnail!(photo).then((url) => {
+        if (!alive.current) return
+        if (url) setSrc(url)
+        else void fallback()
+      })
+    }
+    if (typeof IntersectionObserver === 'undefined') return load()
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && load(), { rootMargin: '300px' })
+    io.observe(el)
+    return () => io.disconnect()
+    // La photo ne change pas (composant utilisé avec key={photo.id}).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDemand])
 
   useEffect(() => {
     alive.current = true
@@ -78,7 +102,7 @@ export function Thumbnail({
     }
   }
 
-  if (!src) return <span className="thumb thumb-missing" aria-hidden="true" />
+  if (!src) return <span ref={placeholder} className="thumb thumb-missing" aria-hidden="true" />
   return (
     <img
       className="thumb"
