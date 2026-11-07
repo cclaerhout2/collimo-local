@@ -153,17 +153,17 @@ where firebase >nul 2>&1
 if errorlevel 1 if exist "%APPDATA%\npm\firebase.cmd" set "FB=%APPDATA%\npm\firebase.cmd"
 :fb_account
 set "FBUSER="
-call "%FB%" login:list >"%LOG%" 2>&1
+call :fb login:list >"%LOG%" 2>&1
 for /f "usebackq delims=" %%e in (`%PS% "$m = Select-String -Path $env:C_LOG -Pattern '[\w.+-]+@[\w-]+(\.[\w-]+)+' -AllMatches; if ($m) { $m[0].Matches[0].Value }"`) do set "FBUSER=%%e"
 if "%FBUSER%"=="" goto fb_login
 echo   Compte Google connecte a Firebase : %FBUSER%
 set "ANS="
 <con set /p "ANS=  Est-ce le bon compte (celui qui gere le projet GCP) (O/N) ? "
 if /i "%ANS%"=="O" goto step6
-call "%FB%" logout >nul 2>&1
+call :fb logout >nul 2>&1
 :fb_login
 echo   Connexion a Google : une page va s'ouvrir dans le navigateur.
-call "%FB%" login
+call :fb login
 if errorlevel 1 goto nologin
 goto fb_account
 
@@ -192,7 +192,7 @@ set "PROJ="
 if defined PROJ set "PROJ=%PROJ: =%"
 if "%PROJ%"=="" goto cfg_project
 echo   Verification du projet...
-call "%FB%" projects:list --json >"%TMPJ%" 2>"%LOG%"
+call :fb projects:list --json >"%TMPJ%" 2>"%LOG%"
 set "APPID="
 for /f "usebackq delims=" %%n in (`%PS% "(ConvertFrom-Json -InputObject (Get-Content -Raw $env:C_TMPJ)).result.Where({$_.projectId -eq '%PROJ%'})[0].projectNumber"`) do set "APPID=%%n"
 if not "%APPID%"=="" goto cfg_site
@@ -208,7 +208,7 @@ goto fail
 echo   OK - projet %PROJ% (numero %APPID%)
 echo.
 echo   Sites deja heberges dans ce projet (Collimo n'en modifiera aucun) :
-call "%FB%" hosting:sites:list --project %PROJ%
+call :fb hosting:sites:list --project %PROJ%
 set "SITE=%PROJ%-collimo"
 echo   Nom du site Collimo, dedie (Entree = %SITE%)
 echo   L'adresse sera https://NOM.web.app
@@ -216,7 +216,7 @@ set "ANS="
 <con set /p "ANS=  Nom du site : "
 if defined ANS set "ANS=%ANS: =%"
 if not "%ANS%"=="" set "SITE=%ANS%"
-call "%FB%" hosting:sites:get %SITE% --project %PROJ% >"%LOG%" 2>&1
+call :fb hosting:sites:get %SITE% --project %PROJ% >"%LOG%" 2>&1
 if errorlevel 1 goto cfg_site_new
 :: Site deja existant : il peut appartenir a une autre application du projet.
 :: Le reutiliser ecraserait son contenu a la premiere publication : double confirmation.
@@ -233,7 +233,7 @@ goto cfg_site_ok
 set "ANS="
 <con set /p "ANS=  Le site %SITE% n'existe pas. Le creer (O/N) ? "
 if /i not "%ANS%"=="O" goto cfg_site
-call "%FB%" hosting:sites:create %SITE% --project %PROJ%
+call :fb hosting:sites:create %SITE% --project %PROJ%
 if errorlevel 1 goto cfg_site
 :cfg_site_ok
 echo   OK - site %SITE%
@@ -366,6 +366,15 @@ if exist "%OUTILS%\git\cmd\git.exe" set "PATH=%OUTILS%\git\cmd;%PATH%"
 if not exist "%OUTILS%\git\cmd\git.exe" if exist "%OUTILS%\git\bin\git.exe" set "PATH=%OUTILS%\git\bin;%PATH%"
 set "PATH=%PATH%;%APPDATA%\npm"
 exit /b 0
+
+:: Firebase lance hors du dossier du projet : tant que .firebaserc contient
+:: les valeurs a remplacer, l'outil refuse de demarrer dans ce dossier.
+:fb
+pushd "%TEMP%"
+call "%FB%" %*
+set "FBERR=%errorlevel%"
+popd
+exit /b %FBERR%
 
 :readcfg
 set "PROJ="
