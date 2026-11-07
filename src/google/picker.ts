@@ -14,9 +14,18 @@ let pickerReady: Promise<void> | null = null
  * @returns une promesse résolue quand le Picker est prêt
  */
 function loadPicker(): Promise<void> {
-  pickerReady ??= loadScript(GAPI_SRC).then(
-    () => new Promise<void>((resolve, reject) => gapi.load('picker', { callback: resolve, onerror: reject })),
-  )
+  pickerReady ??= loadScript(GAPI_SRC)
+    .then(() => new Promise<void>((resolve, reject) => gapi.load('picker', { callback: resolve, onerror: reject })))
+    .then(() => {
+      if (typeof google === 'undefined' || !google.picker?.DocsView) {
+        throw new Error('Le module Google Picker ne s’est pas chargé (réseau ou filtrage de apis.google.com ?)')
+      }
+    })
+    .catch((e: unknown) => {
+      // Échec : on pourra réessayer au prochain clic.
+      pickerReady = null
+      throw e instanceof Error ? e : new Error('Le module Google Picker ne s’est pas chargé')
+    })
   return pickerReady
 }
 
