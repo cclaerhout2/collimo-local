@@ -3,6 +3,7 @@
  * sinon celle du navigateur), contexte React et fonction `t` pour lire les libellés.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { desktopTexts } from './desktop'
 import { en } from './en'
 import { fr, type MessageKey } from './fr'
 
@@ -13,6 +14,18 @@ export const LANGS: readonly Lang[] = ['fr', 'en']
 
 /** Libellés de chaque langue. */
 const dictionaries: Record<Lang, Record<MessageKey, string>> = { fr, en }
+/** Libellés de remplacement en vigueur (application Windows), par langue ; vide pour la version web. */
+let overrides: Partial<Record<Lang, Partial<Record<MessageKey, string>>>> = {}
+
+/**
+ * Active (ou désactive) les libellés de l'application Windows, qui ne parlent plus de Google Drive.
+ * À appeler avant le premier affichage.
+ * @param on - `true` pour l'application Windows
+ */
+export function enableDesktopTexts(on: boolean): void {
+  overrides = on ? desktopTexts : {}
+}
+
 /** Clé de stockage local de la langue choisie. */
 const STORAGE_KEY = 'collimo.lang'
 
@@ -37,7 +50,7 @@ export function detectLang(languages: readonly string[] = navigator.languages ??
  * @returns le texte à afficher (le français si la traduction manque)
  */
 export function translate(lang: Lang, key: MessageKey, vars?: Record<string, string | number>): string {
-  const template = dictionaries[lang][key] ?? fr[key]
+  const template = overrides[lang]?.[key] ?? dictionaries[lang][key] ?? fr[key]
   if (!vars) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match))
 }

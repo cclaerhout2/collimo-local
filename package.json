@@ -8,12 +8,16 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "lint": "oxlint src && prettier --check \"src/**/*.{ts,tsx,css}\" \"tools/**/*.mjs\"",
+    "lint": "oxlint src electron && prettier --check \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"tools/**/*.mjs\"",
     "preview": "vite preview",
     "deploy:preview": "npm run build && firebase hosting:channel:deploy test --only collimo --expires 30d",
     "deploy": "npm run build && firebase deploy --only hosting:collimo",
     "gen:assets": "node tools/gen-assets.mjs",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tools/**/*.mjs\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"electron/**/*.ts\" \"tools/**/*.mjs\"",
+    "desktop:build": "vite build && node tools/build-electron.mjs",
+    "desktop:start": "npm run desktop:build && electron .",
+    "desktop:pack": "npm run desktop:build && electron-builder --win --x64 --publish never",
+    "test:e2e": "node tools/e2e-desktop.mjs"
   },
   "dependencies": {
     "heic-to": "^1.6.7",
@@ -29,12 +33,81 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
     "google-fonts-complete": "^2.2.3",
+    "image-size": "^2.1.0",
     "jsdom": "^31.0.0",
     "oxlint": "^1.90.0",
+    "playwright-core": "^1.65.0",
     "prettier": "^3.9.10",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
+  },
+  "description": "Collimo : collages photo, en ligne (Google Drive) et en application Windows (fichiers du PC).",
+  "author": "Cédric Claerhout",
+  "main": "dist-electron/main.cjs",
+  "build": {
+    "appId": "fr.collimo.app",
+    "productName": "Collimo",
+    "copyright": "Cédric Claerhout",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.ico",
+      "artifactName": "${productName}-${version}-${arch}-${target}.${ext}",
+      "legalTrademarks": "Collimo"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Collimo",
+      "installerLanguages": [
+        "fr_FR",
+        "en_US"
+      ],
+      "language": "1036",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "electronLanguages": [
+      "fr",
+      "en-US",
+      "en-GB"
+    ]
   }
 }

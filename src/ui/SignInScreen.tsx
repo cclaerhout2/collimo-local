@@ -12,13 +12,15 @@ interface Props {
   disabled?: boolean
   /** Lance la connexion. */
   onSignIn: () => void
+  /** Afficher la pastille « G » de Google dans le bouton (absente dans l'application Windows). */
+  googleMark?: boolean
 }
 
 /**
  * Écran d'accueil d'un utilisateur non connecté.
  * @returns l'écran de connexion
  */
-export function SignInScreen({ busy, disabled, onSignIn }: Props) {
+export function SignInScreen({ busy, disabled, onSignIn, googleMark = true }: Props) {
   const { t } = useI18n()
   return (
     <main className="screen screen-center">
@@ -28,7 +30,7 @@ export function SignInScreen({ busy, disabled, onSignIn }: Props) {
         <p className="tagline">{t('app.tagline')}</p>
         <p>{t('signin.text')}</p>
         <button type="button" className="btn btn-primary btn-large" onClick={onSignIn} disabled={busy || disabled}>
-          <GoogleMark />
+          {googleMark && <GoogleMark />}
           {busy ? t('signin.loading') : t('signin.button')}
         </button>
         <p className="fine">{t('signin.privacy')}</p>

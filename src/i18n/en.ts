@@ -25,6 +25,7 @@ export const en: Record<MessageKey, string> = {
 
   'menu.changeLocation': 'Change location',
   'menu.signOut': 'Sign out',
+  'menu.catalogueFolder': 'Catalogue folder…',
 
   'setup.title': 'Where are your photos?',
   'setup.step1': '1. Choose a Drive',

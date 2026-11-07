@@ -123,7 +123,7 @@ export function ExportSheet({
     }
   }
 
-  const folderUrl = `https://drive.google.com/drive/folders/${encodeURIComponent(collimoFolderId)}`
+  const folderUrl = drive.folderLink(collimoFolderId)
 
   return (
     <div className="sheet-backdrop" role="presentation" onClick={busy ? undefined : onClose}>
