@@ -1,5 +1,5 @@
 /**
- * Test de bout en bout de l'application Windows : lance la vraie app Electron (ou l'exécutable
+ * Test de bout en bout de l'application de bureau (Windows, macOS, Linux) : lance la vraie app Electron (ou l'exécutable
  * installé, avec `--exe chemin\Collimo.exe`) sur un dossier de photos généré, puis parcourt le
  * chemin complet d'un utilisateur : choix du dossier, galerie et miniatures, collage, enregistrement
  * sur le disque, « Mes collages », réouverture, usine, mémorisation au relancement, et cloisonnement
@@ -120,8 +120,10 @@ const env = {
 let { app, page } = await launch(env)
 try {
   step('premier lancement : écran de choix du dossier, sans connexion Google')
+  // La langue suit celle du système (sur macOS, `--lang` est ignoré) : le test se fait en français.
+  await page.getByRole('button', { name: 'FR', exact: true }).click({ timeout: 30_000 })
   await page.getByRole('heading', { name: 'Où sont vos photos ?' }).waitFor({ timeout: 30_000 })
-  assert.equal(await page.getByText('Choisissez un Drive').count(), 0, 'pas de choix de Drive dans l’app Windows')
+  assert.equal(await page.getByText('Choisissez un Drive').count(), 0, 'pas de choix de Drive dans l’app de bureau')
   assert.equal(await page.evaluate(() => typeof window.collimoDesktop?.listImages), 'function')
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined', 'pas de Node dans la page')
   await page.screenshot({ path: path.join(OUT, '1-dossier.png') })
@@ -305,4 +307,4 @@ try {
 }
 
 await rm(root, { recursive: true, force: true })
-console.log('\nOK - test de bout en bout de l’application Windows réussi')
+console.log('\nOK - test de bout en bout de l’application réussi')

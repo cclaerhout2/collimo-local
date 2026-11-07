@@ -1,5 +1,5 @@
 /**
- * Processus principal de l'application Windows de Collimo (Electron) : fenêtre, protocole
+ * Processus principal de l'application de bureau de Collimo (Electron ; Windows, macOS, Linux) : fenêtre, protocole
  * `collimo://` (page de l'app, fichiers et miniatures du PC), sélecteurs de Windows et accès aux
  * fichiers pour la page, limités aux dossiers que l'utilisateur a choisis.
  *
@@ -8,8 +8,8 @@
  * - `COLLIMO_USER_DATA` : dossier des données de l'app (réglages, catalogue) ;
  * - `COLLIMO_TEST_PICK_FOLDER`, `COLLIMO_TEST_PICK_FILE` : réponses des sélecteurs, sans fenêtre.
  */
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, protocol, session, shell, type IpcMainInvokeEvent } from 'electron'
-import { appendFileSync, promises as fs } from 'node:fs'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, shell, type IpcMainInvokeEvent } from 'electron'
+import { appendFileSync, readFileSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { APP_SCHEME, CHANNELS, type LocalFile, type LocalFolder, type PickFilter } from '../src/desktop/bridge'
@@ -49,6 +49,22 @@ process.on('uncaughtException', (e) => {
   dialog.showErrorBox('Collimo', `Erreur inattendue : ${e.message}\n\nDétails dans ${ERROR_LOG}`)
 })
 process.on('unhandledRejection', (e) => logError('promesse', e))
+
+/**
+ * Indique si le bac à sable de Chromium ne peut pas démarrer : AppImage (sans profil AppArmor, que seul
+ * le paquet .deb installe) sur un Linux qui restreint les espaces de noms des utilisateurs (Ubuntu 24.04 et suivants).
+ * @returns `true` dans ce seul cas
+ */
+function sandboxBlocked(): boolean {
+  if (process.platform !== 'linux' || !process.env.APPIMAGE) return false
+  try {
+    return readFileSync('/proc/sys/kernel/apparmor_restrict_unprivileged_userns', 'utf8').trim() === '1'
+  } catch {
+    return false
+  }
+}
+// Sans cela, l'AppImage s'arrêterait au démarrage. La page reste isolée (contextIsolation, aucun accès à Node).
+if (sandboxBlocked()) app.commandLine.appendSwitch('no-sandbox')
 
 if (process.env.COLLIMO_USER_DATA) app.setPath('userData', path.resolve(process.env.COLLIMO_USER_DATA))
 
@@ -170,6 +186,7 @@ function registerIpc(): void {
     if (!dir) {
       const r = await dialog.showOpenDialog(ownerOf(e)!, {
         title: opts.title,
+        message: opts.title,
         defaultPath: opts.defaultPath ?? app.getPath('pictures'),
         properties: ['openDirectory', 'createDirectory'],
       })
@@ -191,6 +208,7 @@ function registerIpc(): void {
           : [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'heic', 'heif'] }]
       const r = await dialog.showOpenDialog(ownerOf(e)!, {
         title: opts.title,
+        message: opts.title,
         defaultPath: opts.defaultPath ?? app.getPath('pictures'),
         properties: ['openFile'],
         filters,
@@ -232,6 +250,7 @@ function registerIpc(): void {
     if (!dir) {
       const r = await dialog.showOpenDialog(ownerOf(e)!, {
         title,
+        message: title,
         defaultPath: state.catalogueDir ?? defaultCatalogueDir(),
         properties: ['openDirectory', 'createDirectory'],
       })
@@ -417,6 +436,51 @@ function openLink(target: string): void {
   }
 }
 
+/**
+ * Menu de macOS, où chaque application en a un : Collimo (À propos, Masquer, Quitter), Édition
+ * (couper, copier, coller), Fenêtre. Annuler et Rétablir n'y sont pas : ⌘Z et ⌘⇧Z restent à l'éditeur
+ * de collage, qui gère son propre historique. Sous Windows et Linux, la fenêtre n'a pas de menu.
+ */
+function setMacMenu(): void {
+  const fr = app.getLocale().toLowerCase().startsWith('fr')
+  const l = (frText: string, enText: string) => (fr ? frText : enText)
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: 'Collimo',
+        submenu: [
+          { role: 'about', label: l('À propos de Collimo', 'About Collimo') },
+          { type: 'separator' },
+          { role: 'hide', label: l('Masquer Collimo', 'Hide Collimo') },
+          { role: 'hideOthers', label: l('Masquer les autres', 'Hide Others') },
+          { role: 'unhide', label: l('Tout afficher', 'Show All') },
+          { type: 'separator' },
+          { role: 'quit', label: l('Quitter Collimo', 'Quit Collimo') },
+        ],
+      },
+      {
+        label: l('Édition', 'Edit'),
+        submenu: [
+          { role: 'cut', label: l('Couper', 'Cut') },
+          { role: 'copy', label: l('Copier', 'Copy') },
+          { role: 'paste', label: l('Coller', 'Paste') },
+          { role: 'selectAll', label: l('Tout sélectionner', 'Select All') },
+        ],
+      },
+      {
+        label: l('Fenêtre', 'Window'),
+        submenu: [
+          { role: 'minimize', label: l('Placer dans le Dock', 'Minimize') },
+          { role: 'zoom', label: l('Réduire/agrandir', 'Zoom') },
+          { role: 'togglefullscreen', label: l('Plein écran', 'Full Screen') },
+          { type: 'separator' },
+          { role: 'close', label: l('Fermer la fenêtre', 'Close Window') },
+        ],
+      },
+    ]),
+  )
+}
+
 /** Ouvre la fenêtre principale. */
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -437,7 +501,7 @@ function createWindow(): void {
       spellcheck: false,
     },
   })
-  mainWindow.removeMenu()
+  if (process.platform !== 'darwin') mainWindow.removeMenu()
   mainWindow.once('ready-to-show', () => mainWindow?.show())
   mainWindow.on('closed', () => (mainWindow = null))
 
@@ -454,13 +518,16 @@ function createWindow(): void {
     e.preventDefault()
     openLink(url)
   })
-  // F12 ou Ctrl+Maj+I : outils de développement, pour le diagnostic ; Ctrl+R / F5 : recharger.
+  // F12 ou Ctrl+Maj+I (⌘⌥I sur Mac) : outils de développement, pour le diagnostic ; Ctrl+R (⌘R) ou F5 : recharger.
   wc.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return
-    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+    // Ctrl sous Windows et Linux, ⌘ sous macOS (avec ⌥ pour les outils de développement).
+    const mod = process.platform === 'darwin' ? input.meta : input.control
+    const key = input.key.toLowerCase()
+    if (input.key === 'F12' || (mod && (input.shift || input.alt) && key === 'i')) {
       wc.toggleDevTools()
       e.preventDefault()
-    } else if (input.key === 'F5' || (input.control && !input.shift && input.key.toLowerCase() === 'r')) {
+    } else if (input.key === 'F5' || (mod && !input.shift && key === 'r')) {
       wc.reload()
       e.preventDefault()
     }
@@ -479,7 +546,9 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.focus()
   })
   app.setAppUserModelId('fr.collimo.app')
-  app.on('window-all-closed', () => app.quit())
+  // macOS : l'app reste ouverte sans fenêtre, et en rouvre une quand on clique sur son icône du Dock.
+  app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit())
+  app.on('activate', () => app.isReady() && !mainWindow && createWindow())
   app.on('child-process-gone', (_e, d) => d.reason !== 'clean-exit' && logError(d.type, `${d.reason} (code ${d.exitCode})`))
   void app.whenReady().then(async () => {
     await loadState()
@@ -490,6 +559,7 @@ if (!app.requestSingleInstanceLock()) {
       item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('pictures'), item.getFilename()) })
     })
     // Aucune autorisation du navigateur (caméra, notifications…) n'est utile à Collimo.
+    if (process.platform === 'darwin') setMacMenu()
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'clipboard-sanitized-write'))
     createWindow()
   })

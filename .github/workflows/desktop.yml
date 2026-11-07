@@ -1,0 +1,186 @@
+# Collimo pour ordinateur : sur trois vraies machines (Windows, Linux, macOS), tests automatiques,
+# construction des paquets, test de bout en bout de l'application construite, puis de l'application
+# installée comme le ferait un utilisateur.
+# Les paquets sont téléchargeables dans l'onglet « Actions », rubrique « Artifacts ».
+# Sur main, la version de package.json est publiée en « Release » GitHub (vX.Y.Z, avec tous les paquets)
+# si elle ne l'est pas déjà : pour publier une nouvelle version, il suffit d'augmenter `version`.
+name: Application de bureau
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Modules
+        run: npm ci --no-audit --no-fund
+      - name: Types, lint et tests automatiques
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+      - name: Construction (installeur et version portable)
+        run: npm run desktop:pack:win
+      - name: Test de bout en bout (application non installée)
+        run: node tools/e2e-desktop.mjs --exe release/win-unpacked/Collimo.exe
+      - name: Installation silencieuse, puis test de l'application installée
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem release -Filter 'Collimo-Setup-*.exe' | Select-Object -First 1
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Collimo\Collimo.exe'
+          if (-not (Test-Path $exe)) { throw "Collimo.exe absent après installation : $exe" }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'Collimo.lnk'
+          if (-not (Test-Path $lnk)) { throw "Raccourci du menu Démarrer absent : $lnk" }
+          (Get-Item $exe).VersionInfo | Format-List ProductName, FileDescription, ProductVersion, LegalCopyright
+          node tools/e2e-desktop.mjs --exe $exe
+          if ($LASTEXITCODE -ne 0) { throw "Test de l'application installée en échec" }
+      - name: Désinstallation silencieuse
+        shell: pwsh
+        run: |
+          $un = Join-Path $env:LOCALAPPDATA 'Programs\Collimo\Uninstall Collimo.exe'
+          Start-Process -FilePath $un -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 5
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Collimo\Collimo.exe')) { throw 'Collimo.exe toujours présent après désinstallation' }
+      - name: Captures d'écran des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-windows
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Paquets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Collimo-Windows
+          path: |
+            release/Collimo-Setup-*.exe
+            release/Collimo-*-portable.exe
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Modules
+        run: npm ci --no-audit --no-fund
+      - name: Tests automatiques
+        run: npm test
+      - name: Construction (AppImage et .deb)
+        run: npm run desktop:pack:linux
+      - name: Test de bout en bout (application non installée)
+        run: xvfb-run -a node tools/e2e-desktop.mjs --exe release/linux-unpacked/collimo
+      - name: Test de l'AppImage
+        run: |
+          chmod +x release/Collimo-*.AppImage
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a node tools/e2e-desktop.mjs --exe "$(ls release/Collimo-*.AppImage)"
+      - name: Installation du .deb, puis test de l'application installée
+        run: |
+          sudo apt-get install -y ./release/Collimo-*-linux-amd64.deb
+          test -x /opt/Collimo/collimo
+          test -f /usr/share/applications/collimo.desktop
+          xvfb-run -a node tools/e2e-desktop.mjs --exe /opt/Collimo/collimo
+      - name: Désinstallation du .deb
+        run: |
+          sudo apt-get remove -y collimo
+          test ! -e /opt/Collimo/collimo
+      - name: Captures d'écran des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-linux
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Paquets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Collimo-Linux
+          path: |
+            release/Collimo-*.AppImage
+            release/Collimo-*.deb
+
+  mac:
+    name: macOS
+    runs-on: macos-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Modules
+        run: npm ci --no-audit --no-fund
+      - name: Tests automatiques
+        run: npm test
+      - name: Construction (.dmg et .zip, Apple Silicon et Intel)
+        run: npm run desktop:pack:mac
+      - name: Signature ad hoc vérifiée
+        run: |
+          codesign --verify --deep --strict --verbose=2 release/mac-arm64/Collimo.app
+          lipo -archs release/mac-arm64/Collimo.app/Contents/MacOS/Collimo
+          lipo -archs release/mac/Collimo.app/Contents/MacOS/Collimo
+      - name: Test de bout en bout (application non installée)
+        run: node tools/e2e-desktop.mjs --exe release/mac-arm64/Collimo.app/Contents/MacOS/Collimo
+      - name: Installation depuis le .dmg, puis test de l'application installée
+        run: |
+          DMG="$(ls release/Collimo-*-mac-arm64.dmg)"
+          hdiutil attach "$DMG" -nobrowse -mountpoint /tmp/collimo-dmg
+          test -L /tmp/collimo-dmg/Applications
+          cp -R /tmp/collimo-dmg/Collimo.app /Applications/
+          hdiutil detach /tmp/collimo-dmg
+          node tools/e2e-desktop.mjs --exe /Applications/Collimo.app/Contents/MacOS/Collimo
+      - name: Captures d'écran des tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-mac
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Paquets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Collimo-macOS
+          path: |
+            release/Collimo-*.dmg
+            release/Collimo-*-mac-*.zip
+
+  release:
+    name: Publication de la version
+    needs: [windows, linux, mac]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Collimo-*
+          path: paquets
+          merge-multiple: true
+      - name: Release vX.Y.Z (si elle n'existe pas)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if gh release view "$v" > /dev/null 2>&1; then echo "Version $v déjà publiée : rien à faire."; exit 0; fi
+          ls -la paquets
+          gh release create "$v" paquets/* --target "$GITHUB_SHA" --title "Collimo $v" --generate-notes
