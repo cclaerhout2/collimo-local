@@ -439,8 +439,6 @@ export function createDriveClient(
       return call<Blob>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }), {}, 'blob')
     },
 
-    folderLink: (folderId) => `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`,
-
     listFolderFiles(folderId, namePrefix) {
       const prefix = namePrefix ? ` and name contains ${quote(namePrefix)}` : ''
       return listAll<DriveFileInfo>('/files', 'files', {

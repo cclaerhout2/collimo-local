@@ -5,15 +5,11 @@
  */
 import { describe, expect, it } from 'vitest'
 
-/** Contenu de chaque fichier TypeScript du code de l'app et de l'application Windows (tests et déclarations de types externes exclus). */
+/** Contenu de chaque fichier TypeScript du code de l'app (tests et déclarations de types externes exclus). */
 const SOURCES: Record<string, string> = Object.fromEntries(
   Object.entries(
-    import.meta.glob(['./**/*.{ts,tsx}', '../electron/**/*.ts', '!./**/*.test.{ts,tsx}', '!../electron/**/*.test.ts', '!./**/*.d.ts'], {
-      query: '?raw',
-      import: 'default',
-      eager: true,
-    }),
-  ).map(([path, text]) => [path.replace(/^\.\//, 'src/').replace(/^\.\.\//, ''), text as string]),
+    import.meta.glob(['./**/*.{ts,tsx}', '!./**/*.test.{ts,tsx}', '!./**/*.d.ts'], { query: '?raw', import: 'default', eager: true }),
+  ).map(([path, text]) => [path.replace(/^\.\//, 'src/'), text as string]),
 )
 
 /** Ligne qui déclare une fonction, ou un élément exporté (constante, type, interface, classe). */

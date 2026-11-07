@@ -110,21 +110,18 @@ export function SetupScreen({ services, current, onDone, onCancel, onError }: Pr
       <div className="card setup">
         <h1>{t('setup.title')}</h1>
 
-        {/* Application Windows : pas de choix de Drive, seulement un dossier du PC. */}
-        {services.kind !== 'desktop' && (
-          <section>
-            <h2>{t('setup.step1')}</h2>
-            <div className="drive-list" role="radiogroup" aria-label={t('setup.step1')}>
-              <DriveOption drive={myDrive} selected={driveKey === MY_DRIVE_KEY} onSelect={chooseDrive} icon="my" />
-              <p className="drive-group">{t('setup.sharedDrives')}</p>
-              {sharedDrives === null && <p className="muted">{t('setup.loadingDrives')}</p>}
-              {sharedDrives?.length === 0 && <p className="muted">{t('setup.noSharedDrives')}</p>}
-              {sharedDrives?.map((d) => (
-                <DriveOption key={d.id} drive={d} selected={driveKey === d.id} onSelect={chooseDrive} icon="shared" />
-              ))}
-            </div>
-          </section>
-        )}
+        <section>
+          <h2>{t('setup.step1')}</h2>
+          <div className="drive-list" role="radiogroup" aria-label={t('setup.step1')}>
+            <DriveOption drive={myDrive} selected={driveKey === MY_DRIVE_KEY} onSelect={chooseDrive} icon="my" />
+            <p className="drive-group">{t('setup.sharedDrives')}</p>
+            {sharedDrives === null && <p className="muted">{t('setup.loadingDrives')}</p>}
+            {sharedDrives?.length === 0 && <p className="muted">{t('setup.noSharedDrives')}</p>}
+            {sharedDrives?.map((d) => (
+              <DriveOption key={d.id} drive={d} selected={driveKey === d.id} onSelect={chooseDrive} icon="shared" />
+            ))}
+          </div>
+        </section>
 
         <section>
           <h2>{t('setup.step2')}</h2>

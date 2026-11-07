@@ -28,7 +28,6 @@ export const fr = {
 
   'menu.changeLocation': 'Changer d’emplacement',
   'menu.signOut': 'Se déconnecter',
-  'menu.catalogueFolder': 'Dossier du catalogue…',
 
   'setup.title': 'Où sont vos photos ?',
   'setup.step1': '1. Choisissez un Drive',
