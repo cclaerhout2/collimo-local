@@ -145,6 +145,8 @@ export interface DriveService {
   saveSettings(settings: UserSettings): Promise<void>
   /** Contenu d'un fichier (photos originales, repli des miniatures). */
   fetchFileBlob(id: string): Promise<Blob>
+  /** Lien qui ouvre un dossier (dans Drive, ou dans l'Explorateur pour l'application Windows). */
+  folderLink(folderId: string): string
   /** Fichiers directement dans un dossier (hors sous-dossiers), du plus récent au plus ancien ; `namePrefix` limite aux noms qui le contiennent. */
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   /** Contenu JSON d'un fichier, non vérifié. */
@@ -171,8 +173,10 @@ export interface FolderPicker {
   pickFile(drive: DriveRef, lang: Lang, title: string, mimeType: string): Promise<{ id: string } | null>
 }
 
-/** Ensemble des services Google de l'app. */
+/** Ensemble des services de l'app : Google Drive, Drive simulé, ou fichiers du PC (application Windows). */
 export interface Services {
+  /** Origine des fichiers ; `desktop` = application Windows, sans compte Google. */
+  kind: 'google' | 'mock' | 'desktop'
   auth: AuthService
   drive: DriveService
   picker: FolderPicker

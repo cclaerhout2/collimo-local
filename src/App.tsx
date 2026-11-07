@@ -3,13 +3,14 @@
  * l'emplacement, galerie, éditeur de collage, usine à dispositions) et détient l'état partagé
  * entre les écrans (utilisateur, réglages, sélection de photos, erreur affichée, catalogue).
  */
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { config, missingConfig } from './config'
 import { defaultLayoutFor, setCustomCatalogue } from './collage/catalog'
 import { loadCatalogue, type CatalogueState } from './catalogue/store'
 import { parseProject, ProjectFormatError } from './collage/project'
 import { DEFAULT_RATIO } from './collage/ratios'
 import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc } from './collage/types'
+import { getDesktopBridge } from './desktop/services'
 import { createServices } from './google/services'
 import type { DriveRef, FolderInfo, Photo, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
@@ -69,7 +70,9 @@ export default function App() {
   const services = useMemo(() => createServices(config), [])
   const missing = useMemo(() => missingConfig(config), [])
 
-  const [phase, setPhase] = useState<Phase>({ name: 'signin' })
+  const desktop = services.kind === 'desktop'
+  // Application Windows : pas d'écran de connexion, l'app s'ouvre directement.
+  const [phase, setPhase] = useState<Phase>(desktop ? { name: 'loading' } : { name: 'signin' })
   const [user, setUser] = useState<SignedInUser | null>(null)
   const [settings, setSettings] = useState<UserSettings>(EMPTY_SETTINGS)
   const [selection, setSelection] = useState<string[]>([])
@@ -122,7 +125,8 @@ export default function App() {
     try {
       await services.auth.signIn()
       const me = await services.drive.currentUser()
-      if (!isAllowedEmail(me.email, config.allowedDomain)) {
+      // Application Windows : pas de compte Google, donc pas de domaine à contrôler.
+      if (!desktop && !isAllowedEmail(me.email, config.allowedDomain)) {
         services.auth.signOut()
         setError({ key: 'error.domain', vars: { email: me.email, domain: config.allowedDomain } })
         return
@@ -153,6 +157,43 @@ export default function App() {
     } finally {
       setBusy(false)
     }
+  }
+
+  // Application Windows : « connexion » automatique au démarrage (une seule fois, même en mode strict de React).
+  const started = useRef(false)
+  useEffect(() => {
+    if (!desktop || started.current) return
+    started.current = true
+    void signIn()
+    // signIn ne change pas d'un rendu à l'autre dans les faits : il ne lit que des valeurs stables au démarrage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desktop])
+
+  /**
+   * Fait choisir un autre dossier pour le catalogue de l'usine (application Windows), puis le recharge.
+   * Un dossier réseau partagé permet de proposer les mêmes dispositions à toute l'équipe.
+   */
+  async function chooseCatalogue() {
+    const bridge = getDesktopBridge()
+    if (!bridge) return
+    try {
+      const picked = await bridge.chooseCatalogueDir(t('menu.catalogueFolder'))
+      if (!picked) return
+      applyCatalogue(await loadCatalogue(services.drive, config))
+    } catch (e) {
+      handleError(e)
+    }
+  }
+
+  /**
+   * Ouvre l'éditeur sur un nouveau collage.
+   * Dans l'application Windows, les dimensions des photos ne sont lues qu'ici, pour les seules photos
+   * choisies : la galerie ne les lit pas, pour ne pas télécharger tout un dossier synchronisé.
+   * @param photos - photos choisies, dans l'ordre de sélection
+   */
+  async function createCollage(photos: Photo[]) {
+    if (desktop) photos = await Promise.all(photos.map((p) => services.drive.getPhoto(p.id).catch(() => p)))
+    setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })
   }
 
   /** Reconnecte l'utilisateur après expiration du jeton, sans quitter l'écran en cours. */
@@ -217,12 +258,15 @@ export default function App() {
         onLangChange={changeLang}
         onChangeLocation={user && phase.name === 'gallery' ? () => setPhase({ name: 'setup' }) : undefined}
         onOpenFactory={catalogue?.isAdmin && location && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
-        onSignOut={user ? signOut : undefined}
+        onChooseCatalogue={desktop && user && phase.name === 'gallery' ? () => void chooseCatalogue() : undefined}
+        onSignOut={user && !desktop ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
       {(configError ?? error) && <ErrorBanner error={(configError ?? error)!} onReconnect={() => void reconnect()} />}
 
-      {phase.name === 'signin' && <SignInScreen busy={busy} disabled={!!configError} onSignIn={() => void signIn()} />}
+      {phase.name === 'signin' && (
+        <SignInScreen busy={busy} disabled={!!configError} onSignIn={() => void signIn()} googleMark={!desktop} />
+      )}
 
       {phase.name === 'loading' && (
         <main className="screen screen-center">
@@ -246,7 +290,7 @@ export default function App() {
           location={location}
           selection={selection}
           onSelectionChange={setSelection}
-          onCreate={(photos) => setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })}
+          onCreate={(photos) => void createCollage(photos)}
           onOpenProject={(entry) => void openProject(entry)}
           onError={handleError}
         />

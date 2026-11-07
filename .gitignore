@@ -25,3 +25,8 @@ dist-ssr
 
 # Firebase
 .firebase/
+
+# Application Windows
+dist-electron
+release
+test-results
