@@ -1,13 +1,17 @@
 # Collimo pour Windows
 
-Application de bureau Windows de collages photo, sur les fichiers du PC : sans compte, sans serveur, sans configuration. Construite avec Electron à partir du code de [Collimo](https://github.com/cclaerhout2/collimo) (version web sur Google Drive), dont elle reprend l'éditeur, les dispositions, les textes, stickers, filtres, l'export et l'usine à dispositions.
+Application de bureau Windows pour créer des collages photo **à partir des dossiers du PC** : pas de compte, pas de serveur, rien à configurer, et aucun droit d'administrateur nécessaire. Les photos restent où elles sont ; les collages sont enregistrés à côté d'elles.
+
+> **Deux versions, deux dépôts.** Ce dépôt est la **version Windows**. La **version web**, qui travaille dans Google Drive avec le compte de l'entreprise, est dans [cclaerhout2/collimo](https://github.com/cclaerhout2/collimo). Les deux partagent le même éditeur (dispositions, textes, stickers, filtres, export, usine) ; une évolution du moteur faite d'un côté se reporte de l'autre en copiant les dossiers `src/collage`, `src/ui`, `src/stickers`, `src/i18n` et `src/lib`.
 
 ## Sommaire
 
 - [Installation](#installation)
-- [Utilisation](#utilisation)
+- [Premier lancement](#premier-lancement)
+- [Questions fréquentes](#questions-fréquentes)
 - [Fonctionnalités](#fonctionnalités)
 - [Sécurité](#sécurité)
+- [Autres systèmes (Linux, Mac)](#autres-systèmes-linux-mac)
 - [Développement](#développement)
 - [Publier une version](#publier-une-version)
 - [Conventions de code](#conventions-de-code)
@@ -15,18 +19,45 @@ Application de bureau Windows de collages photo, sur les fichiers du PC : sans c
 
 ## Installation
 
-Sans droits d'administrateur, depuis la page **Releases** du dépôt :
+Télécharger l'un des deux fichiers de la [dernière version](https://github.com/cclaerhout2/collimo-windows/releases/latest) :
 
-- `Collimo-Setup-X.Y.Z.exe` : installeur, en français. Installe pour l'utilisateur seul dans `%LOCALAPPDATA%\Programs\Collimo`, avec raccourcis sur le Bureau et dans le menu Démarrer ; désinstallation par « Ajouter ou supprimer des programmes » ;
-- `Collimo-X.Y.Z-portable.exe` : un seul fichier, à lancer sans installation (depuis une clé USB, par exemple).
+| Fichier | Pour qui | Ce qu'il fait |
+| --- | --- | --- |
+| `Collimo-X.Y.Z-portable.exe` | essayer, ou utiliser sans rien installer (clé USB, PC partagé) | un seul fichier : double-clic, Collimo s'ouvre. Rien n'est installé ; le démarrage prend quelques secondes de plus |
+| `Collimo-Setup-X.Y.Z.exe` | usage régulier | installe Collimo pour l'utilisateur seul (`%LOCALAPPDATA%\Programs\Collimo`), avec raccourcis sur le Bureau et dans le menu Démarrer ; se désinstalle par « Paramètres › Applications » |
 
-Les fichiers ne sont pas signés : au premier lancement, Windows SmartScreen affiche « Windows a protégé votre ordinateur » ; cliquer sur « Informations complémentaires », puis « Exécuter quand même ».
+Aucun des deux ne demande de droits d'administrateur.
 
-## Utilisation
+**Avertissement de Windows au premier lancement** : les fichiers ne sont pas signés, Windows SmartScreen affiche donc « Windows a protégé votre ordinateur ». Cliquer sur « Informations complémentaires », puis « Exécuter quand même ». Cela ne se produit qu'une fois.
 
-Au premier lancement, choisir le dossier des photos. Collimo y crée le sous-dossier `Collimo` pour les collages : chaque enregistrement y ajoute une image (JPG ou PNG) et son fichier projet `.collimo.json`, sous un nom daté, sans jamais rien écraser. « Mes collages » les rouvre pour les retravailler. Si le dossier de photos est déplacé ou renommé (ou si un collage vient d'un autre PC), les photos sont retrouvées par leur nom dans le dossier choisi.
+## Premier lancement
 
-Les polices Google se chargent depuis internet ; tout le reste fonctionne hors ligne.
+1. Collimo s'ouvre directement, sans connexion.
+2. **Choisir un dossier** : la fenêtre de Windows s'ouvre ; choisir le dossier qui contient les photos (par exemple `Images\Vacances 2026`), puis **Continuer**.
+3. La galerie affiche les photos du dossier. Toucher les photos à assembler (jusqu'à 20, dans l'ordre voulu), puis **Créer un collage**.
+4. Dans l'éditeur, choisir la disposition, les bords, le fond, ajouter textes et stickers, puis **Exporter › Enregistrer**.
+
+Le collage est enregistré dans le sous-dossier `Collimo` du dossier de photos : l'image (JPG ou PNG) et son fichier projet `.collimo.json`, sous un nom daté. Chaque enregistrement crée un nouveau collage, rien n'est jamais écrasé. « Mes collages », en haut de la galerie, les rouvre pour les retravailler.
+
+Au lancement suivant, Collimo rouvre le même dossier, dans la même langue. Pour en changer : menu du compte (rond en haut à droite) › **Changer d'emplacement**.
+
+## Questions fréquentes
+
+**Quels dossiers peut-on utiliser ?** Tout dossier visible dans l'Explorateur : Images, Documents, Bureau, clé USB, disque externe, dossier réseau (`\\serveur\partage`), OneDrive, ou un dossier Google Drive grâce à [Google Drive pour ordinateur](https://www.google.com/drive/download/) (lecteur `G:`), ce qui garde les collages dans Drive. Collimo lit les photos placées directement dans le dossier choisi (pas celles des sous-dossiers) ; il faut pouvoir écrire dans ce dossier pour y créer `Collimo`.
+
+**Quels formats de photos ?** JPG, PNG, WebP, GIF, AVIF et HEIC/HEIF (photos d'iPhone). Les autres fichiers du dossier sont ignorés ; un format non pris en charge (TIFF, par exemple) apparaît grisé.
+
+**Faut-il internet ?** Non, sauf pour les polices Google des textes, chargées à la demande. Tout le reste fonctionne hors ligne.
+
+**Où sont mes réglages ?** Dans `%APPDATA%\collimo` (dossier choisi, langue, catalogue de l'usine). Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans les dossiers de photos.
+
+**J'ai déplacé ou renommé mon dossier de photos.** Collimo redemande le dossier au lancement. Les collages déjà enregistrés retrouvent leurs photos par leur nom dans le nouveau dossier. Cela marche aussi pour un collage ouvert sur un autre PC.
+
+**Peut-on partager les dispositions créées dans l'usine ?** Oui : menu du compte › **Dossier du catalogue…**, puis choisir un dossier partagé par l'équipe (réseau, OneDrive, Drive). Toute personne qui pointe vers ce dossier voit les mêmes dispositions ; celles qui peuvent y écrire peuvent les modifier.
+
+**L'entreprise bloque le lancement.** Certaines entreprises interdisent les programmes non signés (AppLocker, stratégies de sécurité). Il faut alors demander au service informatique d'autoriser Collimo, ou faire signer les fichiers avec un certificat de signature de code.
+
+**Un problème ?** Le détail des erreurs inattendues est noté dans `%TEMP%\collimo-erreurs.log` ; joindre ce fichier au signalement. `F12` ouvre les outils de développement.
 
 ## Fonctionnalités
 
@@ -87,6 +118,14 @@ Le catalogue de l'usine est le fichier `collimo-catalogue.json`, dans `%APPDATA%
 - Collimo ne crée que des images JPG/PNG et des fichiers JSON, n'écrase jamais un collage, et ne fait ouvrir par Windows que des dossiers, images et JSON, jamais un programme.
 - Aucun contenu extérieur n'est chargé, sauf les polices Google ; les liens s'ouvrent dans le navigateur par défaut.
 - En cas d'erreur inattendue, le détail est noté dans `%TEMP%\collimo-erreurs.log`. `F12` ouvre les outils de développement, pour le diagnostic.
+
+## Autres systèmes (Linux, Mac)
+
+Collimo repose sur Electron et sur un code sans dépendance propre à Windows : d'autres versions sont possibles sans réécriture.
+
+- **Linux** : quasiment prête. Une version Linux construite pendant le développement passe le même test de bout en bout. Il suffit d'ajouter un format (AppImage, `.deb`) à la configuration `build` de `package.json` et une machine Linux au workflow. Les miniatures y sont calculées par Collimo plutôt que par le système, un peu plus lentement.
+- **Mac** : la construction se fait sur un Mac (le workflow GitHub en propose). Pour que macOS ouvre l'application sans la bloquer, elle doit être signée et notarisée avec un compte développeur Apple (99 $ par an). Les miniatures y sont calculées par le système, comme sous Windows.
+- Dans les deux cas, quelques libellés qui parlent de Windows sont à adapter (`src/i18n/desktop.ts`).
 
 ## Développement
 
