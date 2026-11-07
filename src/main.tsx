@@ -1,3 +1,4 @@
+/** Point d'entrée de l'app : monte `App` dans la page, entourée de la traduction, en mode strict de React. */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'

@@ -1,3 +1,7 @@
+/**
+ * Assemblage du catalogue intégré : réunit les dispositions « en rectangles » (pNN.ts) et « en forme »
+ * (pNN-formes.ts) de 1 à 20 photos, dans l'ordre d'affichage.
+ */
 import type { LayoutDef } from '../types'
 import { P01 } from './p01'
 import { P01_FORMES } from './p01-formes'
@@ -40,10 +44,35 @@ import { P19_FORMES } from './p19-formes'
 import { P20 } from './p20'
 import { P20_FORMES } from './p20-formes'
 
-/** Tri par numéro d'inventaire (« p04-07 » → 7) : l'ordre des captures. */
+/**
+ * Trie des dispositions par numéro d'inventaire (« p04-07 » → 7) : l'ordre des captures.
+ * @param defs - dispositions d'un même nombre de photos
+ * @returns une copie triée, la liste d'origine reste intacte
+ */
 export function byNumber(defs: LayoutDef[]): LayoutDef[] {
   return [...defs].sort((a, b) => Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]))
 }
 
 /** Catalogue complet, regroupé par nombre de photos. */
-export const CATALOG_DEFS: LayoutDef[] = [...byNumber([...P01, ...P01_FORMES]), ...byNumber([...P02, ...P02_FORMES]), ...byNumber([...P03, ...P03_FORMES]), ...byNumber([...P04, ...P04_FORMES]), ...byNumber([...P05, ...P05_FORMES]), ...byNumber([...P06, ...P06_FORMES]), ...byNumber([...P07, ...P07_FORMES]), ...byNumber([...P08, ...P08_FORMES]), ...byNumber([...P09, ...P09_FORMES]), ...byNumber([...P10, ...P10_FORMES]), ...byNumber([...P11, ...P11_FORMES]), ...byNumber([...P12, ...P12_FORMES]), ...byNumber([...P13, ...P13_FORMES]), ...byNumber([...P14, ...P14_FORMES]), ...byNumber([...P15, ...P15_FORMES]), ...byNumber([...P16, ...P16_FORMES]), ...byNumber([...P17, ...P17_FORMES]), ...byNumber([...P18, ...P18_FORMES]), ...byNumber([...P19, ...P19_FORMES]), ...byNumber([...P20, ...P20_FORMES])]
+export const CATALOG_DEFS: LayoutDef[] = [
+  ...byNumber([...P01, ...P01_FORMES]),
+  ...byNumber([...P02, ...P02_FORMES]),
+  ...byNumber([...P03, ...P03_FORMES]),
+  ...byNumber([...P04, ...P04_FORMES]),
+  ...byNumber([...P05, ...P05_FORMES]),
+  ...byNumber([...P06, ...P06_FORMES]),
+  ...byNumber([...P07, ...P07_FORMES]),
+  ...byNumber([...P08, ...P08_FORMES]),
+  ...byNumber([...P09, ...P09_FORMES]),
+  ...byNumber([...P10, ...P10_FORMES]),
+  ...byNumber([...P11, ...P11_FORMES]),
+  ...byNumber([...P12, ...P12_FORMES]),
+  ...byNumber([...P13, ...P13_FORMES]),
+  ...byNumber([...P14, ...P14_FORMES]),
+  ...byNumber([...P15, ...P15_FORMES]),
+  ...byNumber([...P16, ...P16_FORMES]),
+  ...byNumber([...P17, ...P17_FORMES]),
+  ...byNumber([...P18, ...P18_FORMES]),
+  ...byNumber([...P19, ...P19_FORMES]),
+  ...byNumber([...P20, ...P20_FORMES]),
+]

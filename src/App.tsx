@@ -1,3 +1,8 @@
+/**
+ * Composant racine de Collimo : enchaîne les phases de l'application (connexion, choix de
+ * l'emplacement, galerie, éditeur de collage, usine à dispositions) et détient l'état partagé
+ * entre les écrans (utilisateur, réglages, sélection de photos, erreur affichée, catalogue).
+ */
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { config, missingConfig } from './config'
 import { defaultLayoutFor, setCustomCatalogue } from './collage/catalog'
@@ -20,6 +25,7 @@ import { Header } from './ui/Header'
 import { SetupScreen } from './ui/SetupScreen'
 import { SignInScreen } from './ui/SignInScreen'
 
+/** Phase de l'application, c'est-à-dire l'écran affiché ; l'éditeur porte le collage ouvert. */
 type Phase =
   | { name: 'signin' }
   | { name: 'loading' }
@@ -28,20 +34,36 @@ type Phase =
   | { name: 'editor'; doc: CollageDoc; key: number }
   | { name: 'factory' }
 
+/** Réglages d'un utilisateur qui n'a encore rien enregistré. */
 const EMPTY_SETTINGS: UserSettings = { version: 1 }
 
-/** Nouveau collage : carré, première disposition du catalogue, photos dans l'ordre de sélection. */
+/**
+ * Crée un nouveau collage : carré, première disposition du catalogue, photos dans l'ordre de sélection.
+ * @param photos - photos choisies dans la galerie, dans l'ordre de sélection
+ * @returns le document du collage, avec recadrages, bordures et fond par défaut
+ */
 export function newCollage(photos: Photo[]): CollageDoc {
   return {
     version: 1,
     ratio: DEFAULT_RATIO,
     layoutId: defaultLayoutFor(photos.length).id,
-    photos: photos.map((p) => ({ id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } })),
+    photos: photos.map((p) => ({
+      id: p.id,
+      name: p.name,
+      mimeType: p.mimeType,
+      width: p.width,
+      height: p.height,
+      crop: { ...DEFAULT_CROP },
+    })),
     borders: { ...DEFAULT_BORDERS },
     background: DEFAULT_BACKGROUND,
   }
 }
 
+/**
+ * Application complète : en-tête, bandeaux d'information et d'erreur, puis l'écran de la phase en cours.
+ * @returns l'application, avec l'écran correspondant à la phase en cours
+ */
 export default function App() {
   const { t, setLang } = useI18n()
   const services = useMemo(() => createServices(config), [])
@@ -55,14 +77,27 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [catalogue, setCatalogue] = useState<CatalogueState | null>(null)
 
-  /** Catalogue de l'usine : chargé en arrière-plan ; s'il est absent ou illisible, seules les dispositions intégrées sont proposées. */
+  /**
+   * Retient le catalogue de l'usine et le transmet au moteur de collage.
+   * Le catalogue est chargé en arrière-plan ; s'il est absent ou illisible, seules les dispositions intégrées sont proposées.
+   * @param c - catalogue lu sur le Drive partagé, ou `null` pour revenir aux seules dispositions intégrées
+   */
   const applyCatalogue = useCallback((c: CatalogueState | null) => {
     setCatalogue(c)
     setCustomCatalogue(c?.data ?? null)
   }, [])
 
+  /**
+   * Affiche une erreur quelconque dans le bandeau, traduite en message pour l'utilisateur.
+   * @param e - erreur attrapée
+   */
   const handleError = useCallback((e: unknown) => setError(toUiError(e)), [])
 
+  /**
+   * Ouvre un projet enregistré dans l'éditeur.
+   * Un fichier projet illisible donne un message dédié plutôt qu'une erreur générique.
+   * @param entry - projet choisi dans la liste de la galerie
+   */
   async function openProject(entry: ProjectEntry) {
     setError(null)
     try {
@@ -75,6 +110,12 @@ export default function App() {
     }
   }
 
+  /**
+   * Connecte l'utilisateur, vérifie son domaine, charge ses réglages et ouvre la galerie
+   * (ou le choix de l'emplacement si aucun dossier valide n'est enregistré).
+   * Le catalogue de l'usine est chargé en parallèle sans bloquer l'ouverture : il ne sert
+   * qu'à proposer des dispositions supplémentaires et à savoir si l'utilisateur est admin.
+   */
   async function signIn() {
     setBusy(true)
     setError(null)
@@ -114,7 +155,7 @@ export default function App() {
     }
   }
 
-  /** Après expiration du jeton : nouvelle connexion, sans quitter l'écran en cours. */
+  /** Reconnecte l'utilisateur après expiration du jeton, sans quitter l'écran en cours. */
   async function reconnect() {
     try {
       await services.auth.signIn()
@@ -124,6 +165,7 @@ export default function App() {
     }
   }
 
+  /** Déconnecte l'utilisateur et oublie tout ce qui lui appartient (réglages, sélection, catalogue). */
   function signOut() {
     services.auth.signOut()
     applyCatalogue(null)
@@ -134,6 +176,12 @@ export default function App() {
     setPhase({ name: 'signin' })
   }
 
+  /**
+   * Enregistre l'emplacement de travail choisi, puis ouvre la galerie.
+   * Le sous-dossier Collimo, où vont les collages et projets, est créé au besoin.
+   * @param drive - Drive (personnel ou partagé) qui contient le dossier
+   * @param folder - dossier de photos choisi
+   */
   async function saveLocation(drive: DriveRef, folder: FolderInfo) {
     const collimoFolderId = await services.drive.ensureCollimoFolder(folder.id)
     const next: UserSettings = {
@@ -147,6 +195,10 @@ export default function App() {
     setPhase({ name: 'gallery' })
   }
 
+  /**
+   * Change la langue de l'interface et, si l'utilisateur est connecté, la mémorise dans ses réglages.
+   * @param lang - langue choisie
+   */
   function changeLang(lang: Lang) {
     setLang(lang)
     if (!user) return
@@ -168,9 +220,7 @@ export default function App() {
         onSignOut={user ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
-      {(configError ?? error) && (
-        <ErrorBanner error={(configError ?? error)!} onReconnect={() => void reconnect()} />
-      )}
+      {(configError ?? error) && <ErrorBanner error={(configError ?? error)!} onReconnect={() => void reconnect()} />}
 
       {phase.name === 'signin' && <SignInScreen busy={busy} disabled={!!configError} onSignIn={() => void signIn()} />}
 
@@ -203,7 +253,13 @@ export default function App() {
       )}
 
       {phase.name === 'factory' && location && catalogue && user && (
-        <Suspense fallback={<main className="screen screen-center"><div className="spinner" aria-label={t('signin.loading')} /></main>}>
+        <Suspense
+          fallback={
+            <main className="screen screen-center">
+              <div className="spinner" aria-label={t('signin.loading')} />
+            </main>
+          }
+        >
           <FactoryScreen
             services={services}
             location={location}

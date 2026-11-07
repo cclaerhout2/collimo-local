@@ -1,7 +1,15 @@
+/**
+ * Configuration de l'app (identifiants Google, domaine, catalogue) et constantes générales :
+ * autorisations demandées, nom du dossier Collimo, nombre maximum de photos, formats d'image.
+ */
+
 /** Configuration lue au build depuis les variables d'environnement Vite (.env.local). */
 export interface AppConfig {
+  /** Identifiant client OAuth (VITE_GOOGLE_CLIENT_ID). */
   clientId: string
+  /** Clé d'API Google, pour le Picker (VITE_GOOGLE_API_KEY). */
   apiKey: string
+  /** Numéro du projet Google Cloud, pour le Picker (VITE_GOOGLE_APP_ID). */
   appId: string
   /** Domaine Workspace autorisé, en minuscules ; vide = pas de contrôle côté app. */
   allowedDomain: string
@@ -9,11 +17,13 @@ export interface AppConfig {
   mock: boolean
   /** Drive partagé du catalogue de l'usine à dispositions : identifiant (prioritaire) ou nom exact. */
   catalogueDriveId: string
+  /** Nom exact du Drive partagé du catalogue, utilisé si `catalogueDriveId` est vide. */
   catalogueDriveName: string
 }
 
 const env = import.meta.env
 
+/** Configuration de cette version de l'app. */
 export const config: AppConfig = {
   clientId: env.VITE_GOOGLE_CLIENT_ID ?? '',
   apiKey: env.VITE_GOOGLE_API_KEY ?? '',
@@ -51,6 +61,11 @@ export const SUPPORTED_IMAGE_TYPES = [
 /** Formats HEIC/HEIF des iPhone : décodés par Safari, ou par un module chargé à la demande ailleurs. */
 export const HEIC_TYPES = ['image/heic', 'image/heif'] as const
 
+/**
+ * Liste les variables d'environnement obligatoires absentes (aucune en mode démo).
+ * @param c - configuration à vérifier
+ * @returns les noms des variables manquantes, vide si tout est en place
+ */
 export function missingConfig(c: AppConfig): string[] {
   if (c.mock) return []
   const missing: string[] = []

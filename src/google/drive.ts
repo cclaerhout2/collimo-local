@@ -1,3 +1,7 @@
+/**
+ * Client de l'API Google Drive v3 (appels `fetch` directs) : photos, dossiers, réglages de l'utilisateur,
+ * fichiers JSON du catalogue et envoi des collages. Les erreurs passagères sont réessayées.
+ */
 import { COLLIMO_FOLDER_NAME, SUPPORTED_IMAGE_TYPES } from '../config'
 import {
   SessionExpiredError,
@@ -10,40 +14,71 @@ import {
   type UserSettings,
 } from './types'
 
+/** Adresse de base de l'API Drive. */
 const API = 'https://www.googleapis.com/drive/v3'
+/** Adresse de base des envois de contenu. */
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3'
+/** Type MIME d'un dossier Drive. */
 export const FOLDER_MIME = 'application/vnd.google-apps.folder'
+/** Nom du fichier de réglages dans l'espace caché de l'app (appDataFolder). */
 const SETTINGS_FILE = 'collimo-settings.json'
 /** Taille des miniatures affichées dans la galerie (plus grand côté, en pixels). */
 const THUMB_SIZE = 480
 
-/** Échappe une valeur pour une requête Drive `q`. */
+/**
+ * Échappe une valeur pour une requête Drive `q`.
+ * @param value - texte brut
+ * @returns la valeur entre apostrophes, barres obliques inverses et apostrophes échappées
+ */
 export const quote = (value: string) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
 
-/** Requête des images directement dans un dossier (les sous-dossiers, dont « Collimo », sont exclus). */
+/**
+ * Requête des images directement dans un dossier (les sous-dossiers, dont « Collimo », sont exclus).
+ * @param folderId - identifiant du dossier
+ * @returns la requête `q`
+ */
 export function photosQuery(folderId: string): string {
   return `${quote(folderId)} in parents and mimeType contains 'image/' and trashed = false`
 }
 
+/**
+ * Requête du sous-dossier « Collimo » d'un dossier.
+ * @param parentId - identifiant du dossier parent
+ * @returns la requête `q`
+ */
 export function collimoFolderQuery(parentId: string): string {
   return `name = ${quote(COLLIMO_FOLDER_NAME)} and mimeType = '${FOLDER_MIME}' and ${quote(parentId)} in parents and trashed = false`
 }
 
-/** Paramètres de liste : Drive partagés activés, et recherche limitée au bon Drive. */
+/**
+ * Paramètres de liste : Drive partagés activés, et recherche limitée au bon Drive.
+ * @param driveId - Drive partagé, ou `null` pour Mon Drive
+ * @returns les paramètres à ajouter à l'adresse
+ */
 export function listScope(driveId: string | null): Record<string, string> {
   const base = { supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' }
   return driveId ? { ...base, corpora: 'drive', driveId } : { ...base, corpora: 'user' }
 }
 
-/** Agrandit la miniature Drive (le lien finit par `=s220`). */
+/**
+ * Agrandit la miniature Drive (le lien finit par `=s220`).
+ * @param link - lien de miniature fourni par Drive
+ * @param size - plus grand côté voulu, en pixels
+ * @returns le lien redimensionné, inchangé s'il n'a pas le suffixe attendu, ou `undefined` sans lien
+ */
 export function sizedThumbnail(link: string | undefined, size = THUMB_SIZE): string | undefined {
   if (!link) return undefined
   return /=s\d+(-c)?$/.test(link) ? link.replace(/=s\d+(-c)?$/, `=s${size}`) : link
 }
 
-export const isSupportedImage = (mimeType: string) =>
-  (SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mimeType)
+/**
+ * Indique si le navigateur sait décoder ce format d'image.
+ * @param mimeType - type MIME du fichier
+ * @returns `true` pour un format pris en charge
+ */
+export const isSupportedImage = (mimeType: string) => (SUPPORTED_IMAGE_TYPES as readonly string[]).includes(mimeType)
 
+/** Fichier image tel que renvoyé par l'API Drive. */
 interface RawFile {
   id: string
   name: string
@@ -52,6 +87,11 @@ interface RawFile {
   imageMediaMetadata?: { width?: number; height?: number; rotation?: number }
 }
 
+/**
+ * Convertit un fichier Drive en photo de l'app.
+ * @param f - fichier renvoyé par Drive
+ * @returns la photo, dimensions corrigées de la rotation EXIF
+ */
 export function toPhoto(f: RawFile): Photo {
   const m = f.imageMediaMetadata
   // Rotation 1 ou 3 (quart de tour) : largeur et hauteur affichées sont inversées.
@@ -67,7 +107,9 @@ export function toPhoto(f: RawFile): Photo {
   }
 }
 
+/** Erreur renvoyée par l'API Drive. */
 export class DriveApiError extends Error {
+  /** Code HTTP de la réponse. */
   readonly status: number
   /** Motif donné par Drive (`userRateLimitExceeded`, `insufficientFilePermissions`…), s'il y en a un. */
   readonly reason?: string
@@ -77,20 +119,46 @@ export class DriveApiError extends Error {
     this.status = status
     this.reason = reason
   }
-  /** Quota dépassé : Drive répond 403 ou 429, et accepte la même requête un peu plus tard. */
+  /**
+   * Indique un quota dépassé : Drive répond 403 ou 429, et accepte la même requête un peu plus tard.
+   * @returns `true` si l'erreur vient d'un quota
+   */
   get isRateLimit() {
     return this.status === 429 || (this.status === 403 && /rateLimitExceeded/i.test(this.reason ?? ''))
   }
 }
 
+/** Signature de `fetch`, remplaçable dans les tests. */
 type Fetch = typeof fetch
 
 /** Erreurs passagères (quota, 5xx, réseau) : jusqu'à 3 réessais, en attendant 0,5 s, 1 s puis 2 s. */
 export const RETRY_DELAYS_MS = [500, 1000, 2000]
+/**
+ * Attend un délai.
+ * @param ms - durée en millisecondes
+ * @returns une promesse résolue après le délai
+ */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fetch.bind(globalThis), delays = RETRY_DELAYS_MS): DriveService {
-  /** Une requête authentifiée, réessayée si Drive répond par une erreur passagère. */
+/**
+ * Crée le client Drive.
+ * @param getToken - fournit le jeton d'accès courant (lève `SessionExpiredError` s'il est périmé)
+ * @param fetchImpl - implémentation de `fetch` (remplacée dans les tests)
+ * @param delays - attentes entre réessais, en millisecondes (vides dans les tests)
+ * @returns le service Drive
+ */
+export function createDriveClient(
+  getToken: () => string,
+  fetchImpl: Fetch = fetch.bind(globalThis),
+  delays = RETRY_DELAYS_MS,
+): DriveService {
+  /**
+   * Une requête authentifiée, réessayée si Drive répond par une erreur passagère.
+   * @param url - adresse complète
+   * @param init - options de `fetch` ; l'en-tête d'autorisation est ajouté
+   * @returns la réponse réussie
+   * @throws `SessionExpiredError` sur une réponse 401, {@link DriveApiError} sur une autre erreur définitive
+   */
   async function request(url: string, init: RequestInit = {}): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       let res: Response
@@ -119,6 +187,13 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
     }
   }
 
+  /**
+   * Une requête authentifiée, dont on lit le corps.
+   * @param url - adresse complète
+   * @param init - options de `fetch`
+   * @param as - lecture du corps en JSON ou en Blob
+   * @returns le corps lu
+   */
   async function call<T>(url: string, init: RequestInit = {}, as: 'json' | 'blob' = 'json'): Promise<T> {
     const res = await request(url, init)
     return (as === 'json' ? res.json() : res.blob()) as Promise<T>
@@ -127,22 +202,36 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
   /** Identifiant du fichier de réglages, gardé après la première recherche (une requête de moins par enregistrement). */
   let settingsFileId: string | null | undefined
 
-  const url = (path: string, params: Record<string, string>) =>
-    `${API}${path}?${new URLSearchParams(params).toString()}`
+  /**
+   * Adresse de l'API Drive.
+   * @param path - chemin après `/drive/v3`
+   * @param params - paramètres de requête
+   * @returns l'adresse complète
+   */
+  const url = (path: string, params: Record<string, string>) => `${API}${path}?${new URLSearchParams(params).toString()}`
 
+  /**
+   * Liste complète, en suivant les pages (`nextPageToken`).
+   * @param path - chemin de la liste, par exemple `/files`
+   * @param key - champ de la réponse qui contient les éléments (`files`, `drives`)
+   * @param params - paramètres de requête
+   * @returns tous les éléments, toutes pages réunies
+   */
   async function listAll<T>(path: string, key: string, params: Record<string, string>): Promise<T[]> {
     const items: T[] = []
     let pageToken: string | undefined
     do {
-      const page = await call<Record<string, unknown>>(
-        url(path, pageToken ? { ...params, pageToken } : params),
-      )
+      const page = await call<Record<string, unknown>>(url(path, pageToken ? { ...params, pageToken } : params))
       items.push(...((page[key] as T[] | undefined) ?? []))
       pageToken = page.nextPageToken as string | undefined
     } while (pageToken)
     return items
   }
 
+  /**
+   * Cherche le fichier de réglages dans l'espace caché de l'app (une seule fois par session).
+   * @returns son identifiant, ou `null` s'il n'existe pas encore
+   */
   async function findSettingsFileId(): Promise<string | null> {
     if (settingsFileId !== undefined) return settingsFileId
     const files = await listAll<{ id: string }>('/files', 'files', {
@@ -155,8 +244,15 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
     return settingsFileId
   }
 
+  /** Fichier JSON tel que renvoyé par l'API Drive. */
   type RawJsonFile = { id: string; name: string; modifiedTime?: string; webViewLink?: string; capabilities?: { canEdit?: boolean } }
+  /** Champs demandés pour un fichier JSON. */
   const JSON_FIELDS = 'id,name,modifiedTime,webViewLink,capabilities(canEdit)'
+  /**
+   * Convertit un fichier JSON Drive en {@link DriveJsonFile}.
+   * @param f - fichier renvoyé par Drive
+   * @returns le fichier, droit de modification compris
+   */
   const toJsonFile = (f: RawJsonFile): DriveJsonFile => ({
     id: f.id,
     name: f.name,
@@ -165,7 +261,12 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
     canEdit: f.capabilities?.canEdit ?? false,
   })
 
-  /** Octets déjà reçus par une session d'envoi (0 si Drive ne répond pas). */
+  /**
+   * Octets déjà reçus par une session d'envoi (0 si Drive ne répond pas).
+   * @param session - adresse de la session d'envoi
+   * @param size - taille totale du fichier, en octets
+   * @returns le nombre d'octets reçus, d'où reprendre l'envoi
+   */
   async function uploadedBytes(session: string, size: number): Promise<number> {
     try {
       const res = await fetchImpl(session, { method: 'PUT', headers: { 'Content-Range': `bytes */${size}` } })
@@ -190,7 +291,11 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
           throw e
         }
       } else if (ref.name) {
-        const found = await listAll<RawDrive>('/drives', 'drives', { q: `name = ${quote(ref.name)}`, pageSize: '10', fields: `nextPageToken, drives(${fields})` })
+        const found = await listAll<RawDrive>('/drives', 'drives', {
+          q: `name = ${quote(ref.name)}`,
+          pageSize: '10',
+          fields: `nextPageToken, drives(${fields})`,
+        })
         d = found[0]
       }
       return d ? { id: d.id, name: d.name, canAddChildren: d.capabilities?.canAddChildren ?? false } : null
@@ -212,11 +317,14 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
       const multipart =
         `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
         `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--`
-      const f = await call<RawJsonFile>(`${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=${encodeURIComponent(JSON_FIELDS)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-        body: multipart,
-      })
+      const f = await call<RawJsonFile>(
+        `${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=${encodeURIComponent(JSON_FIELDS)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+          body: multipart,
+        },
+      )
       return toJsonFile(f)
     },
 
@@ -240,9 +348,7 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
         pageSize: '100',
         fields: 'nextPageToken, drives(id,name)',
       })
-      return drives
-        .map<DriveRef>((d) => ({ id: d.id, name: d.name }))
-        .sort((a, b) => a.name.localeCompare(b.name))
+      return drives.map<DriveRef>((d) => ({ id: d.id, name: d.name })).sort((a, b) => a.name.localeCompare(b.name))
     },
 
     async getFolder(id) {
@@ -382,7 +488,8 @@ export function createDriveClient(getToken: () => string, fetchImpl: Fetch = fet
         }
         if (done.status === 401) throw new SessionExpiredError()
         if (done.ok) return (await done.json()) as DriveFileInfo
-        if ((done.status < 500 && done.status !== 429) || attempt >= delays.length) throw new DriveApiError(done.status, `envoi interrompu (${done.status})`)
+        if ((done.status < 500 && done.status !== 429) || attempt >= delays.length)
+          throw new DriveApiError(done.status, `envoi interrompu (${done.status})`)
         await sleep(delays[attempt])
         from = await uploadedBytes(session, data.size)
       }

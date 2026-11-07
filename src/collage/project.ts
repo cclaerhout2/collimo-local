@@ -1,33 +1,69 @@
+/**
+ * Fichier projet d'un collage (JSON enregistré à côté de l'image exportée) : écriture, et relecture
+ * prudente qui valide et borne chaque valeur.
+ */
 import { layoutById } from './catalog'
 import { splitToRects } from './layoutDsl'
 import { RATIOS } from './ratios'
 import { filterById } from './color'
 import { DEFAULT_EFFECTS } from './overlays'
-import { ADJUST_KEYS, DEFAULT_CROP, POSITIVE_ONLY, type Adjustments, type CollageDoc, type Overlay, type PlacedPhoto, type TextEffects } from './types'
+import {
+  ADJUST_KEYS,
+  DEFAULT_CROP,
+  POSITIVE_ONLY,
+  type Adjustments,
+  type CollageDoc,
+  type Overlay,
+  type PlacedPhoto,
+  type TextEffects,
+} from './types'
 
 /** Extension des fichiers projet, rangés à côté des images exportées dans le dossier Collimo. */
 export const PROJECT_SUFFIX = '.collimo.json'
 
+/** Contenu d'un fichier projet (JSON) : le collage et de quoi le reconnaître. */
 export interface ProjectFile {
+  /** Marque du fichier, pour reconnaître un projet Collimo. */
   app: 'collimo'
+  /** Version du format de fichier. */
   version: 1
+  /** Date de l'enregistrement, au format ISO 8601. */
   savedAt: string
   doc: CollageDoc
 }
 
+/**
+ * Écrit le fichier projet d'un collage.
+ * @param doc - collage
+ * @param savedAt - date de l'enregistrement
+ * @returns le JSON, indenté pour rester lisible
+ */
 export function serializeProject(doc: CollageDoc, savedAt: Date): string {
   const file: ProjectFile = { app: 'collimo', version: 1, savedAt: savedAt.toISOString(), doc }
   return JSON.stringify(file, null, 2)
 }
 
+/** Erreur levée quand un fichier projet n'est pas un projet Collimo valide. */
 export class ProjectFormatError extends Error {}
 
+/**
+ * Nombre relu, ramené dans ses limites.
+ * @param v - valeur lue dans le fichier
+ * @param fallback - valeur à prendre si `v` n'est pas un nombre fini
+ * @param min - limite basse
+ * @param max - limite haute
+ * @returns le nombre borné, ou `fallback`
+ */
 const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity) =>
   typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback
 
 /**
  * Relit un fichier projet en le validant : un fichier abîmé ou modifié à la main ne doit pas
- * faire planter l'app. Les valeurs hors limites sont ramenées dans les limites.
+ * faire planter l'app. Les valeurs hors limites sont ramenées dans les limites, les valeurs inconnues
+ * remplacées par des valeurs par défaut.
+ * @param raw - contenu du fichier, déjà lu comme JSON
+ * @returns le collage relu ; `layoutId` est vide si la disposition n'existe plus ou n'a pas le bon nombre de cases
+ * @throws {@link ProjectFormatError} si ce n'est pas un projet Collimo, s'il n'a aucune photo ou si une photo est invalide
  */
 export function parseProject(raw: unknown): CollageDoc {
   const f = raw as Partial<ProjectFile> | null
@@ -87,7 +123,11 @@ export function parseProject(raw: unknown): CollageDoc {
   }
 }
 
-/** Réglages relus : clés connues seulement, valeurs bornées, valeurs nulles retirées. */
+/**
+ * Réglages relus : clés connues seulement, valeurs bornées, valeurs nulles retirées.
+ * @param raw - réglages lus dans le fichier
+ * @returns les réglages non nuls, ou `undefined` s'il n'y en a aucun
+ */
 export function parseAdjust(raw: unknown): Partial<Adjustments> | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
@@ -99,10 +139,27 @@ export function parseAdjust(raw: unknown): Partial<Adjustments> | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+/** Couleur CSS hexadécimale à six chiffres, seule forme acceptée dans un projet. */
 const COLOR = /^#[0-9a-f]{6}$/i
+/**
+ * Couleur relue.
+ * @param v - valeur lue dans le fichier
+ * @param fallback - couleur à prendre si `v` n'est pas une couleur `#rrggbb`
+ * @returns la couleur
+ */
 const color = (v: unknown, fallback: string) => (typeof v === 'string' && COLOR.test(v) ? v : fallback)
+/**
+ * Texte relu.
+ * @param v - valeur lue dans le fichier
+ * @param fallback - texte à prendre si `v` n'est pas un texte
+ * @returns le texte
+ */
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback)
-/** Un SVG gardé dans le projet ne doit contenir ni script ni lien externe. */
+/**
+ * Vérifie un SVG gardé dans le projet : il ne doit contenir ni script ni lien externe.
+ * @param v - valeur lue dans le fichier
+ * @returns le SVG tel quel s'il est sûr, sinon `null` (ou s'il dépasse 200 000 caractères)
+ */
 export function safeSvg(v: unknown): string | null {
   if (typeof v !== 'string' || !v.trim().startsWith('<svg') || v.length > 200_000) return null
   // Seuls les renvois internes (href="#…") sont permis : pas de lien vers l'extérieur.
@@ -110,6 +167,11 @@ export function safeSvg(v: unknown): string | null {
   return v
 }
 
+/**
+ * Effets d'un texte relus, valeurs par défaut pour ce qui manque.
+ * @param raw - effets lus dans le fichier
+ * @returns les effets complets
+ */
 function parseEffects(raw: unknown): TextEffects {
   const r = (raw ?? {}) as Record<string, Record<string, unknown> | undefined>
   const d = DEFAULT_EFFECTS
@@ -131,7 +193,11 @@ function parseEffects(raw: unknown): TextEffects {
   }
 }
 
-/** Textes et stickers relus : les éléments abîmés sont ignorés, les autres ramenés dans les limites. */
+/**
+ * Textes et stickers relus : les éléments abîmés sont ignorés, les autres ramenés dans les limites.
+ * @param raw - liste lue dans le fichier
+ * @returns les éléments valides (200 au plus), dans leur ordre
+ */
 export function parseOverlays(raw: unknown): Overlay[] {
   if (!Array.isArray(raw)) return []
   const out: Overlay[] = []
@@ -184,7 +250,13 @@ export function parseOverlays(raw: unknown): Overlay[] {
   return out
 }
 
-/** « Collimo_2026-11-06_23-07-12.collimo.json » → « Collimo_2026-11-06_23-07-12 ». */
+/**
+ * Nom d'un fichier projet sans son extension.
+ * @param fileName - nom du fichier
+ * @returns le nom sans {@link PROJECT_SUFFIX}, ou le nom tel quel s'il ne la porte pas
+ * @example
+ * projectBaseName('Collimo_2026-11-06_23-07-12.collimo.json') // 'Collimo_2026-11-06_23-07-12'
+ */
 export function projectBaseName(fileName: string): string {
   return fileName.endsWith(PROJECT_SUFFIX) ? fileName.slice(0, -PROJECT_SUFFIX.length) : fileName
 }

@@ -1,6 +1,7 @@
+/** Libellés anglais de l'interface (traduction de fr.ts). */
 import type { MessageKey } from './fr'
 
-/** English strings. Must define exactly the same keys as fr.ts (checked by the tests). */
+/** Libellés anglais. Doivent définir exactement les mêmes clés que fr.ts (vérifié par les tests). */
 export const en: Record<MessageKey, string> = {
   'app.tagline': 'Your photos, put together in a single move.',
   'lang.label': 'Language',
@@ -10,14 +11,12 @@ export const en: Record<MessageKey, string> = {
   'signin.title': 'Welcome to Collimo',
   'signin.text': 'Sign in with your Google work account to create collages from your Drive photos.',
   'signin.button': 'Sign in with Google',
-  'signin.privacy':
-    'Your photos stay in your Drive. Collimo only reads the folders you choose and only writes its own files.',
+  'signin.privacy': 'Your photos stay in your Drive. Collimo only reads the folders you choose and only writes its own files.',
   'signin.loading': 'Signing in…',
 
   'error.config': 'Incomplete configuration: {vars}. See the README for setup.',
   'error.domain': 'This account ({email}) is not part of the allowed domain ({domain}).',
-  'error.scopes':
-    'Collimo needs every requested permission to work. Sign in again and tick all of them.',
+  'error.scopes': 'Collimo needs every requested permission to work. Sign in again and tick all of them.',
   'error.popup': 'The sign-in window was closed or blocked. Please try again.',
   'error.expired': 'Your session has expired.',
   'error.reconnect': 'Sign in again',
@@ -37,8 +36,7 @@ export const en: Record<MessageKey, string> = {
   'setup.pickFolder': 'Choose a folder',
   'setup.pickerTitle': 'Choose your photo folder',
   'setup.selected': 'Selected folder: {name}',
-  'setup.collimoNote':
-    'Collimo will create a “Collimo” subfolder in this folder to store your collages.',
+  'setup.collimoNote': 'Collimo will create a “Collimo” subfolder in this folder to store your collages.',
   'setup.confirm': 'Continue',
   'setup.cancel': 'Cancel',
   'setup.checking': 'Checking the folder…',
@@ -57,7 +55,6 @@ export const en: Record<MessageKey, string> = {
   'gallery.max': 'A collage holds at most {max} photos.',
   'gallery.unsupported': 'Format not supported yet ({type})',
   'gallery.refresh': 'Refresh',
-
 
   'editor.back': 'Photos',
   'editor.export': 'Export',
@@ -200,7 +197,8 @@ export const en: Record<MessageKey, string> = {
   'export.rendering': 'Creating the image… {done}/{total}',
   'export.uploading': 'Uploading to Drive…',
   'export.done': 'Collage saved: {name}',
-  'export.doneHint': 'The image and the project file are in the Collimo folder. The collage stays open: each new save creates a new collage.',
+  'export.doneHint':
+    'The image and the project file are in the Collimo folder. The collage stays open: each new save creates a new collage.',
   'export.openImage': 'Open the image',
   'export.openFolder': 'Open the Collimo folder',
   'export.download': 'Download',
@@ -215,7 +213,8 @@ export const en: Record<MessageKey, string> = {
   'menu.factory': 'Layout factory',
   'factory.title': 'Layout factory',
   'factory.back': 'Photos',
-  'factory.intro': 'Create, edit and publish layouts. They are saved in the shared drive “{drive}” and offered to the whole domain once published.',
+  'factory.intro':
+    'Create, edit and publish layouts. They are saved in the shared drive “{drive}” and offered to the whole domain once published.',
   'factory.updated': 'Last change: {date} by {user}',
   'factory.history': 'History in Drive',
   'factory.rejected': '{count} layout(s) in the catalogue cannot be read and were ignored.',
@@ -294,7 +293,8 @@ export const en: Record<MessageKey, string> = {
   'factory.saving': 'Saving…',
   'factory.saved': 'Saved to the catalogue.',
   'factory.grant.title': 'Allow Collimo to edit the catalogue',
-  'factory.grant.text': 'The catalogue was created by another admin. For security, Collimo can only edit it once you have chosen it yourself: select “{file}” in the window that opens.',
+  'factory.grant.text':
+    'The catalogue was created by another admin. For security, Collimo can only edit it once you have chosen it yourself: select “{file}” in the window that opens.',
   'factory.grant.button': 'Choose the catalogue file',
   'factory.undo': 'Undo',
   'factory.redo': 'Redo',

@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 18 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 const C3 = 'c(x,x,x)'
@@ -6,7 +10,14 @@ const C5 = 'c(x,x,x,x,x)'
 const R4 = 'r(x,x,x,x)'
 const R7 = 'r(x,x,x,x,x,x,x)'
 
-/** Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px. */
+/**
+ * Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px.
+ * @param x1 - bord gauche, en pixels de vignette
+ * @param y1 - bord haut, en pixels de vignette
+ * @param x2 - bord droit, en pixels de vignette
+ * @param y2 - bord bas, en pixels de vignette
+ * @returns le rectangle en coordonnées du cadre (0–1)
+ */
 const px = (x1: number, y1: number, x2: number, y2: number) => ({ x: x1 / 400, y: y1 / 400, w: (x2 - x1) / 400, h: (y2 - y1) / 400 })
 
 /** Dispositions en rectangles pour 18 photo(s), dans l'ordre des captures de référence. */

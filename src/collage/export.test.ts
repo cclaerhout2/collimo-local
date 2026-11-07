@@ -7,7 +7,14 @@ const layout = buildLayout({ id: 'p02-test', photos: 2, family: 'grille', split:
 
 function doc(photoSize: [number, number]): CollageDoc {
   const photo = { id: 'a', name: 'a.jpg', mimeType: 'image/jpeg', width: photoSize[0], height: photoSize[1], crop: DEFAULT_CROP }
-  return { version: 1, ratio: '1:1', layoutId: layout.id, photos: [photo, { ...photo, id: 'b' }], borders: DEFAULT_BORDERS, background: '#fff' }
+  return {
+    version: 1,
+    ratio: '1:1',
+    layoutId: layout.id,
+    photos: [photo, { ...photo, id: 'b' }],
+    borders: DEFAULT_BORDERS,
+    background: '#fff',
+  }
 }
 
 describe('exportSize', () => {

@@ -6,8 +6,15 @@ import { COLLIMO_FOLDER_NAME } from '../config'
 import { DriveApiError } from './drive'
 import type { DriveFileInfo, DriveJsonFile, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
+/** Couleurs des dégradés des fausses photos. */
 const PALETTE = ['#2dd4a7', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b']
 
+/**
+ * Fausse photo : une miniature SVG en dégradé, aux couleurs tirées de son numéro.
+ * @param i - numéro de la photo (nom et couleurs)
+ * @param portrait - `true` pour une photo en hauteur (600 × 800), sinon en largeur (800 × 600)
+ * @returns la photo simulée
+ */
 function fakePhoto(i: number, portrait: boolean): Photo {
   const [w, h] = portrait ? [600, 800] : [800, 600]
   const c1 = PALETTE[i % PALETTE.length]
@@ -30,6 +37,7 @@ function fakePhoto(i: number, portrait: boolean): Photo {
   }
 }
 
+/** Dossiers simulés, par identifiant : un dans Mon Drive, deux dans un Drive partagé (dont un en lecture seule). */
 const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
   seminaire: {
     id: 'seminaire',
@@ -57,14 +65,25 @@ const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
   },
 }
 
+/** Drive partagés simulés. */
 const sharedDrives: DriveRef[] = [
   { id: 'shared-com', name: 'Communication' },
   { id: 'shared-rh', name: 'Ressources humaines' },
 ]
 
-const delay = <T,>(value: T, ms = 350) => new Promise<T>((r) => setTimeout(() => r(value), ms))
+/**
+ * Renvoie une valeur après un délai, pour imiter la latence du réseau.
+ * @param value - valeur à renvoyer
+ * @param ms - délai en millisecondes
+ * @returns une promesse résolue avec `value`
+ */
+const delay = <T>(value: T, ms = 350) => new Promise<T>((r) => setTimeout(() => r(value), ms))
 
-/** « Photo originale » simulée : un dégradé numéroté, pour vérifier l'ordre et le cadrage. */
+/**
+ * « Photo originale » simulée : un dégradé numéroté, pour vérifier l'ordre et le cadrage.
+ * @param id - identifiant de la photo (son numéro est extrait des chiffres)
+ * @returns une image PNG de 1600 × 1200 (ou 1200 × 1600 en hauteur)
+ */
 async function fakeOriginal(id: string): Promise<Blob> {
   const i = Number(id.replace(/\D/g, '')) || 0
   const portrait = Object.values(folders).some((f) => f.photos.some((p) => p.id === id && (p.height ?? 0) > (p.width ?? 0)))
@@ -101,11 +120,19 @@ async function fakeOriginal(id: string): Promise<Blob> {
  * `?catalogue=autoriser` : catalogue existant, créé par un autre admin (il faut autoriser Collimo dessus).
  */
 const CATALOGUE_DRIVE = { id: 'shared-catalogue', name: 'Collimo – Catalogue' }
+/**
+ * Mode du catalogue simulé, lu dans le paramètre `catalogue` de l'adresse.
+ * @returns `admin` par défaut, sinon `lecteur` ou `autoriser`
+ */
 function catalogueMode(): 'admin' | 'lecteur' | 'autoriser' {
   const v = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('catalogue') : null
   return v === 'lecteur' || v === 'autoriser' ? v : 'admin'
 }
 
+/**
+ * Crée les services simulés : connexion d'un clic sans Google, Drive en mémoire, sélecteur qui choisit tout seul.
+ * @returns les services, à utiliser à la place des services Google
+ */
 export function createMockServices(): Services {
   const mode = catalogueMode()
   const json = new Map<string, DriveJsonFile & { parent: string; data: string; granted: boolean }>()
@@ -150,7 +177,9 @@ export function createMockServices(): Services {
       },
       listPhotos: (folder) => delay(folders[folder.id]?.photos ?? [], 600),
       async getPhoto(id) {
-        const p = Object.values(folders).flatMap((f) => f.photos).find((x) => x.id === id)
+        const p = Object.values(folders)
+          .flatMap((f) => f.photos)
+          .find((x) => x.id === id)
         if (!p) throw new Error('photo not found')
         return delay(p, 150)
       },
@@ -181,7 +210,16 @@ export function createMockServices(): Services {
       },
       async createJsonFile(parentId, name, data) {
         const id = `catalogue-${json.size + 1}`
-        const f = { id, name, parent: parentId, canEdit: true, granted: true, modifiedTime: new Date().toISOString(), webViewLink: '#demo', data: JSON.stringify(data) }
+        const f = {
+          id,
+          name,
+          parent: parentId,
+          canEdit: true,
+          granted: true,
+          modifiedTime: new Date().toISOString(),
+          webViewLink: '#demo',
+          data: JSON.stringify(data),
+        }
         json.set(id, f)
         return delay(publicJson(f), 300)
       },

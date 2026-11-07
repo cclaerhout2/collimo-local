@@ -1,12 +1,22 @@
+/**
+ * Aperçu du collage dans l'éditeur : un Canvas ajusté à la place disponible, avec une couche
+ * optionnelle posée exactement dessus pour les gestes et la sélection.
+ */
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { renderCollage, type Drawable } from '../../collage/render'
 import type { CollageDoc, Layout, Overlay } from '../../collage/types'
 
+/** Propriétés de {@link CollageCanvas}. */
 interface Props {
+  /** Collage à dessiner. */
   doc: CollageDoc
+  /** Disposition des cases. */
   layout: Layout
+  /** Proportions du collage (largeur / hauteur). */
   ratio: number
+  /** Photo chargée d'une case, ou `undefined` tant qu'elle ne l'est pas (case grisée). */
   imageFor: (cellIndex: number) => Drawable | undefined
+  /** Image d'aperçu d'un sticker, si elle est prête. */
   overlayFor?: (o: Overlay) => Drawable | undefined
   /** Accès au Canvas (pipette). */
   canvasRef?: MutableRefObject<HTMLCanvasElement | null>
@@ -14,11 +24,17 @@ interface Props {
   version: number
   /** Avant/après : photos sans réglages. */
   raw?: boolean
-  /** Couche posée exactement sur l'aperçu (gestes, sélection). */
+  /** Couche posée exactement sur l'aperçu (gestes, sélection) ; reçoit sa taille en pixels CSS. */
   overlay?: (size: { width: number; height: number }) => ReactNode
 }
 
-/** Aperçu du collage, ajusté à la place disponible et net sur les écrans haute densité. */
+/**
+ * Aperçu du collage, ajusté à la place disponible et net sur les écrans haute densité.
+ *
+ * Le cadre est mesuré en pixels CSS ; le bitmap du Canvas est multiplié par `devicePixelRatio`
+ * (plafonné à 3 pour limiter la mémoire).
+ * @returns le Canvas centré dans son cadre, et la couche `overlay` par-dessus
+ */
 export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvasRef: externalRef, version, overlay, raw }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)

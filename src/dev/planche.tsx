@@ -8,6 +8,12 @@ import { layoutsFor } from '../collage/catalog'
 import { cellGeometry, decorGeometry } from '../collage/cells'
 import type { Layout } from '../collage/types'
 
+/**
+ * Vignette d'une disposition, dessinée comme les icônes de l'app de référence : cases sombres
+ * numérotées dans l'ordre des photos, sur un fond gris de 120 px.
+ * @param props - la disposition à dessiner (`layout`)
+ * @returns la vignette légendée par l'identifiant de la disposition
+ */
 function Icon({ layout }: { layout: Layout }) {
   const S = 120
   const B = { spacing: 0.55, margin: 0.4, radius: 0 }
@@ -20,7 +26,14 @@ function Icon({ layout }: { layout: Layout }) {
         {cells.map(({ box: b, path, evenodd, shaped, noGap }, i) => (
           <g key={i}>
             {path ? (
-              <path d={path} fillRule={evenodd ? 'evenodd' : 'nonzero'} fill="#262626" stroke="#767676" strokeWidth={shaped || noGap ? 0 : gap} strokeLinejoin="round" />
+              <path
+                d={path}
+                fillRule={evenodd ? 'evenodd' : 'nonzero'}
+                fill="#262626"
+                stroke="#767676"
+                strokeWidth={shaped || noGap ? 0 : gap}
+                strokeLinejoin="round"
+              />
             ) : (
               <rect x={b.x} y={b.y} width={b.w} height={b.h} fill="#262626" stroke="#767676" strokeWidth={1.5} />
             )}
@@ -30,7 +43,12 @@ function Icon({ layout }: { layout: Layout }) {
           </g>
         ))}
         {decorGeometry(layout, S, S, B).map((d, i) => (
-          <path key={`d${i}`} d={d.d} fillRule={d.evenodd ? 'evenodd' : 'nonzero'} fill={d.fill === 'ink' ? '#141414' : d.fill === 'white' ? '#fff' : '#767676'} />
+          <path
+            key={`d${i}`}
+            d={d.d}
+            fillRule={d.evenodd ? 'evenodd' : 'nonzero'}
+            fill={d.fill === 'ink' ? '#141414' : d.fill === 'white' ? '#fff' : '#767676'}
+          />
         ))}
       </svg>
       <figcaption style={{ font: '12px system-ui', color: '#ddd', marginTop: 4 }}>{layout.id}</figcaption>
@@ -38,6 +56,10 @@ function Icon({ layout }: { layout: Layout }) {
   )
 }
 
+/**
+ * Page de la planche : une section par nombre de photos (celui du paramètre `n`, ou de 1 à 20).
+ * @returns la page complète
+ */
 function Planche() {
   const n = Number(new URLSearchParams(location.search).get('n'))
   const counts = n >= 1 && n <= 20 ? [n] : Array.from({ length: 20 }, (_, i) => i + 1)

@@ -1,7 +1,12 @@
+/**
+ * Formats de collage proposés (rapport largeur / hauteur), avec leur usage indicatif.
+ */
+/** Un format de collage proposé. */
 export interface RatioDef {
   id: string
   /** Largeur / hauteur. */
   value: number
+  /** Libellé affiché (non traduit). */
   label: string
   /** Usage indicatif, affiché sous le libellé (clé de traduction). */
   hint?: 'ratio.square' | 'ratio.post' | 'ratio.story' | 'ratio.screen' | 'ratio.print' | 'ratio.phone'
@@ -21,8 +26,14 @@ export const RATIOS: RatioDef[] = [
   { id: '9:19.5', value: 9 / 19.5, label: '9:19,5', hint: 'ratio.phone' },
 ]
 
+/** Identifiant du format par défaut (carré). */
 export const DEFAULT_RATIO = '1:1'
 
+/**
+ * Rapport largeur / hauteur d'un format.
+ * @param id - identifiant du format
+ * @returns le rapport, ou 1 (carré) si le format est inconnu
+ */
 export function ratioValue(id: string): number {
   return RATIOS.find((r) => r.id === id)?.value ?? 1
 }

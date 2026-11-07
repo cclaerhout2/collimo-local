@@ -1,3 +1,10 @@
+/**
+ * Couche de gestes posée sur l'aperçu du collage : sélection des photos, cadrage (glisser, zoom, rotation),
+ * séparations, échange par appui long, et manipulation des textes et stickers.
+ *
+ * Toutes les positions y sont en pixels CSS, depuis le coin haut gauche de l'aperçu ; les textes et stickers
+ * stockent leur centre en coordonnées relatives (0 à 1), d'où les conversions avec `width` et `height`.
+ */
 import {
   useEffect,
   useRef,
@@ -15,33 +22,56 @@ import type { CollageDoc, Crop, Layout, Overlay } from '../../collage/types'
 
 /** Délai d'appui long pour soulever une photo et l'échanger (ms). */
 export const LONG_PRESS_MS = 500
-/** Distance (px) à partir de laquelle un appui devient un glissé. */
+/** Distance (pixels CSS) à partir de laquelle un appui devient un glissé. */
 const DRAG_THRESHOLD = 6
+/** Écart (pixels CSS) entre le bord du cadre de sélection et le centre de la poignée de rotation. */
 const ROTATE_HANDLE_GAP = 26
 
+/** Taille d'une photo, en pixels de l'image. */
 type Size = { w: number; h: number }
 
+/** Propriétés de {@link InteractionLayer}. */
 interface Props {
+  /** Largeur de l'aperçu, en pixels CSS. */
   width: number
+  /** Hauteur de l'aperçu, en pixels CSS. */
   height: number
+  /** Collage affiché. */
   doc: CollageDoc
+  /** Disposition résolue du collage. */
   layout: Layout
+  /** Indice de la case sélectionnée, ou `null`. */
   selected: number | null
   /** Mode « Échanger » du menu : le prochain toucher choisit l'autre photo. */
   swapPick: boolean
+  /** Taille de la photo d'une case, en pixels de l'image, si elle est connue. */
   imageSize: (cellIndex: number) => Size | undefined
+  /** Sélectionne une case (toucher), ou rien (toucher à côté, Échap). */
   onSelect: (cellIndex: number | null) => void
+  /** Nouveau cadrage d'une case (glisser, pincer, tourner, molette, clavier). */
   onCrop: (cellIndex: number, crop: Crop) => void
+  /** Échange les photos de deux cases. */
   onSwap: (a: number, b: number) => void
+  /** Nouvelle découpe de la disposition, après déplacement d'une séparation. */
   onSplit: (split: string) => void
+  /** Identifiant du texte ou sticker sélectionné, ou `null`. */
   selectedOverlay: string | null
+  /** Sélectionne un texte ou sticker, ou rien. */
   onSelectOverlay: (id: string | null) => void
+  /** Texte ou sticker modifié (déplacé, agrandi, tourné, élargi). */
   onOverlay: (o: Overlay) => void
+  /** Double-clic sur un texte : ouvre sa saisie. */
   onEditText: (id: string) => void
   /** Pipette active : le prochain toucher renvoie sa position au lieu d'agir. */
   onEyedropper?: (x: number, y: number) => void
 }
 
+/**
+ * Geste en cours. `pending` : appui pas encore qualifié (toucher, glissé ou appui long) ;
+ * `pan`, `pinch`, `rotate` : cadrage d'une photo ; `divider` : déplacement d'une séparation ;
+ * `swap` : photo soulevée pour l'échange ; les types en `o…` concernent un texte ou sticker.
+ * Les gestes de pincement et de rotation gardent l'état de départ, pour calculer chaque étape depuis lui.
+ */
 type Gesture =
   | { type: 'none' }
   | { type: 'pending'; cell: number | null; x: number; y: number; timer: number }
@@ -57,15 +87,31 @@ type Gesture =
   | { type: 'owidth'; id: string; o: Overlay }
   | { type: 'opinch'; id: string; dist: number; angle: number; o: Overlay }
 
-/** Case sous le point : la dernière dessinée d'abord (une incrustation est au-dessus). */
+/** Contexte de dessin minuscule, créé à la demande, qui sert seulement à tester si un point est dans un tracé. */
 let hitCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null
+/**
+ * Teste si un point est dans un tracé SVG.
+ * @param d - tracé SVG de la case
+ * @param evenodd - vrai si le tracé est troué (règle « evenodd »)
+ * @param x - abscisse du point, dans le repère du tracé
+ * @param y - ordonnée du point, dans le repère du tracé
+ * @returns vrai si le point est dedans ; toujours vrai sans `Path2D` (tests hors navigateur)
+ */
 function insidePath(d: string, evenodd: boolean | undefined, x: number, y: number): boolean {
   if (typeof Path2D === 'undefined') return true
-  hitCtx ??= (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : document.createElement('canvas')).getContext('2d') as CanvasRenderingContext2D
+  hitCtx ??= (typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : document.createElement('canvas')).getContext(
+    '2d',
+  ) as CanvasRenderingContext2D
   return hitCtx.isPointInPath(new Path2D(d), x, y, evenodd ? 'evenodd' : 'nonzero')
 }
 
-/** Case sous le point : la dernière dessinée d'abord ; les cases en forme suivent leur contour. */
+/**
+ * Case sous le point : la dernière dessinée d'abord ; les cases en forme suivent leur contour.
+ * @param cells - géométrie des cases (avec contour éventuel) ou simples rectangles
+ * @param x - abscisse du point, en pixels CSS
+ * @param y - ordonnée du point, en pixels CSS
+ * @returns l'indice de la case touchée, ou `null`
+ */
 export function hitCell(cells: (CellGeom | CellBox)[], x: number, y: number): number | null {
   for (let i = cells.length - 1; i >= 0; i--) {
     const g = 'box' in cells[i] ? (cells[i] as CellGeom) : { box: cells[i] as CellBox }
@@ -76,7 +122,15 @@ export function hitCell(cells: (CellGeom | CellBox)[], x: number, y: number): nu
   return null
 }
 
-/** Point (x, y) ramené dans le repère d'un élément : centre en 0, axes tournés avec lui. */
+/**
+ * Point (x, y) ramené dans le repère d'un élément : centre en 0, axes tournés avec lui.
+ * @param o - texte ou sticker
+ * @param width - largeur de l'aperçu, en pixels CSS
+ * @param height - hauteur de l'aperçu, en pixels CSS
+ * @param x - abscisse du point, en pixels CSS
+ * @param y - ordonnée du point, en pixels CSS
+ * @returns les coordonnées du point dans le repère de l'élément, en pixels CSS
+ */
 export function toOverlayFrame(o: Overlay, width: number, height: number, x: number, y: number): [number, number] {
   const a = (-o.angle * Math.PI) / 180
   const dx = x - o.cx * width
@@ -84,7 +138,16 @@ export function toOverlayFrame(o: Overlay, width: number, height: number, x: num
   return [dx * Math.cos(a) - dy * Math.sin(a), dx * Math.sin(a) + dy * Math.cos(a)]
 }
 
-/** Élément sous le point : le plus haut d'abord. Marge de 8 px pour viser les petits éléments au doigt. */
+/**
+ * Élément sous le point : le plus haut d'abord. Marge de 8 px pour viser les petits éléments au doigt.
+ * @param overlays - textes et stickers, du plus bas au plus haut
+ * @param width - largeur de l'aperçu, en pixels CSS
+ * @param height - hauteur de l'aperçu, en pixels CSS
+ * @param x - abscisse du point, en pixels CSS
+ * @param y - ordonnée du point, en pixels CSS
+ * @param slop - marge de tolérance autour du cadre, en pixels CSS
+ * @returns l'identifiant de l'élément touché, ou `null`
+ */
 export function hitOverlay(overlays: Overlay[], width: number, height: number, x: number, y: number, slop = 8): string | null {
   for (let i = overlays.length - 1; i >= 0; i--) {
     const o = overlays[i]
@@ -95,14 +158,28 @@ export function hitOverlay(overlays: Overlay[], width: number, height: number, x
   return null
 }
 
-/** Agrandit ou réduit un élément d'un facteur ; un texte garde le même découpage en lignes. */
+/**
+ * Agrandit ou réduit un élément d'un facteur ; un texte garde le même découpage en lignes.
+ *
+ * Pour un texte, la taille de police et la largeur de la boîte changent ensemble, d'où le même découpage.
+ * Les tailles sont bornées pour qu'un élément ne disparaisse pas ni n'envahisse tout le collage.
+ * @param o - texte ou sticker
+ * @param factor - facteur d'échelle (1 = inchangé)
+ * @returns l'élément redimensionné
+ */
 export function scaleOverlay(o: Overlay, factor: number): Overlay {
   const f = Math.max(0.05, factor)
   if (o.type === 'text') return { ...o, size: Math.min(1, Math.max(0.01, o.size * f)), width: Math.min(1.5, Math.max(0.05, o.width * f)) }
   return { ...o, size: Math.min(2, Math.max(0.02, o.size * f)) }
 }
 
-/** Séparations qui longent la case donnée (relative au cadre), avec le point où placer leur poignée. */
+/**
+ * Séparations qui longent la case donnée (relative au cadre), avec le point où placer leur poignée.
+ * @param all - toutes les séparations de la disposition
+ * @param cell - case, en coordonnées relatives au cadre (0 à 1)
+ * @returns les séparations sur un bord de la case, avec `along`, le milieu de la partie commune
+ * (relatif, le long de la séparation)
+ */
 export function cellDividers(all: Divider[], cell: { x: number; y: number; w: number; h: number }) {
   const eps = 1e-6
   const out: { divider: Divider; along: number }[] = []
@@ -126,11 +203,18 @@ export function cellDividers(all: Divider[], cell: { x: number; y: number; w: nu
  * Couche posée sur l'aperçu : sélection, glisser, zoom (molette, pincement, double-clic),
  * rotation (poignée ronde ou deux doigts), séparations, appui long pour échanger.
  * Mêmes gestes à la souris et au doigt, grâce aux événements « pointer ».
+ * @param props - voir {@link Props}
+ * @returns la couche transparente qui reçoit les gestes, avec en SVG la sélection et ses poignées
  */
 export function InteractionLayer(props: Props) {
   const { width, height, doc, layout, selected, swapPick, onSelect, onCrop, onSwap, onSplit } = props
   const { selectedOverlay, onSelectOverlay, onOverlay, onEditText, onEyedropper } = props
   const overlays = doc.overlays ?? []
+  /**
+   * Dernière version d'un texte ou sticker (via `latest`, pour rester à jour pendant un geste).
+   * @param id - identifiant de l'élément
+   * @returns l'élément, ou `undefined` s'il a été supprimé
+   */
   const overlayById = (id: string) => (latest.current.doc.overlays ?? []).find((o) => o.id === id)
   const ref = useRef<HTMLDivElement>(null)
   const pointers = useRef(new Map<number, { x: number; y: number }>())
@@ -149,15 +233,31 @@ export function InteractionLayer(props: Props) {
     latest.current = props
   })
 
+  /**
+   * Position d'un événement, ramenée à la couche.
+   * @param e - événement souris, pointeur ou molette (coordonnées de la fenêtre)
+   * @returns la position en pixels CSS, depuis le coin haut gauche de la couche
+   */
   const local = (e: { clientX: number; clientY: number }) => {
     const r = ref.current!.getBoundingClientRect()
     return { x: e.clientX - r.left, y: e.clientY - r.top }
   }
 
+  /**
+   * Cadrage courant d'une case.
+   * @param i - indice de la case
+   * @returns le cadrage, ou `undefined` si la case n'a pas de photo
+   */
   function cropOf(i: number) {
     return latest.current.doc.photos[i]?.crop
   }
 
+  /**
+   * Tailles utiles aux calculs de cadrage d'une case, d'après les dernières propriétés reçues.
+   * @param i - indice de la case
+   * @returns la taille de la photo (`img`, pixels de l'image), celle de la case (`box`) et son rectangle (`b`),
+   * en pixels CSS ; ou `null` si la taille de la photo est inconnue
+   */
   function sizes(i: number) {
     const img = latest.current.imageSize(i)
     const b = cellGeometry(latest.current.layout, latest.current.width, latest.current.height, latest.current.doc.borders)[i]?.box
@@ -184,11 +284,20 @@ export function InteractionLayer(props: Props) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  /** Annule le minuteur de l'appui long, si un appui est en attente. */
   function clearTimer() {
     const g = gesture.current
     if (g.type === 'pending') window.clearTimeout(g.timer)
   }
 
+  /**
+   * Début d'un geste : choisit son type selon le nombre de doigts et ce qui est touché.
+   *
+   * Ordre de priorité : pipette ; deuxième doigt (pincement d'un élément ou de la photo sélectionnée) ;
+   * poignées de l'élément sélectionné ; élément touché ; poignées de la photo (rotation, séparations) ;
+   * sinon appui en attente sur une case, qui devient un échange après {@link LONG_PRESS_MS}.
+   * @param e - événement d'appui
+   */
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     const p = local(e)
     if (onEyedropper) {
@@ -203,7 +312,8 @@ export function InteractionLayer(props: Props) {
     if (pointers.current.size === 2 && (g.type === 'omove' || g.type === 'opending')) {
       const o = overlayById(g.id)
       const [a, b] = [...pointers.current.values()]
-      if (o) gesture.current = { type: 'opinch', id: o.id, dist: Math.hypot(b.x - a.x, b.y - a.y), angle: pointerAngle(a.x, a.y, b.x, b.y), o }
+      if (o)
+        gesture.current = { type: 'opinch', id: o.id, dist: Math.hypot(b.x - a.x, b.y - a.y), angle: pointerAngle(a.x, a.y, b.x, b.y), o }
       return
     }
 
@@ -212,7 +322,14 @@ export function InteractionLayer(props: Props) {
       clearTimer()
       const [a, b] = [...pointers.current.values()]
       const crop = cropOf(selected)
-      if (crop) gesture.current = { type: 'pinch', cell: selected, dist: Math.hypot(b.x - a.x, b.y - a.y), angle: pointerAngle(a.x, a.y, b.x, b.y), crop }
+      if (crop)
+        gesture.current = {
+          type: 'pinch',
+          cell: selected,
+          dist: Math.hypot(b.x - a.x, b.y - a.y),
+          angle: pointerAngle(a.x, a.y, b.x, b.y),
+          crop,
+        }
       return
     }
     if (pointers.current.size > 1) return
@@ -240,7 +357,8 @@ export function InteractionLayer(props: Props) {
       if (kind === 'rotate') {
         const b = boxes[selected]
         const crop = cropOf(selected)
-        if (crop) gesture.current = { type: 'rotate', cell: selected, startPointer: pointerAngle(b.x + b.w / 2, b.y + b.h / 2, p.x, p.y), crop }
+        if (crop)
+          gesture.current = { type: 'rotate', cell: selected, startPointer: pointerAngle(b.x + b.w / 2, b.y + b.h / 2, p.x, p.y), crop }
         return
       }
       if (kind === 'divider' && spec) {
@@ -262,6 +380,14 @@ export function InteractionLayer(props: Props) {
     gesture.current = { type: 'pending', cell, x: p.x, y: p.y, timer }
   }
 
+  /**
+   * Suite du geste : déplace, agrandit ou tourne l'élément, cadre la photo, bouge la séparation
+   * ou suit la case visée pendant un échange.
+   *
+   * Un appui en attente ne devient un glissé qu'au-delà de {@link DRAG_THRESHOLD} ; il ne déplace la photo
+   * que si sa case est déjà sélectionnée, pour ne pas décadrer une photo en faisant défiler la page.
+   * @param e - événement de déplacement
+   */
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     if (!pointers.current.has(e.pointerId)) return
     const p = local(e)
@@ -347,6 +473,11 @@ export function InteractionLayer(props: Props) {
     }
   }
 
+  /**
+   * Fin du geste : un simple toucher sélectionne (ou échange en mode « Échanger »), un échange par appui long
+   * se termine sur la case visée.
+   * @param e - événement de relâchement
+   */
   function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
     pointers.current.delete(e.pointerId)
     const g = gesture.current
@@ -368,6 +499,10 @@ export function InteractionLayer(props: Props) {
     gesture.current = { type: 'none' }
   }
 
+  /**
+   * Geste interrompu par le navigateur (défilement, appel…) : tout est abandonné.
+   * @param e - événement d'annulation
+   */
   function onPointerCancel(e: ReactPointerEvent<HTMLDivElement>) {
     pointers.current.delete(e.pointerId)
     clearTimer()
@@ -375,6 +510,10 @@ export function InteractionLayer(props: Props) {
     setLifted(null)
   }
 
+  /**
+   * Double-clic : édite un texte, ou bascule le zoom de la photo sélectionnée entre ×1 et ×2 autour du point.
+   * @param e - événement de double-clic
+   */
   function onDoubleClick(e: ReactMouseEvent<HTMLDivElement>) {
     const p = local(e)
     const hitO = hitOverlay(overlays, width, height, p.x, p.y)
@@ -390,12 +529,22 @@ export function InteractionLayer(props: Props) {
     onCrop(selected, zoomAt(crop, s.img, s.box, target, p.x - (s.b.x + s.b.w / 2), p.y - (s.b.y + s.b.h / 2)))
   }
 
+  /**
+   * Clavier : flèches pour déplacer (Maj pour de plus grands pas), + et - pour agrandir ou zoomer,
+   * Échap pour désélectionner. Agit sur l'élément sélectionné, sinon sur la photo sélectionnée.
+   * @param e - événement clavier
+   */
   function onKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
     if (selectedOverlay) {
       const o = overlayById(selectedOverlay)
       if (!o) return
       const step = (e.shiftKey ? 20 : 4) / Math.max(1, width)
-      const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+      const moves: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      }
       if (e.key === 'Escape') onSelectOverlay(null)
       else if (moves[e.key]) onOverlay({ ...o, cx: o.cx + moves[e.key][0], cy: o.cy + moves[e.key][1] * (width / Math.max(1, height)) })
       else if (e.key === '+' || e.key === '=') onOverlay(scaleOverlay(o, 1.08))
@@ -409,7 +558,12 @@ export function InteractionLayer(props: Props) {
     const crop = cropOf(selected)
     if (!s || !crop) return
     const step = e.shiftKey ? 40 : 10
-    const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    }
     if (e.key === 'Escape') onSelect(null)
     else if (moves[e.key]) onCrop(selected, panBy(crop, s.img, s.box, ...moves[e.key]))
     else if (e.key === '+' || e.key === '=') onCrop(selected, zoomAt(crop, s.img, s.box, crop.zoom * 1.1))
@@ -447,7 +601,13 @@ export function InteractionLayer(props: Props) {
         {sel && !lifted && (
           <>
             <CellOutline g={geoms[selected!]} className="selection" />
-            <line x1={sel.x + sel.w / 2} y1={rotateY} x2={sel.x + sel.w / 2} y2={sel.y > ROTATE_HANDLE_GAP + 4 ? sel.y : sel.y + ROTATE_HANDLE_GAP} className="rotate-stem" />
+            <line
+              x1={sel.x + sel.w / 2}
+              y1={rotateY}
+              x2={sel.x + sel.w / 2}
+              y2={sel.y > ROTATE_HANDLE_GAP + 4 ? sel.y : sel.y + ROTATE_HANDLE_GAP}
+              className="rotate-stem"
+            />
             <g data-handle="rotate" className="handle rotate-handle" transform={`translate(${sel.x + sel.w / 2} ${rotateY})`}>
               <circle r={14} />
               <path d="M-5 -2a6 6 0 1 1 1 6" fill="none" strokeWidth={2} />
@@ -458,7 +618,13 @@ export function InteractionLayer(props: Props) {
               const x = divider.dir === 'c' ? area.outer + divider.pos * area.areaW : area.outer + along * area.areaW
               const y = divider.dir === 'r' ? area.outer + divider.pos * area.areaH : area.outer + along * area.areaH
               return (
-                <g key={index} data-handle="divider" data-index={index} className={`handle divider-handle ${divider.dir === 'c' ? 'ew' : 'ns'}`} transform={`translate(${x} ${y})`}>
+                <g
+                  key={index}
+                  data-handle="divider"
+                  data-index={index}
+                  className={`handle divider-handle ${divider.dir === 'c' ? 'ew' : 'ns'}`}
+                  transform={`translate(${x} ${y})`}
+                >
                   <circle r={11} />
                 </g>
               )
@@ -472,16 +638,30 @@ export function InteractionLayer(props: Props) {
   )
 }
 
+/**
+ * Contour d'une case (`g`), suivant sa forme ; `className` choisit le style (sélection, soulevée, cible).
+ * @returns le tracé ou le rectangle SVG du contour
+ */
 function CellOutline({ g, className }: { g: CellGeom; className: string }) {
   if (g.path) return <path d={g.path} fillRule={g.evenodd ? 'evenodd' : 'nonzero'} className={className} />
   return <rect {...rectProps(g.box)} className={className} />
 }
 
+/**
+ * Attributs SVG d'un rectangle de case.
+ * @param b - rectangle de la case, en pixels CSS
+ * @returns les attributs `x`, `y`, `width`, `height` et `rx`
+ */
 function rectProps(b: CellBox) {
   return { x: b.x, y: b.y, width: b.w, height: b.h, rx: b.radius }
 }
 
-/** Cadre d'un élément sélectionné, tourné avec lui : poignées agrandir (coin), tourner (rond), largeur (texte). */
+/**
+ * Cadre d'un élément sélectionné, tourné avec lui : poignées agrandir (coin), tourner (rond), largeur (texte).
+ *
+ * `width` et `height` sont la taille de l'aperçu en pixels CSS, pour convertir la position relative de `o`.
+ * @returns le groupe SVG du cadre et de ses poignées, ou rien si l'élément n'existe plus
+ */
 function OverlaySelection({ o, width, height }: { o?: Overlay; width: number; height: number }) {
   if (!o) return null
   const b = overlayBox(o, width, height)

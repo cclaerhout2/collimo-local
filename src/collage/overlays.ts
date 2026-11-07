@@ -1,9 +1,15 @@
+/**
+ * Textes et stickers posés sur le collage : création, styles prédéfinis, mise en page du texte
+ * et dessin sur un Canvas 2D, avec les effets (contour, ombre, lueur, étiquette).
+ */
 import { DEFAULT_FONT } from '../stickers/fonts'
 import type { Drawable } from './render'
 import type { IconOverlay, ImageOverlay, Overlay, TextEffects, TextOverlay } from './types'
 
+/** Contexte de dessin 2D, à l'écran ou hors écran. */
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
+/** Effets d'un nouveau texte : tous éteints, avec des réglages prêts si on les allume. */
 export const DEFAULT_EFFECTS: TextEffects = {
   stroke: { on: false, color: '#000000', width: 0.35 },
   shadow: { on: false, color: '#000000', blur: 0.4, distance: 0.3 },
@@ -11,12 +17,23 @@ export const DEFAULT_EFFECTS: TextEffects = {
   label: { on: false, color: '#ffffff', padding: 0.35, radius: 0.3 },
 }
 
+/** Compteur qui distingue les identifiants créés dans la même milliseconde. */
 let seq = 0
+/**
+ * Crée un identifiant d'élément unique (horodatage et compteur, en base 36).
+ * @returns l'identifiant, commençant par `o`
+ */
 export function newOverlayId(): string {
   seq += 1
   return `o${Date.now().toString(36)}${seq.toString(36)}`
 }
 
+/**
+ * Crée un texte au centre du collage, mis en forme selon un style prédéfini.
+ * @param text - texte à afficher
+ * @param preset - style prédéfini (le premier par défaut)
+ * @returns le nouvel élément
+ */
 export function newText(text: string, preset: TextPreset = TEXT_PRESETS[0]): TextOverlay {
   return applyPreset(
     {
@@ -38,14 +55,35 @@ export function newText(text: string, preset: TextPreset = TEXT_PRESETS[0]): Tex
   )
 }
 
+/**
+ * Crée une icône au centre du collage.
+ * @param set - bibliothèque d'origine
+ * @param name - nom de l'icône dans sa bibliothèque
+ * @param svg - balise `<svg>` complète de l'icône
+ * @param color - couleur, pour les icônes d'une couleur
+ * @returns le nouvel élément
+ */
 export function newIcon(set: IconOverlay['set'], name: string, svg: string, color?: string): IconOverlay {
   return { id: newOverlayId(), type: 'icon', cx: 0.5, cy: 0.5, angle: 0, opacity: 1, set, name, svg, color, size: 0.25 }
 }
 
+/**
+ * Crée une image (sticker) au centre du collage.
+ * @param fileId - identifiant du fichier image dans le stockage local
+ * @param name - nom du fichier d'origine
+ * @param mimeType - type MIME du fichier
+ * @param aspect - hauteur / largeur de l'image
+ * @returns le nouvel élément
+ */
 export function newImage(fileId: string, name: string, mimeType: string, aspect: number): ImageOverlay {
   return { id: newOverlayId(), type: 'image', cx: 0.5, cy: 0.5, angle: 0, opacity: 1, fileId, name, mimeType, size: 0.35, aspect }
 }
 
+/**
+ * Copie un élément, légèrement décalée vers le bas à droite pour qu'on la voie.
+ * @param o - élément à copier
+ * @returns la copie, avec un nouvel identifiant
+ */
 export function duplicateOverlay(o: Overlay): Overlay {
   const copy = structuredClone(o)
   copy.id = newOverlayId()
@@ -56,27 +94,67 @@ export function duplicateOverlay(o: Overlay): Overlay {
 
 // --- Styles prédéfinis du texte ---
 
+/** Style prédéfini d'un texte : police, couleur et effets. */
 export interface TextPreset {
   id: string
+  /** Police du style ; ce qui manque reprend la police par défaut. */
   font?: Partial<TextOverlay['font']>
+  /** Couleur CSS du texte. */
   color: string
+  /** Effets du style ; ce qui manque reprend {@link DEFAULT_EFFECTS}. */
   effects?: { [K in keyof TextEffects]?: Partial<TextEffects[K]> }
 }
 
+/** Styles de texte proposés, dans l'ordre d'affichage ; le premier sert pour un nouveau texte. */
 export const TEXT_PRESETS: TextPreset[] = [
   { id: 'shadow', color: '#ffffff', effects: { shadow: { on: true, color: '#000000', blur: 0.5, distance: 0.25 } } },
   { id: 'outline', color: '#ffffff', effects: { stroke: { on: true, color: '#111111', width: 0.45 } } },
   { id: 'label-light', color: '#111111', effects: { label: { on: true, color: '#ffffff', padding: 0.35, radius: 0.25 } } },
   { id: 'label-dark', color: '#ffffff', effects: { label: { on: true, color: '#111111', padding: 0.35, radius: 0.25 } } },
-  { id: 'title-red', font: { family: 'Anton', weight: 400 }, color: '#b3261e', effects: { shadow: { on: true, color: '#7f1d1d', blur: 0.15, distance: 0.35 } } },
-  { id: 'neon', font: { family: 'Righteous', weight: 400 }, color: '#ffffff', effects: { glow: { on: true, color: '#2dd4a7', blur: 0.7 } } },
-  { id: 'script', font: { family: 'Pacifico', weight: 400 }, color: '#ffffff', effects: { shadow: { on: true, color: '#000000', blur: 0.4, distance: 0.2 } } },
-  { id: 'poster', font: { family: 'Bebas Neue', weight: 400 }, color: '#facc15', effects: { stroke: { on: true, color: '#111111', width: 0.3 } } },
-  { id: 'tag', font: { family: 'Montserrat', weight: 700 }, color: '#062b21', effects: { label: { on: true, color: '#2dd4a7', padding: 0.45, radius: 1 } } },
-  { id: 'marker', font: { family: 'Permanent Marker', weight: 400 }, color: '#111111', effects: { label: { on: true, color: '#fde68a', padding: 0.3, radius: 0 } } },
+  {
+    id: 'title-red',
+    font: { family: 'Anton', weight: 400 },
+    color: '#b3261e',
+    effects: { shadow: { on: true, color: '#7f1d1d', blur: 0.15, distance: 0.35 } },
+  },
+  {
+    id: 'neon',
+    font: { family: 'Righteous', weight: 400 },
+    color: '#ffffff',
+    effects: { glow: { on: true, color: '#2dd4a7', blur: 0.7 } },
+  },
+  {
+    id: 'script',
+    font: { family: 'Pacifico', weight: 400 },
+    color: '#ffffff',
+    effects: { shadow: { on: true, color: '#000000', blur: 0.4, distance: 0.2 } },
+  },
+  {
+    id: 'poster',
+    font: { family: 'Bebas Neue', weight: 400 },
+    color: '#facc15',
+    effects: { stroke: { on: true, color: '#111111', width: 0.3 } },
+  },
+  {
+    id: 'tag',
+    font: { family: 'Montserrat', weight: 700 },
+    color: '#062b21',
+    effects: { label: { on: true, color: '#2dd4a7', padding: 0.45, radius: 1 } },
+  },
+  {
+    id: 'marker',
+    font: { family: 'Permanent Marker', weight: 400 },
+    color: '#111111',
+    effects: { label: { on: true, color: '#fde68a', padding: 0.3, radius: 0 } },
+  },
 ]
 
-/** Applique un style : police, couleur et effets ; le texte, la position et la taille restent. */
+/**
+ * Applique un style : police, couleur et effets ; le texte, la position et la taille restent.
+ * @param o - texte à modifier
+ * @param p - style à appliquer
+ * @returns une copie du texte avec le style
+ */
 export function applyPreset(o: TextOverlay, p: TextPreset): TextOverlay {
   const effects = structuredClone(DEFAULT_EFFECTS)
   for (const k of Object.keys(effects) as (keyof TextEffects)[]) Object.assign(effects[k], p.effects?.[k] ?? {})
@@ -90,13 +168,27 @@ export function applyPreset(o: TextOverlay, p: TextPreset): TextOverlay {
 
 // --- Mise en page du texte ---
 
+/**
+ * Police au format CSS du Canvas (`ctx.font`), avec des polices de secours.
+ * @param o - texte
+ * @param px - taille de la police, en pixels
+ * @returns la description de la police
+ */
 export function fontString(o: TextOverlay, px: number): string {
   return `${o.font.italic ? 'italic ' : ''}${o.font.weight} ${px}px "${o.font.family}", system-ui, sans-serif`
 }
 
+/** Hauteur d'une ligne de texte, en multiple de la taille de la police. */
 export const LINE_HEIGHT = 1.2
 
-/** Découpe en lignes : retours à la ligne saisis, puis coupure aux espaces sous la largeur max. */
+/**
+ * Découpe un texte en lignes : retours à la ligne saisis, puis coupure aux espaces sous la largeur max.
+ * Un mot plus long que la largeur max reste seul sur sa ligne, sans être coupé.
+ * @param measure - largeur d'un texte, en pixels
+ * @param text - texte à découper
+ * @param maxWidth - largeur maximale d'une ligne, en pixels
+ * @returns les lignes, sans espaces en fin de ligne
+ */
 export function wrapLines(measure: (s: string) => number, text: string, maxWidth: number): string[] {
   const out: string[] = []
   for (const para of text.split('\n')) {
@@ -114,18 +206,32 @@ export function wrapLines(measure: (s: string) => number, text: string, maxWidth
   return out
 }
 
+/** Mise en page d'un texte, en pixels, pour une taille de collage donnée. */
 export interface TextLayout {
+  /** Taille de la police, en pixels. */
   px: number
+  /** Lignes, après découpe. */
   lines: string[]
+  /** Largeur de chaque ligne, en pixels. */
   widths: number[]
+  /** Hauteur d'une ligne, en pixels. */
   lineHeight: number
-  /** Taille du bloc de texte, sans l'étiquette. */
+  /** Largeur du bloc de texte, sans l'étiquette, en pixels. */
   textW: number
+  /** Hauteur du bloc de texte, sans l'étiquette, en pixels. */
   textH: number
   /** Marge de l'étiquette, en pixels (0 si pas d'étiquette). */
   pad: number
 }
 
+/**
+ * Met en page un texte : taille de police, découpe en lignes et dimensions du bloc.
+ * @param ctx - contexte de dessin, qui sert à mesurer (sa police est modifiée)
+ * @param o - texte
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @returns la mise en page, en pixels
+ */
 export function layoutText(ctx: Ctx, o: TextOverlay, width: number, height: number): TextLayout {
   const px = Math.max(1, o.size * Math.min(width, height))
   ctx.font = fontString(o, px)
@@ -143,7 +249,12 @@ export function layoutText(ctx: Ctx, o: TextOverlay, width: number, height: numb
   }
 }
 
+/** Contexte de dessin réservé aux mesures de texte, créé au premier besoin. */
 let measureCtx: Ctx | null = null
+/**
+ * Contexte de dessin réservé aux mesures de texte.
+ * @returns le contexte, partagé
+ */
 function measuring(): Ctx {
   if (!measureCtx) {
     const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(8, 8) : document.createElement('canvas')
@@ -152,7 +263,13 @@ function measuring(): Ctx {
   return measureCtx
 }
 
-/** Taille en pixels du cadre de sélection d'un élément, pour un collage de taille (width, height). */
+/**
+ * Taille en pixels du cadre de sélection d'un élément (étiquette comprise pour un texte).
+ * @param o - élément
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @returns largeur et hauteur du cadre, en pixels, avant rotation
+ */
 export function overlayBox(o: Overlay, width: number, height: number): { w: number; h: number } {
   const unit = Math.min(width, height)
   if (o.type === 'text') {
@@ -165,6 +282,14 @@ export function overlayBox(o: Overlay, width: number, height: number): { w: numb
 
 // --- Dessin ---
 
+/**
+ * Dessine un texte et ses effets autour de l'origine du contexte (déjà placée et tournée) :
+ * étiquette, lueur, ombre, contour, puis le texte.
+ * @param ctx - contexte de dessin
+ * @param o - texte
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ */
 function drawText(ctx: Ctx, o: TextOverlay, width: number, height: number) {
   const l = layoutText(ctx, o, width, height)
   const e = o.effects
@@ -186,7 +311,7 @@ function drawText(ctx: Ctx, o: TextOverlay, width: number, height: number) {
     const w = l.textW + 2 * l.pad
     const h = l.textH + 2 * l.pad
     ctx.beginPath()
-    ctx.roundRect(-w / 2, -h / 2, w, h, Math.min(w, h) / 2 * e.label.radius)
+    ctx.roundRect(-w / 2, -h / 2, w, h, (Math.min(w, h) / 2) * e.label.radius)
     ctx.fillStyle = e.label.color
     ctx.fill()
   }
@@ -221,8 +346,13 @@ function drawText(ctx: Ctx, o: TextOverlay, width: number, height: number) {
 }
 
 /**
- * Dessine un élément. Les icônes et images ont besoin d'une source déjà décodée (`img`) ;
- * sans elle (aperçu en cours de chargement), rien n'est dessiné.
+ * Dessine un élément à sa place, tourné et avec son opacité. Les icônes et images ont besoin d'une
+ * source déjà décodée (`img`) ; sans elle (aperçu en cours de chargement), rien n'est dessiné.
+ * @param ctx - contexte de dessin
+ * @param o - élément
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param img - image décodée, pour une icône ou une image
  */
 export function drawOverlay(ctx: Ctx, o: Overlay, width: number, height: number, img?: Drawable) {
   if (o.type !== 'text' && !img) return
@@ -241,12 +371,21 @@ export function drawOverlay(ctx: Ctx, o: Overlay, width: number, height: number,
 
 // --- Icônes : SVG vers image ---
 
-/** SVG de l'icône avec sa couleur (les icônes d'une couleur utilisent currentColor). */
+/**
+ * SVG de l'icône avec sa couleur (les icônes d'une couleur utilisent `currentColor`).
+ * @param o - icône
+ * @returns le SVG, couleur remplacée s'il y en a une
+ */
 export function coloredSvg(o: IconOverlay): string {
   return o.color ? o.svg.replace(/currentColor/g, o.color) : o.svg
 }
 
-/** Décode le SVG d'une icône à la taille voulue (plus grand côté, en pixels). */
+/**
+ * Décode le SVG d'une icône en image carrée.
+ * @param o - icône
+ * @param side - côté voulu, en pixels (16 au moins)
+ * @returns l'image décodée, à libérer avec `close()`
+ */
 export async function rasterizeIcon(o: IconOverlay, side: number): Promise<Drawable & { close(): void }> {
   const s = Math.max(16, Math.ceil(side))
   const svg = coloredSvg(o).replace(/width="\d+" height="\d+"/, `width="${s}" height="${s}"`)
@@ -262,5 +401,9 @@ export async function rasterizeIcon(o: IconOverlay, side: number): Promise<Drawa
   }
 }
 
-/** Clé de cache d'une icône rasterisée : change si la couleur ou l'icône change. */
+/**
+ * Clé de cache d'une icône rasterisée : change si la couleur ou l'icône change.
+ * @param o - icône
+ * @returns la clé
+ */
 export const iconKey = (o: IconOverlay) => `${o.set}:${o.name}:${o.color ?? ''}`

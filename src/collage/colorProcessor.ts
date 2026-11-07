@@ -5,14 +5,20 @@
 import { colorPixel, combine, type ColorParams, type RGB } from './color'
 import type { Drawable } from './render'
 
+/** Photo traitée, à libérer avec `close()` une fois dessinée. */
 export type Processed = Drawable & { close(): void }
 
+/** Shader de sommets : un triangle qui couvre tout le canvas. */
 const VERT = `#version 300 es
 in vec2 p;
 out vec2 v_uv;
 // Image chargée sans retournement (ligne 0 = haut) : on inverse y pour qu'elle sorte à l'endroit.
 void main() { v_uv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }`
 
+/**
+ * Shader de pixels : netteté, réglages, puis look du filtre mélangé selon son intensité.
+ * Les réglages arrivent groupés dans des vecteurs (`u_a0` à `u_a2` pour la photo, `u_l0` à `u_l2` pour le filtre).
+ */
 const FRAG = `#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -66,8 +72,15 @@ void main() {
   o = vec4(base, src.a);
 }`
 
+/** Canvas hors écran si le navigateur le permet, sinon élément `<canvas>`. */
 type AnyCanvas = OffscreenCanvas | HTMLCanvasElement
 
+/**
+ * Crée un canvas de la taille donnée, hors écran si possible.
+ * @param w - largeur, en pixels
+ * @param h - hauteur, en pixels
+ * @returns le canvas
+ */
 function makeCanvas(w: number, h: number): AnyCanvas {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h)
   const c = document.createElement('canvas')
@@ -76,7 +89,14 @@ function makeCanvas(w: number, h: number): AnyCanvas {
   return c
 }
 
-/** Netteté (même noyau que le GLSL), appliquée sur une copie des pixels. */
+/**
+ * Netteté (même noyau que le GLSL), calculée à partir d'une copie des pixels d'origine.
+ * @param px - pixels RGBA, modifiés sur place
+ * @param w - largeur de l'image, en pixels
+ * @param h - hauteur de l'image, en pixels
+ * @param amount - intensité, de 0 (rien) à 1
+ * @returns `px`, modifié
+ */
 function sharpenCpu(px: Uint8ClampedArray, w: number, h: number, amount: number) {
   if (amount <= 0) return px
   const src = px.slice()
@@ -99,6 +119,14 @@ function sharpenCpu(px: Uint8ClampedArray, w: number, h: number, amount: number)
   return px
 }
 
+/**
+ * Applique réglages et filtre à une image sur le processeur (secours sans WebGL 2, et tests).
+ * @param source - image d'origine
+ * @param w - largeur du résultat, en pixels
+ * @param h - hauteur du résultat, en pixels
+ * @param p - paramètres du traitement
+ * @returns la photo traitée
+ */
 export function processPhotoCpu(source: CanvasImageSource, w: number, h: number, p: ColorParams): Processed {
   const canvas = makeCanvas(w, h)
   const ctx = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -121,18 +149,30 @@ export function processPhotoCpu(source: CanvasImageSource, w: number, h: number,
   return { source: canvas, width: w, height: h, close: () => {} }
 }
 
+/** Contexte WebGL 2 prêt à traiter des photos, partagé par toutes les photos. */
 interface Gl {
   gl: WebGL2RenderingContext
+  /** Canvas du contexte, redimensionné à chaque photo. */
   canvas: AnyCanvas
   prog: WebGLProgram
+  /** Emplacement de chaque variable `uniform` du shader, par nom. */
   u: Record<string, WebGLUniformLocation | null>
+  /** Plus grand côté de texture accepté par la carte graphique, en pixels. */
   maxSize: number
 }
 
+/**
+ * Crée le contexte WebGL 2 et compile les shaders.
+ * @returns le contexte prêt, ou `null` si WebGL 2 est indisponible ou si la compilation échoue
+ */
 function initGl(): Gl | null {
   try {
     const canvas = makeCanvas(1, 1)
-    const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false }) as WebGL2RenderingContext | null
+    const gl = canvas.getContext('webgl2', {
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: true,
+      antialias: false,
+    }) as WebGL2RenderingContext | null
     if (!gl) return null
     const compile = (type: number, src: string) => {
       const s = gl.createShader(type)!
@@ -156,7 +196,22 @@ function initGl(): Gl | null {
     // Sans retournement : cette option est ignorée pour les ImageBitmap, on retourne dans le shader.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false)
-    const names = ['u_tex', 'u_texel', 'u_a0', 'u_a1', 'u_a2', 'u_hasLook', 'u_intensity', 'u_mono', 'u_fade', 'u_l0', 'u_l1', 'u_l2', 'u_st', 'u_ht']
+    const names = [
+      'u_tex',
+      'u_texel',
+      'u_a0',
+      'u_a1',
+      'u_a2',
+      'u_hasLook',
+      'u_intensity',
+      'u_mono',
+      'u_fade',
+      'u_l0',
+      'u_l1',
+      'u_l2',
+      'u_st',
+      'u_ht',
+    ]
     const u = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(prog, n)]))
     return { gl, canvas, prog, u, maxSize: gl.getParameter(gl.MAX_TEXTURE_SIZE) as number }
   } catch {
@@ -164,12 +219,21 @@ function initGl(): Gl | null {
   }
 }
 
+/** Contexte partagé : `undefined` tant qu'il n'a pas été essayé, `null` si WebGL 2 est indisponible. */
 let shared: Gl | null | undefined
 
-/** Textures déjà envoyées à la carte graphique : un curseur de réglage ne renvoie pas 20 photos par image. */
+/** Nombre de textures gardées sur la carte graphique. */
 const MAX_TEXTURES = 24
+/** Textures déjà envoyées à la carte graphique, de la plus ancienne à la plus récente : un curseur de réglage ne renvoie pas 20 photos par image. */
 const textures = new Map<TexImageSource, WebGLTexture>()
 
+/**
+ * Texture d'une image, envoyée à la carte graphique au premier usage puis réutilisée.
+ * La plus anciennement utilisée est supprimée au-delà de {@link MAX_TEXTURES}.
+ * @param g - contexte WebGL
+ * @param source - image d'origine
+ * @returns la texture
+ */
 function textureFor(g: Gl, source: TexImageSource): WebGLTexture {
   const { gl } = g
   const hit = textures.get(source)
@@ -195,7 +259,10 @@ function textureFor(g: Gl, source: TexImageSource): WebGLTexture {
   return tex
 }
 
-/** À appeler quand une image source est libérée (bitmap fermé). */
+/**
+ * Supprime la texture d'une image ; à appeler quand l'image source est libérée (bitmap fermé).
+ * @param source - image d'origine
+ */
 export function forgetTexture(source: TexImageSource) {
   const tex = textures.get(source)
   if (!tex) return
@@ -203,6 +270,15 @@ export function forgetTexture(source: TexImageSource) {
   shared?.gl.deleteTexture(tex)
 }
 
+/**
+ * Applique réglages et filtre à une image sur la carte graphique.
+ * @param g - contexte WebGL
+ * @param source - image d'origine
+ * @param w - largeur du résultat, en pixels
+ * @param h - hauteur du résultat, en pixels
+ * @param p - paramètres du traitement
+ * @returns une copie du résultat, car le canvas WebGL est réutilisé pour la photo suivante
+ */
 function processGl(g: Gl, source: TexImageSource, w: number, h: number, p: ColorParams): Processed {
   const { gl, canvas, u } = g
   if (canvas.width !== w) canvas.width = w
@@ -216,7 +292,18 @@ function processGl(g: Gl, source: TexImageSource, w: number, h: number, p: Color
   gl.uniform4f(u.u_a1, a.shadows, a.warmth, a.tint, a.saturation)
   gl.uniform2f(u.u_a2, a.vibrance, a.sharpness)
   const look = p.look
-  const la = { exposure: 0, brightness: 0, contrast: 0, highlights: 0, shadows: 0, warmth: 0, tint: 0, saturation: 0, vibrance: 0, ...(look?.adjust ?? {}) }
+  const la = {
+    exposure: 0,
+    brightness: 0,
+    contrast: 0,
+    highlights: 0,
+    shadows: 0,
+    warmth: 0,
+    tint: 0,
+    saturation: 0,
+    vibrance: 0,
+    ...(look?.adjust ?? {}),
+  }
   gl.uniform1f(u.u_hasLook, look && p.intensity > 0 ? 1 : 0)
   gl.uniform1f(u.u_intensity, p.intensity)
   gl.uniform1f(u.u_mono, look?.mono ? 1 : 0)
@@ -239,7 +326,12 @@ function processGl(g: Gl, source: TexImageSource, w: number, h: number, p: Color
 
 /**
  * Applique réglages et filtre à une image, à la taille (w, h). Carte graphique si possible ;
- * sinon (ou image plus grande que ce qu'elle accepte), calcul sur le processeur.
+ * sinon (ou image plus grande que ce qu'elle accepte, ou erreur WebGL), calcul sur le processeur.
+ * @param source - image d'origine
+ * @param w - largeur du résultat, en pixels
+ * @param h - hauteur du résultat, en pixels
+ * @param p - paramètres du traitement
+ * @returns la photo traitée, à libérer avec `close()`
  */
 export function processPhoto(source: CanvasImageSource & TexImageSource, w: number, h: number, p: ColorParams): Processed {
   if (shared === undefined) shared = initGl()
@@ -259,7 +351,10 @@ export function processPhoto(source: CanvasImageSource & TexImageSource, w: numb
   return processPhotoCpu(source, w, h, p)
 }
 
-/** Pour les tests et le diagnostic : moteur utilisé. */
+/**
+ * Moteur de traitement utilisé (pour les tests et le diagnostic).
+ * @returns `webgl` si la carte graphique est utilisable, sinon `cpu`
+ */
 export function processorKind(): 'webgl' | 'cpu' {
   if (shared === undefined) shared = initGl()
   return shared ? 'webgl' : 'cpu'

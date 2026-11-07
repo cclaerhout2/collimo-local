@@ -7,20 +7,56 @@ import type { Pt } from '../path'
 import { splitPoly, type CellDef, type EdgeCut, type ShapeName } from '../shapes'
 import type { Layout } from '../types'
 
+/** Case rectangulaire. */
 type Rect = Extract<CellDef, { kind: 'rect' }>
+/** Case polygonale. */
 type Poly = Extract<CellDef, { kind: 'poly' }>
 
+/** Tolérance d'alignement (fraction du cadre) : deux bords plus proches que cela sont considérés confondus. */
 export const EPS = 0.004
+/** Taille minimale d'une case quand on déplace une séparation (2 % du cadre). */
 const MIN = 0.02
+/**
+ * Arrondit au dix-millième, pour garder un fichier de catalogue lisible et des alignements exacts.
+ * @param v - valeur à arrondir
+ * @returns la valeur arrondie
+ */
 const round = (v: number) => Math.round(v * 10000) / 10000
+/**
+ * Indique si deux nombres sont égaux à `e` près.
+ * @param a - premier nombre
+ * @param b - second nombre
+ * @param e - tolérance
+ * @returns `true` s'ils sont proches
+ */
 const near = (a: number, b: number, e = EPS) => Math.abs(a - b) <= e
+/**
+ * Indique si deux points sont confondus à `e` près sur chaque coordonnée.
+ * @param a - premier point
+ * @param b - second point
+ * @param e - tolérance
+ * @returns `true` s'ils sont confondus
+ */
 const samePt = (a: Pt, b: Pt, e = EPS) => near(a[0], b[0], e) && near(a[1], b[1], e)
 
+/**
+ * Copie profonde d'une liste de cases (les opérations ne modifient jamais leur entrée).
+ * @param cells - cases à copier
+ * @returns la copie
+ */
 const clone = (cells: CellDef[]): CellDef[] => structuredClone(cells)
 
-/** Cases modifiables d'une disposition existante ; les cases posées sur une autre sont marquées « superposées ». */
+/**
+ * Cases modifiables d'une disposition existante ; les cases posées sur une autre sont marquées « superposées ».
+ * @param layout - disposition du catalogue (cases libres `geo`, ou rectangles calculés)
+ * @returns une copie des cases, à éditer dans l'usine
+ * @remarks Une case est jugée superposée si elle recouvre une autre case sur une surface notable
+ * (au moins 4 échantillons et 0,15 % du total), pour ignorer les simples contacts de bord.
+ */
 export function toEditable(layout: Layout): CellDef[] {
-  const cells: CellDef[] = layout.geo ? clone(layout.geo) : layout.cells.map((c) => ({ kind: 'rect', x: round(c.x), y: round(c.y), w: round(c.w), h: round(c.h) }))
+  const cells: CellDef[] = layout.geo
+    ? clone(layout.geo)
+    : layout.cells.map((c) => ({ kind: 'rect', x: round(c.x), y: round(c.y), w: round(c.w), h: round(c.h) }))
   const { pairs, total } = coverage(cells)
   for (const [k, n] of pairs) {
     if (n < Math.max(4, total * 0.0015)) continue
@@ -30,19 +66,44 @@ export function toEditable(layout: Layout): CellDef[] {
   return cells
 }
 
-/** Grille de `cols` × `rows` rectangles, remplie ligne par ligne. */
+/**
+ * Grille de `cols` × `rows` rectangles, remplie ligne par ligne.
+ * @param cols - nombre de colonnes
+ * @param rows - nombre de rangées
+ * @returns les cases rectangulaires
+ */
 export function gridTemplate(cols: number, rows: number): CellDef[] {
   const out: CellDef[] = []
   for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++) out.push({ kind: 'rect', x: round(c / cols), y: round(r / rows), w: round(1 / cols), h: round(1 / rows) })
+    for (let c = 0; c < cols; c++)
+      out.push({ kind: 'rect', x: round(c / cols), y: round(r / rows), w: round(1 / cols), h: round(1 / rows) })
   return out
 }
 
+/**
+ * Convertit un rectangle en polygone à quatre sommets (pour pouvoir en déplacer les sommets ou en découper les bords).
+ * @param c - case rectangulaire
+ * @returns le polygone équivalent, en gardant la marque « superposée »
+ */
 export function rectToPoly(c: Rect): Poly {
   const { x, y, w, h } = c
-  return { kind: 'poly', points: [[x, y], [round(x + w), y], [round(x + w), round(y + h)], [x, round(y + h)]], ...(c.over ? { over: true } : {}) }
+  return {
+    kind: 'poly',
+    points: [
+      [x, y],
+      [round(x + w), y],
+      [round(x + w), round(y + h)],
+      [x, round(y + h)],
+    ],
+    ...(c.over ? { over: true } : {}),
+  }
 }
 
+/**
+ * Centre de gravité d'un polygone.
+ * @param points - sommets du polygone
+ * @returns le centroïde, ou la moyenne des sommets si le polygone est d'aire nulle
+ */
 export function centroid(points: Pt[]): Pt {
   let a = 0
   let cx = 0
@@ -62,7 +123,11 @@ export function centroid(points: Pt[]): Pt {
   return [cx / (3 * a), cy / (3 * a)]
 }
 
-/** Centre d'une case (pour placer son numéro ou une poignée). */
+/**
+ * Centre d'une case (pour placer son numéro ou une poignée).
+ * @param c - case
+ * @returns le centre ; pour un chemin, le centre de la boîte de ses coordonnées
+ */
 export function cellCenter(c: CellDef): Pt {
   if (c.kind === 'rect' || c.kind === 'shape') return [c.x + c.w / 2, c.y + c.h / 2]
   if (c.kind === 'poly') return centroid(c.points)
@@ -72,18 +137,39 @@ export function cellCenter(c: CellDef): Pt {
   return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]
 }
 
-/** Coupe une case en deux, à la verticale (`v`) ou à l'horizontale (`h`) ; la 2e moitié suit la 1re. */
+/**
+ * Coupe une case en deux, à la verticale (`v`) ou à l'horizontale (`h`) ; la 2e moitié suit la 1re.
+ * @param cells - cases actuelles
+ * @param i - indice de la case à couper
+ * @param dir - sens de la coupe
+ * @returns les nouvelles cases, ou `cells` inchangé si la case ne se coupe pas (forme, chemin)
+ */
 export function splitCell(cells: CellDef[], i: number, dir: 'v' | 'h'): CellDef[] {
   const c = cells[i]
   let parts: CellDef[]
   if (c.kind === 'rect') {
     parts =
       dir === 'v'
-        ? [{ ...c, w: round(c.w / 2) }, { ...c, x: round(c.x + c.w / 2), w: round(c.w - round(c.w / 2)) }]
-        : [{ ...c, h: round(c.h / 2) }, { ...c, y: round(c.y + c.h / 2), h: round(c.h - round(c.h / 2)) }]
+        ? [
+            { ...c, w: round(c.w / 2) },
+            { ...c, x: round(c.x + c.w / 2), w: round(c.w - round(c.w / 2)) },
+          ]
+        : [
+            { ...c, h: round(c.h / 2) },
+            { ...c, y: round(c.y + c.h / 2), h: round(c.h - round(c.h / 2)) },
+          ]
   } else if (c.kind === 'poly') {
     const [cx, cy] = centroid(c.points)
-    const [a, b]: [Pt, Pt] = dir === 'v' ? [[cx, -1], [cx, 2]] : [[2, cy], [-1, cy]]
+    const [a, b]: [Pt, Pt] =
+      dir === 'v'
+        ? [
+            [cx, -1],
+            [cx, 2],
+          ]
+        : [
+            [2, cy],
+            [-1, cy],
+          ]
     const halves = splitPoly(c.points, a, b).filter((p) => p.length >= 3)
     if (halves.length < 2) return cells
     parts = halves.map((points) => ({ kind: 'poly', points: points.map(([x, y]) => [round(x), round(y)] as Pt) }))
@@ -91,15 +177,34 @@ export function splitCell(cells: CellDef[], i: number, dir: 'v' | 'h'): CellDef[
   return [...cells.slice(0, i), ...parts, ...cells.slice(i + 1)]
 }
 
+/**
+ * Retire une case.
+ * @param cells - cases actuelles
+ * @param i - indice de la case à retirer
+ * @returns les cases restantes
+ */
 export function removeCell(cells: CellDef[], i: number): CellDef[] {
   return cells.filter((_, k) => k !== i)
 }
 
+/**
+ * Duplique une case, décalée de 4 % vers le bas à droite pour être visible ; la copie suit l'original.
+ * @param cells - cases actuelles
+ * @param i - indice de la case à dupliquer
+ * @returns les cases avec la copie
+ */
 export function duplicateCell(cells: CellDef[], i: number): CellDef[] {
   const copy = translate(clone([cells[i]])[0], 0.04, 0.04)
   return [...cells.slice(0, i + 1), copy, ...cells.slice(i + 1)]
 }
 
+/**
+ * Décale une case.
+ * @param c - case à décaler
+ * @param dx - décalage horizontal, en fraction du cadre
+ * @param dy - décalage vertical, en fraction du cadre
+ * @returns la case décalée
+ */
 export function translate(c: CellDef, dx: number, dy: number): CellDef {
   if (c.kind === 'rect' || c.kind === 'shape') return { ...c, x: round(c.x + dx), y: round(c.y + dy) }
   if (c.kind === 'poly') return { ...c, points: c.points.map(([x, y]) => [round(x + dx), round(y + dy)] as Pt) }
@@ -107,15 +212,29 @@ export function translate(c: CellDef, dx: number, dy: number): CellDef {
   return { ...c, d }
 }
 
+/**
+ * Déplace une case de la liste.
+ * @param cells - cases actuelles
+ * @param i - indice de la case à déplacer
+ * @param dx - décalage horizontal, en fraction du cadre
+ * @param dy - décalage vertical, en fraction du cadre
+ * @returns les nouvelles cases
+ */
 export function moveCell(cells: CellDef[], i: number, dx: number, dy: number): CellDef[] {
   return cells.map((c, k) => (k === i ? translate(c, dx, dy) : c))
 }
 
+/** Côté d'une case rectangulaire. */
 export type Side = 'left' | 'right' | 'top' | 'bottom'
 
 /**
  * Déplace une séparation : le côté `side` de la case rectangulaire `i`, avec tous les côtés alignés
  * qui le prolongent (cases voisines, sommets de polygones posés dessus). Les cases gardent au moins 2 %.
+ * @param cells - cases actuelles
+ * @param i - indice de la case rectangulaire saisie
+ * @param side - côté saisi
+ * @param to - nouvelle position de la séparation (abscisse ou ordonnée, en fraction du cadre)
+ * @returns les nouvelles cases, ou `cells` inchangé si la case n'est pas un rectangle
  */
 export function dragSeparator(cells: CellDef[], i: number, side: Side, to: number): CellDef[] {
   const c = cells[i]
@@ -185,7 +304,14 @@ export function dragSeparator(cells: CellDef[], i: number, side: Side, to: numbe
   return out
 }
 
-/** Déplace un sommet de polygone, et les sommets confondus des polygones voisins (la mosaïque reste jointive). */
+/**
+ * Déplace un sommet de polygone, et les sommets confondus des polygones voisins (la mosaïque reste jointive).
+ * @param cells - cases actuelles
+ * @param i - indice du polygone
+ * @param k - indice du sommet
+ * @param to - nouvelle position, ramenée dans le cadre
+ * @returns les nouvelles cases, ou `cells` inchangé si la case n'est pas un polygone
+ */
 export function movePoint(cells: CellDef[], i: number, k: number, to: Pt): CellDef[] {
   const c = cells[i]
   if (c.kind !== 'poly') return cells
@@ -198,7 +324,13 @@ export function movePoint(cells: CellDef[], i: number, k: number, to: Pt): CellD
   })
 }
 
-/** Ajoute un sommet au milieu du côté `k` (et dans la case voisine qui partage ce côté). */
+/**
+ * Ajoute un sommet au milieu du côté `k` (et dans la case voisine qui partage ce côté).
+ * @param cells - cases actuelles
+ * @param i - indice de la case (un rectangle devient polygone)
+ * @param k - indice du côté (du sommet k au sommet k + 1)
+ * @returns les nouvelles cases
+ */
 export function insertPoint(cells: CellDef[], i: number, k: number): CellDef[] {
   let out = cells.map((c, n) => (n === i && c.kind === 'rect' ? rectToPoly(c) : c))
   const c = out[i]
@@ -222,6 +354,13 @@ export function insertPoint(cells: CellDef[], i: number, k: number): CellDef[] {
   return out
 }
 
+/**
+ * Retire un sommet d'un polygone (un polygone garde au moins trois sommets).
+ * @param cells - cases actuelles
+ * @param i - indice du polygone
+ * @param k - indice du sommet
+ * @returns les nouvelles cases, ou `cells` inchangé si le sommet ne peut pas être retiré
+ */
 export function removePoint(cells: CellDef[], i: number, k: number): CellDef[] {
   const c = cells[i]
   if (c.kind !== 'poly' || c.points.length <= 3) return cells
@@ -230,13 +369,24 @@ export function removePoint(cells: CellDef[], i: number, k: number): CellDef[] {
   return cells.map((q, n) => (n === i ? { ...c, points, ...(cuts ? { cuts } : {}) } : q))
 }
 
+/**
+ * Case vue comme polygone.
+ * @param c - case
+ * @returns le polygone (un rectangle est converti), ou `null` pour une forme ou un chemin
+ */
 function polyOf(c: CellDef): Poly | null {
   if (c.kind === 'poly') return c
   if (c.kind === 'rect') return rectToPoly(c)
   return null
 }
 
-/** Position de p le long de [a, b] (0 = a, 1 = b) s'il est sur la droite (a, b), sinon null. */
+/**
+ * Position de p le long de [a, b] (0 = a, 1 = b) s'il est sur la droite (a, b), sinon null.
+ * @param a - début du segment
+ * @param b - fin du segment
+ * @param p - point testé
+ * @returns la position (hors de 0–1 si p est sur la droite mais hors du segment), ou `null`
+ */
 function along(a: Pt, b: Pt, p: Pt): number | null {
   const dx = b[0] - a[0]
   const dy = b[1] - a[1]
@@ -247,7 +397,13 @@ function along(a: Pt, b: Pt, p: Pt): number | null {
   return ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2
 }
 
-/** Insère dans le polygone, sur le côté j, les points donnés qui tombent à l'intérieur de ce côté. */
+/**
+ * Insère dans le polygone, sur le côté j, les points donnés qui tombent à l'intérieur de ce côté.
+ * @param q - polygone
+ * @param j - indice du côté
+ * @param pts - points candidats
+ * @returns le polygone avec les nouveaux sommets (qui reprennent la coupe du côté), ou `q` s'il n'y en a pas
+ */
 function splitEdgeAt(q: Poly, j: number, pts: Pt[]): Poly {
   const a = q.points[j]
   const b = q.points[(j + 1) % q.points.length]
@@ -265,6 +421,11 @@ function splitEdgeAt(q: Poly, j: number, pts: Pt[]): Poly {
  * Coupe spéciale (courbe, vague, zigzag, éclair, déchirure) sur le côté `k` de la case `i`, et sur la
  * même portion de séparation dans les cases voisines. Un rectangle devient un polygone ; un côté
  * partagé seulement en partie est d'abord découpé pour que le bord soit identique des deux côtés.
+ * @param cells - cases actuelles
+ * @param i - indice de la case
+ * @param k - indice du côté
+ * @param cut - coupe à poser, ou `null` pour revenir à un bord droit
+ * @returns les nouvelles cases, ou `cells` inchangé pour une forme ou un chemin
  */
 export function applyCut(cells: CellDef[], i: number, k: number, cut: EdgeCut | null): CellDef[] {
   const base = polyOf(cells[i])
@@ -320,16 +481,33 @@ export function applyCut(cells: CellDef[], i: number, k: number, cut: EdgeCut | 
   return out
 }
 
+/**
+ * Crée une case « forme » carrée de la bibliothèque.
+ * @param name - nom de la forme
+ * @param cx - abscisse du centre
+ * @param cy - ordonnée du centre
+ * @param size - côté, en fraction du cadre
+ * @returns la nouvelle case
+ */
 export function shapeCell(name: ShapeName, cx = 0.5, cy = 0.5, size = 0.3): CellDef {
   return { kind: 'shape', shape: name, x: round(cx - size / 2), y: round(cy - size / 2), w: size, h: size }
 }
 
-/** Nouvel ordre : `order[n]` = indice actuel de la case qui devient la n-ième. */
+/**
+ * Réordonne les cases (l'ordre fixe quelle photo va dans quelle case).
+ * @param cells - cases actuelles
+ * @param order - nouvel ordre : `order[n]` = indice actuel de la case qui devient la n-ième
+ * @returns les cases réordonnées
+ */
 export function reorder(cells: CellDef[], order: number[]): CellDef[] {
   return order.map((k) => cells[k])
 }
 
-/** Ordre de lecture automatique (lignes de haut en bas, puis de gauche à droite). */
+/**
+ * Ordre de lecture automatique (lignes de haut en bas, puis de gauche à droite).
+ * @param cells - cases
+ * @returns l'ordre à passer à {@link reorder} ; deux centres à moins de 6 % de hauteur sont sur la même ligne
+ */
 export function readingOrderOf(cells: CellDef[]): number[] {
   const centers = cells.map(cellCenter)
   return centers
@@ -338,5 +516,9 @@ export function readingOrderOf(cells: CellDef[]): number[] {
     .map((x) => x.k)
 }
 
-/** Les cases sont-elles toutes des rectangles ? */
+/**
+ * Indique si les cases sont toutes des rectangles.
+ * @param cells - cases
+ * @returns `true` si aucune n'est un polygone, une forme ou un chemin
+ */
 export const allRects = (cells: CellDef[]) => cells.every((c) => c.kind === 'rect')

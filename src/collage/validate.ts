@@ -7,6 +7,11 @@ import { cellPathFrame } from './cells'
 import type { Pt, Seg } from './path'
 import type { CellDef } from './shapes'
 
+/**
+ * Problème relevé dans une disposition : mauvais nombre de cases, case hors du cadre,
+ * deux cases qui se chevauchent sans le vouloir, case trop petite, ou disposition vide.
+ * Les cases sont désignées par leur indice.
+ */
 export type LayoutIssue =
   | { code: 'count'; expected: number; got: number }
   | { code: 'outside'; cell: number }
@@ -14,15 +19,35 @@ export type LayoutIssue =
   | { code: 'tiny'; cell: number }
   | { code: 'empty' }
 
-/** Contours d'une case en polylignes (courbes découpées), coordonnées du cadre (rapport 1). */
+/**
+ * Contours d'une case en polylignes (courbes découpées), coordonnées du cadre (rapport 1).
+ * @param c - définition de la case
+ * @returns les contours fermés et la règle de remplissage
+ */
 export function cellPolylines(c: CellDef): { rings: Pt[][]; evenodd: boolean } {
   if (c.kind === 'rect') {
-    return { rings: [[[c.x, c.y], [c.x + c.w, c.y], [c.x + c.w, c.y + c.h], [c.x, c.y + c.h]]], evenodd: false }
+    return {
+      rings: [
+        [
+          [c.x, c.y],
+          [c.x + c.w, c.y],
+          [c.x + c.w, c.y + c.h],
+          [c.x, c.y + c.h],
+        ],
+      ],
+      evenodd: false,
+    }
   }
   const f = cellPathFrame(c, 1)!
   return { rings: flatten(f.segs), evenodd: !!f.evenodd }
 }
 
+/**
+ * Découpe les courbes d'un chemin en segments droits.
+ * @param segs - segments absolus du chemin
+ * @param steps - nombre de segments droits par courbe
+ * @returns un contour par sous-chemin (les contours de moins de 3 points sont ignorés)
+ */
 export function flatten(segs: Seg[], steps = 12): Pt[][] {
   const rings: Pt[][] = []
   let ring: Pt[] = []
@@ -58,6 +83,14 @@ export function flatten(segs: Seg[], steps = 12): Pt[][] {
   return rings
 }
 
+/**
+ * Indique si un point est à l'intérieur d'une forme, par lancer de rayon vers la droite.
+ * @param rings - contours fermés de la forme
+ * @param evenodd - règle pair-impair (sinon règle non nulle, celle du Canvas par défaut)
+ * @param x - abscisse du point
+ * @param y - ordonnée du point
+ * @returns `true` si le point est dans la forme
+ */
 export function pointIn(rings: Pt[][], evenodd: boolean, x: number, y: number): boolean {
   let winding = 0
   let crossings = 0
@@ -77,7 +110,14 @@ export function pointIn(rings: Pt[][], evenodd: boolean, x: number, y: number): 
   return evenodd ? crossings % 2 === 1 : winding !== 0
 }
 
-/** Part de la surface du cadre couverte par chaque case, et paires de cases qui se chevauchent. */
+/**
+ * Part de la surface du cadre couverte par chaque case, et paires de cases qui se chevauchent,
+ * par échantillonnage au centre de chaque maille d'une grille.
+ * @param cells - cases de la disposition, coordonnées du cadre (0–1)
+ * @param grid - nombre de mailles par côté
+ * @returns la part couverte par chaque case (0–1), le nombre de points communs par paire (clé `"a-b"`),
+ * la boîte englobante de chaque case et le nombre total de points
+ */
 export function coverage(cells: CellDef[], grid = 100) {
   const shapes = cells.map(cellPolylines)
   const boxes = shapes.map(({ rings }) => {
@@ -110,7 +150,12 @@ export function coverage(cells: CellDef[], grid = 100) {
   return { area: area.map((n) => n / total), pairs, boxes, total }
 }
 
-/** Problèmes d'une disposition ; liste vide = publiable. */
+/**
+ * Problèmes d'une disposition ; liste vide = publiable.
+ * @param cells - cases de la disposition, coordonnées du cadre (0–1)
+ * @param photos - nombre de photos annoncé
+ * @returns les problèmes relevés
+ */
 export function validateCells(cells: CellDef[], photos: number): LayoutIssue[] {
   if (!cells.length) return [{ code: 'empty' }]
   const issues: LayoutIssue[] = []

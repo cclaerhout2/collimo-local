@@ -1,11 +1,31 @@
+/**
+ * Dispositions « en forme » du catalogue pour 3 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { Pt } from '../path'
 import { cutFrame, edgePoints, path, pieDisc, poly, rect, shape, shapeAt, SHAPES } from '../shapes'
 import type { LayoutDef } from '../types'
 
-/** Forme de la bibliothèque (carré unité) recopiée en chemin dans le rectangle (x, y, w, h) du cadre. */
+/**
+ * Forme de la bibliothèque (carré unité) recopiée en chemin dans le rectangle (x, y, w, h) du cadre.
+ * @param d - chemin SVG de la forme, dans le carré unité
+ * @param x - bord gauche du rectangle
+ * @param y - bord haut du rectangle
+ * @param w - largeur du rectangle
+ * @param h - hauteur du rectangle
+ * @returns le chemin transformé, coordonnées arrondies à 4 décimales
+ */
 const place = (d: string, x: number, y: number, w: number, h: number) =>
-  d.replace(/(-?\d*\.?\d+)\s+(-?\d*\.?\d+)/g, (_, a: string, b: string) => `${(x + Number(a) * w).toFixed(4)} ${(y + Number(b) * h).toFixed(4)}`)
+  d.replace(
+    /(-?\d*\.?\d+)\s+(-?\d*\.?\d+)/g,
+    (_, a: string, b: string) => `${(x + Number(a) * w).toFixed(4)} ${(y + Number(b) * h).toFixed(4)}`,
+  )
 
+/**
+ * Copie d'une suite de points en ordre inverse (pour parcourir une déchirure dans l'autre sens).
+ * @param p - points à inverser
+ * @returns une nouvelle liste, l'original reste intact
+ */
 const rev = (p: Pt[]) => [...p].reverse()
 // Déchirures de p03-27 : verticale en deux moitiés, horizontale à gauche.
 const V1 = edgePoints([0.55, 0], [0.55, 0.5], 'torn', 0.04, 3, 21)
@@ -14,7 +34,21 @@ const H = edgePoints([0, 0.5], [0.55, 0.5], 'torn', 0.04, 3, 23)
 
 /** Dispositions en forme pour 3 photo(s) (étape 6), numérotées comme dans l'inventaire. */
 export const P03_FORMES: LayoutDef[] = [
-  { id: 'p03-09', photos: 3, family: 'coupe', geo: cutFrame([[[0, 0.27], [1, 0.37]], [[0, 0.75], [1, 0.62]]]) },
+  {
+    id: 'p03-09',
+    photos: 3,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0, 0.27],
+        [1, 0.37],
+      ],
+      [
+        [0, 0.75],
+        [1, 0.62],
+      ],
+    ]),
+  },
   {
     id: 'p03-10',
     photos: 3,
@@ -33,8 +67,18 @@ export const P03_FORMES: LayoutDef[] = [
     family: 'coupe',
     geo: [poly([0, 0], [0.5, 1], [0, 1]), poly([0, 0], [1, 0], [0.5, 1]), poly([1, 0], [1, 1], [0.5, 1])],
   },
-  { id: 'p03-14', photos: 3, family: 'incrustation', geo: [rect(0, 0, 1, 0.5), rect(0, 0.5, 1, 0.5), path(place(SHAPES.circle, 0.27, 0.27, 0.46, 0.46))] },
-  { id: 'p03-15', photos: 3, family: 'incrustation', geo: [rect(0, 0, 1, 0.5), rect(0, 0.5, 1, 0.5), path(place(SHAPES.heart, 0.25, 0.27, 0.5, 0.46))] },
+  {
+    id: 'p03-14',
+    photos: 3,
+    family: 'incrustation',
+    geo: [rect(0, 0, 1, 0.5), rect(0, 0.5, 1, 0.5), path(place(SHAPES.circle, 0.27, 0.27, 0.46, 0.46))],
+  },
+  {
+    id: 'p03-15',
+    photos: 3,
+    family: 'incrustation',
+    geo: [rect(0, 0, 1, 0.5), rect(0, 0.5, 1, 0.5), path(place(SHAPES.heart, 0.25, 0.27, 0.5, 0.46))],
+  },
   {
     id: 'p03-16',
     photos: 3,
@@ -45,8 +89,27 @@ export const P03_FORMES: LayoutDef[] = [
       path(place(SHAPES.circle, 0.3, 0.28, 0.44, 0.44)),
     ],
   },
-  { id: 'p03-20', photos: 3, family: 'coupe', geo: cutFrame([[[0, 0.4], [1, 0.22]], [[0, 0.78], [1, 0.6]]]) },
-  { id: 'p03-21', photos: 3, family: 'geometrie', geo: [shapeAt('hexagon', 0.49, 0.29, 0.529), shapeAt('hexagon', 0.28, 0.68, 0.529), shapeAt('hexagon', 0.7, 0.68, 0.529)] },
+  {
+    id: 'p03-20',
+    photos: 3,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0, 0.4],
+        [1, 0.22],
+      ],
+      [
+        [0, 0.78],
+        [1, 0.6],
+      ],
+    ]),
+  },
+  {
+    id: 'p03-21',
+    photos: 3,
+    family: 'geometrie',
+    geo: [shapeAt('hexagon', 0.49, 0.29, 0.529), shapeAt('hexagon', 0.28, 0.68, 0.529), shapeAt('hexagon', 0.7, 0.68, 0.529)],
+  },
   {
     id: 'p03-22',
     photos: 3,
@@ -60,9 +123,36 @@ export const P03_FORMES: LayoutDef[] = [
       ),
     ],
   },
-  { id: 'p03-23', photos: 3, family: 'ronds', geo: [shapeAt('circle', 0.32, 0.28, 0.483), shapeAt('circle', 0.69, 0.47, 0.506), shapeAt('circle', 0.33, 0.71, 0.506)] },
-  { id: 'p03-24', photos: 3, family: 'coeurs', geo: [shapeAt('heart', 0.7, 0.27, 0.480), shapeAt('heart', 0.3, 0.47, 0.480), shapeAt('heart', 0.63, 0.73, 0.480)] },
-  { id: 'p03-25', photos: 3, family: 'coupe', geo: cutFrame([[[0.42, 0], [0.05, 1]], [[0.95, 0], [0.52, 1]]], 'cols') },
+  {
+    id: 'p03-23',
+    photos: 3,
+    family: 'ronds',
+    geo: [shapeAt('circle', 0.32, 0.28, 0.483), shapeAt('circle', 0.69, 0.47, 0.506), shapeAt('circle', 0.33, 0.71, 0.506)],
+  },
+  {
+    id: 'p03-24',
+    photos: 3,
+    family: 'coeurs',
+    geo: [shapeAt('heart', 0.7, 0.27, 0.48), shapeAt('heart', 0.3, 0.47, 0.48), shapeAt('heart', 0.63, 0.73, 0.48)],
+  },
+  {
+    id: 'p03-25',
+    photos: 3,
+    family: 'coupe',
+    geo: cutFrame(
+      [
+        [
+          [0.42, 0],
+          [0.05, 1],
+        ],
+        [
+          [0.95, 0],
+          [0.52, 1],
+        ],
+      ],
+      'cols',
+    ),
+  },
   {
     id: 'p03-26',
     photos: 3,
@@ -118,8 +208,18 @@ export const P03_FORMES: LayoutDef[] = [
       poly([0.08, 0.5], [0.62, 0.5], [0.71, 0.87], [0.29, 0.87]),
     ],
   },
-  { id: 'p03-38', photos: 3, family: 'ronds', geo: [shapeAt('flower', 0.5, 0.27, 0.44), shapeAt('flower', 0.27, 0.72, 0.44), shapeAt('flower', 0.73, 0.72, 0.44)] },
-  { id: 'p03-39', photos: 3, family: 'illustre', geo: [shapeAt('circle', 0.21, 0.23, 0.36), shapeAt('circle', 0.79, 0.23, 0.36), shapeAt('circle', 0.5, 0.6, 0.68)] },
+  {
+    id: 'p03-38',
+    photos: 3,
+    family: 'ronds',
+    geo: [shapeAt('flower', 0.5, 0.27, 0.44), shapeAt('flower', 0.27, 0.72, 0.44), shapeAt('flower', 0.73, 0.72, 0.44)],
+  },
+  {
+    id: 'p03-39',
+    photos: 3,
+    family: 'illustre',
+    geo: [shapeAt('circle', 0.21, 0.23, 0.36), shapeAt('circle', 0.79, 0.23, 0.36), shapeAt('circle', 0.5, 0.6, 0.68)],
+  },
   {
     id: 'p03-40',
     photos: 3,

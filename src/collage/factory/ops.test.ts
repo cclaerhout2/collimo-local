@@ -11,20 +11,33 @@ const rects = (cells: CellDef[]) => cells.map((c) => (c.kind === 'rect' ? [c.x, 
 describe('usine : opérations sur les cases', () => {
   it('modèle en grille', () => {
     const g = gridTemplate(2, 2)
-    expect(rects(g)).toEqual([[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]])
+    expect(rects(g)).toEqual([
+      [0, 0, 0.5, 0.5],
+      [0.5, 0, 0.5, 0.5],
+      [0, 0.5, 0.5, 0.5],
+      [0.5, 0.5, 0.5, 0.5],
+    ])
     expect(validateCells(g, 4)).toEqual([])
   })
 
   it('coupe une case en deux', () => {
     const g = splitCell(gridTemplate(1, 1), 0, 'v')
-    expect(rects(g)).toEqual([[0, 0, 0.5, 1], [0.5, 0, 0.5, 1]])
+    expect(rects(g)).toEqual([
+      [0, 0, 0.5, 1],
+      [0.5, 0, 0.5, 1],
+    ])
     expect(validateCells(g, 2)).toEqual([])
   })
 
   it('déplace une séparation sur toute sa longueur', () => {
     // 2 × 2 : la séparation verticale traverse les deux rangées.
     const g = dragSeparator(gridTemplate(2, 2), 0, 'right', 0.3)
-    expect(rects(g)).toEqual([[0, 0, 0.3, 0.5], [0.3, 0, 0.7, 0.5], [0, 0.5, 0.3, 0.5], [0.3, 0.5, 0.7, 0.5]])
+    expect(rects(g)).toEqual([
+      [0, 0, 0.3, 0.5],
+      [0.3, 0, 0.7, 0.5],
+      [0, 0.5, 0.3, 0.5],
+      [0.3, 0.5, 0.7, 0.5],
+    ])
     // Bornée : chaque case garde au moins 2 %.
     expect(rects(dragSeparator(gridTemplate(2, 1), 0, 'right', -1))[0]).toEqual([0, 0, 0.02, 1])
   })
@@ -37,7 +50,10 @@ describe('usine : opérations sur les cases', () => {
       { kind: 'rect', x: 0, y: 0.5, w: 0.3, h: 0.5 },
       { kind: 'rect', x: 0.3, y: 0.5, w: 0.7, h: 0.5 },
     ]
-    expect(rects(dragSeparator(g, 0, 'right', 0.6)).slice(2)).toEqual([[0, 0.5, 0.3, 0.5], [0.3, 0.5, 0.7, 0.5]])
+    expect(rects(dragSeparator(g, 0, 'right', 0.6)).slice(2)).toEqual([
+      [0, 0.5, 0.3, 0.5],
+      [0.3, 0.5, 0.7, 0.5],
+    ])
   })
 
   it('sommets confondus déplacés ensemble', () => {
@@ -99,7 +115,7 @@ describe('validation automatique', () => {
     expect(validateCells([{ kind: 'rect', x: 0.5, y: 0, w: 0.8, h: 1 }], 1).map((i) => i.code)).toEqual(['outside'])
   })
 
-  it('toutes les dispositions du catalogue, une fois reprises dans l\'usine, sont valides', () => {
+  it("toutes les dispositions du catalogue, une fois reprises dans l'usine, sont valides", () => {
     const bad: string[] = []
     for (const l of allLayouts()) {
       const issues = validateCells(toEditable(l), l.photos)

@@ -1,3 +1,4 @@
+/** Catalogue des stickers : emoji Fluent, icônes Phosphor, et images de l'utilisateur prises dans Drive. */
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../../../i18n'
 import {
@@ -13,14 +14,24 @@ import {
   type PhWeight,
 } from '../../../stickers/catalog'
 
+/** Source affichée : un jeu d'icônes, ou « mes images » (Drive). */
 type Source = IconSet | 'mine'
 
+/** Propriétés de {@link StickerBrowser}. */
 interface Props {
+  /** Appelé avec le jeu, le nom et le SVG complet de l'icône choisie. */
   onPickIcon: (set: IconSet, name: string, svg: string) => void
+  /** Ouvre le sélecteur Drive pour ajouter une image en sticker. */
   onPickImage: () => void
 }
 
-/** Miniature d'icône, chargée à l'affichage (les corps SVG arrivent par catégorie). */
+/**
+ * Miniature d'icône, chargée à l'affichage (les corps SVG arrivent par catégorie).
+ *
+ * `weight` est le style Phosphor (trait ou plein). Les icônes Phosphor sont teintées en clair
+ * pour rester visibles sur le fond sombre du panneau.
+ * @returns l'image de l'icône, ou un emplacement vide pendant le chargement
+ */
 function IconThumb({ entry, weight }: { entry: IconEntry; weight: PhWeight }) {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
@@ -39,6 +50,13 @@ function IconThumb({ entry, weight }: { entry: IconEntry; weight: PhWeight }) {
   return src ? <img src={src} alt="" loading="lazy" draggable={false} /> : <span className="sticker-skeleton" />
 }
 
+/**
+ * Catalogue des stickers, avec recherche et filtre par catégorie.
+ *
+ * L'index de chaque jeu n'est chargé qu'à sa première ouverture ; l'affichage est limité à 180 icônes
+ * pour garder une grille fluide.
+ * @returns les sources, la recherche, les catégories et la grille des icônes, ou le bouton d'ajout d'image
+ */
 export function StickerBrowser({ onPickIcon, onPickImage }: Props) {
   const { t, lang } = useI18n()
   const [source, setSource] = useState<Source>('fluent')
@@ -66,8 +84,18 @@ export function StickerBrowser({ onPickIcon, onPickImage }: Props) {
   }, [entries, category, query])
 
   const categories = source === 'ph' ? PH_CATEGORIES : FLUENT_CATEGORIES
+  /**
+   * Nom d'une catégorie dans la langue de l'interface.
+   * @param c - identifiant de la catégorie
+   * @returns son nom traduit, ou l'identifiant à défaut
+   */
   const label = (c: string) => CATEGORY_LABELS[c]?.[lang === 'fr' ? 0 : 1] ?? c
 
+  /**
+   * Ajoute l'icône choisie, dans le style (trait ou plein) sélectionné.
+   * @param e - icône du catalogue
+   * @returns une promesse résolue une fois l'icône transmise
+   */
   async function pick(e: IconEntry) {
     const body = await iconBody(e, weight)
     onPickIcon(e.set, e.name, iconSvg(e.set, body))
@@ -93,12 +121,25 @@ export function StickerBrowser({ onPickIcon, onPickImage }: Props) {
           ))}
         </div>
         {source !== 'mine' && (
-          <input type="search" className="search-input" placeholder={t('sticker.search')} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t('sticker.search')} />
+          <input
+            type="search"
+            className="search-input"
+            placeholder={t('sticker.search')}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label={t('sticker.search')}
+          />
         )}
         {source === 'ph' && (
           <div className="segmented segmented-small">
             {(['regular', 'fill'] as const).map((w) => (
-              <button key={w} type="button" className={weight === w ? 'active' : ''} aria-pressed={weight === w} onClick={() => setWeight(w)}>
+              <button
+                key={w}
+                type="button"
+                className={weight === w ? 'active' : ''}
+                aria-pressed={weight === w}
+                onClick={() => setWeight(w)}
+              >
                 {t(w === 'regular' ? 'sticker.outline' : 'sticker.filled')}
               </button>
             ))}

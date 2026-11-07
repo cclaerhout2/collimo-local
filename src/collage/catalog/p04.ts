@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 4 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 /** Dispositions en rectangles pour 4 photo(s), dans l'ordre des captures de référence. */

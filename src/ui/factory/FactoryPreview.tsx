@@ -1,3 +1,7 @@
+/**
+ * Aperçu de l'usine : la disposition en cours de dessin rendue avec de vraies photos du dossier,
+ * dans plusieurs formats, pour juger du résultat avant de l'enregistrer.
+ */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { defBBox } from '../../collage/cells'
 import type { Drawable } from '../../collage/render'
@@ -8,9 +12,14 @@ import { DEFAULT_BACKGROUND, DEFAULT_BORDERS, DEFAULT_CROP, type CollageDoc, typ
 import type { Photo } from '../../google/types'
 import { useI18n } from '../../i18n'
 
+/** Formats proposés pour l'aperçu. */
 const PREVIEW_RATIOS = ['1:1', '4:5', '9:16', '16:9']
 
-/** Miniatures Drive des photos du dossier en cours, chargées une fois pour tous les aperçus. */
+/**
+ * Charge les miniatures Drive des photos du dossier en cours, une fois pour tous les aperçus.
+ * @param photos - photos du dossier, ou `null` tant qu'elles ne sont pas connues
+ * @returns les images chargées (20 au plus) ; celles qui échouent sont ignorées
+ */
 export function usePreviewImages(photos: Photo[] | null): Drawable[] {
   const [images, setImages] = useState<Drawable[]>([])
   useEffect(() => {
@@ -36,13 +45,20 @@ export function usePreviewImages(photos: Photo[] | null): Drawable[] {
   return images
 }
 
+/** Propriétés de l'aperçu. */
 interface Props {
+  /** Cases de la disposition en cours. */
   cells: CellDef[]
+  /** Décors de la disposition. */
   decor?: Decor[]
+  /** Photos à placer dans les cases, réutilisées en boucle s'il y a plus de cases que de photos. */
   images: Drawable[]
 }
 
-/** Aperçu de la disposition en cours avec de vraies photos, sur plusieurs formats. */
+/**
+ * Aperçu de la disposition en cours avec de vraies photos, sur plusieurs formats.
+ * @returns la section d'aperçu, avec le choix du format
+ */
 export function FactoryPreview({ cells, decor, images }: Props) {
   const { t } = useI18n()
   const [ratio, setRatio] = useState('1:1')
@@ -80,7 +96,9 @@ export function FactoryPreview({ cells, decor, images }: Props) {
     const ctx = el.getContext('2d')
     if (!ctx) return
     try {
-      renderCollage(ctx, doc, layout, el.width, el.height, (i) => (images.length ? images[i % images.length] : undefined), { placeholder: '#3a3a44' })
+      renderCollage(ctx, doc, layout, el.width, el.height, (i) => (images.length ? images[i % images.length] : undefined), {
+        placeholder: '#3a3a44',
+      })
     } catch {
       /* chemin en cours de modification, illisible : on garde l'image précédente */
     }
@@ -91,12 +109,21 @@ export function FactoryPreview({ cells, decor, images }: Props) {
       <h3>{t('factory.preview')}</h3>
       <div className="segmented small" role="radiogroup" aria-label={t('factory.preview')}>
         {PREVIEW_RATIOS.map((r) => (
-          <button key={r} type="button" role="radio" aria-checked={r === ratio} className={r === ratio ? 'active' : ''} onClick={() => setRatio(r)}>
+          <button
+            key={r}
+            type="button"
+            role="radio"
+            aria-checked={r === ratio}
+            className={r === ratio ? 'active' : ''}
+            onClick={() => setRatio(r)}
+          >
             {r}
           </button>
         ))}
       </div>
-      <div className="factory-preview-box">{layout ? <canvas ref={canvas} className="factory-preview-canvas" /> : <p className="muted">{t('factory.preview.none')}</p>}</div>
+      <div className="factory-preview-box">
+        {layout ? <canvas ref={canvas} className="factory-preview-canvas" /> : <p className="muted">{t('factory.preview.none')}</p>}
+      </div>
     </section>
   )
 }

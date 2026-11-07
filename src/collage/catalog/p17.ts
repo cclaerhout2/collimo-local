@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 17 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 const C4 = 'c(x,x,x,x)'
@@ -5,7 +9,14 @@ const C5 = 'c(x,x,x,x,x)'
 const C6 = 'c(x,x,x,x,x,x)'
 const R7 = 'r(x,x,x,x,x,x,x)'
 
-/** Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px. */
+/**
+ * Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px.
+ * @param x1 - bord gauche, en pixels de vignette
+ * @param y1 - bord haut, en pixels de vignette
+ * @param x2 - bord droit, en pixels de vignette
+ * @param y2 - bord bas, en pixels de vignette
+ * @returns le rectangle en coordonnées du cadre (0–1)
+ */
 const px = (x1: number, y1: number, x2: number, y2: number) => ({ x: x1 / 400, y: y1 / 400, w: (x2 - x1) / 400, h: (y2 - y1) / 400 })
 
 /** Dispositions en rectangles pour 17 photo(s), dans l'ordre des captures de référence. */
@@ -20,8 +31,7 @@ export const P17: LayoutDef[] = [
     id: 'p17-02',
     photos: 17,
     family: 'mixte',
-    split:
-      'r(c(63*x, 60*x, 118*x, 79*x), 2*c(63*r(x,x), 60*r(x,x), 118*r(2.6*x, c(x,x)), 79*r(x,x)), c(63*x, 60*x, 118*x, 79*x))',
+    split: 'r(c(63*x, 60*x, 118*x, 79*x), 2*c(63*r(x,x), 60*r(x,x), 118*r(2.6*x, c(x,x)), 79*r(x,x)), c(63*x, 60*x, 118*x, 79*x))',
   },
   {
     id: 'p17-03',

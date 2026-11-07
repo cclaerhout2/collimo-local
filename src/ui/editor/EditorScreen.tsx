@@ -1,3 +1,7 @@
+/**
+ * Écran d'édition d'un collage : aperçu interactif, onglets de réglages (format, disposition, bordures,
+ * fond, filtres, textes, stickers), menu de la photo sélectionnée, annuler / rétablir et export.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../collage/catalog'
 import type { ExportImage } from '../../collage/export'
@@ -23,16 +27,25 @@ import { StickerBrowser } from './overlay/StickerBrowser'
 import { useHistory } from './useHistory'
 import { useOverlayAssets } from './useOverlayAssets'
 
-/** Taille des photos chargées pour l'aperçu (plus grand côté). */
+/** Taille des photos chargées pour l'aperçu (plus grand côté, en pixels de l'image). */
 const PREVIEW_SIDE = 1600
 
+/** Onglet de réglages de l'éditeur. */
 type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'filters' | 'text' | 'stickers'
+/** Onglets, dans l'ordre d'affichage. */
 const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'filters', 'text', 'stickers']
 
-/** Taille maximale des photos traitées pour l'aperçu (plus grand côté). */
+/** Taille maximale des photos traitées (filtres, réglages) pour l'aperçu (plus grand côté, en pixels de l'image). */
 const PROCESSED_SIDE = 1200
 
-/** Petit échantillon RGBA d'une image, pour le réglage automatique. */
+/**
+ * Petit échantillon RGBA d'une image, pour le réglage automatique.
+ *
+ * Réduire l'image avant de lire ses pixels suffit pour des statistiques de couleur et reste rapide.
+ * @param img - image à échantillonner
+ * @param side - plus grand côté de l'échantillon, en pixels
+ * @returns les pixels de l'échantillon, quatre octets (R, V, B, A) par pixel
+ */
 function sampleRgba(img: ImageBitmap, side = 48): Uint8ClampedArray {
   const { width, height } = fitWithin(img.width, img.height, side)
   const c = new OffscreenCanvas(width, height)
@@ -41,18 +54,37 @@ function sampleRgba(img: ImageBitmap, side = 48): Uint8ClampedArray {
   return ctx.getImageData(0, 0, width, height).data
 }
 
-/** Couleur hexadécimale d'un pixel. */
+/**
+ * Couleur hexadécimale d'un pixel.
+ * @param r - rouge, de 0 à 255
+ * @param g - vert, de 0 à 255
+ * @param b - bleu, de 0 à 255
+ * @returns la couleur au format `#rrggbb`
+ */
 export const toHex = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
 
+/** Propriétés de {@link EditorScreen}. */
 interface Props {
+  /** Accès à Google Drive et au sélecteur de fichiers. */
   services: Services
+  /** Dossiers Drive de l'utilisateur (sélecteur, dossier d'enregistrement Collimo). */
   location: Location
+  /** Collage à ouvrir. */
   initialDoc: CollageDoc
+  /** Retour à l'écran précédent. */
   onBack: () => void
+  /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
+  /** Signale une erreur de chargement (photo ou sticker illisible…). */
   onError: (e: unknown) => void
 }
 
+/**
+ * Mélange une liste (algorithme de Fisher-Yates), sans modifier l'original.
+ * @param items - éléments à mélanger
+ * @param random - générateur dans [0, 1[, remplaçable dans les tests
+ * @returns une copie mélangée de la liste
+ */
 export function shuffled<T>(items: readonly T[], random = Math.random): T[] {
   const out = [...items]
   for (let i = out.length - 1; i > 0; i--) {
@@ -62,12 +94,24 @@ export function shuffled<T>(items: readonly T[], random = Math.random): T[] {
   return out
 }
 
-/** Après une suppression : disposition de la même famille pour une photo de moins, sinon la première. */
+/**
+ * Après une suppression : disposition de la même famille pour une photo de moins, sinon la première.
+ * @param photoCount - nombre de photos restantes
+ * @param family - famille de la disposition actuelle
+ * @returns la disposition à appliquer
+ */
 export function nearestLayout(photoCount: number, family: Layout['family']): Layout {
   const candidates = layoutsFor(photoCount)
   return candidates.find((l) => l.family === family) ?? defaultLayoutFor(photoCount)
 }
 
+/**
+ * Écran d'édition d'un collage.
+ *
+ * Les photos sont chargées réduites (trois à la fois) pour l'aperçu ; l'export relit les originaux
+ * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
+ * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
+ */
 export function EditorScreen({ services, location, initialDoc, onBack, onReconnect, onError }: Props) {
   const { t, lang } = useI18n()
   const [selected, setSelected] = useState<number | null>(null)
@@ -105,7 +149,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const photoCount = doc.photos.length
   const layout = useMemo(() => resolveLayout(layoutId, split, photoCount), [layoutId, split, photoCount])
   const ratio = ratioValue(doc.ratio)
-  const photoKey = doc.photos.map((p) => p.id).sort().join('|')
+  const photoKey = doc.photos
+    .map((p) => p.id)
+    .sort()
+    .join('|')
 
   // Chargement des photos de l'aperçu, trois à la fois, réduites pour ménager la mémoire.
   useEffect(() => {
@@ -176,12 +223,20 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   useEffect(() => {
     if (!firstLoaded || sample) return
     const size = fitWithin(firstLoaded.width, firstLoaded.height, 120)
-    void createImageBitmap(firstLoaded.source, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' }).then(setSample)
+    void createImageBitmap(firstLoaded.source, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' }).then(
+      setSample,
+    )
   }, [firstLoaded, sample])
 
-  /** Réglage automatique : d'après la photo choisie, ou toutes les photos du collage. */
+  /**
+   * Réglage automatique : d'après la photo choisie, ou toutes les photos du collage.
+   * @param scope - `'collage'`, ou l'indice de la photo
+   * @returns les réglages calculés sur les échantillons réunis des photos chargées
+   */
   function autoFor(scope: 'collage' | number): Partial<Adjustments> {
-    const sources = (scope === 'collage' ? doc.photos : [doc.photos[scope]]).map((p) => images.current.get(p.id)).filter((x): x is LoadedImage => !!x)
+    const sources = (scope === 'collage' ? doc.photos : [doc.photos[scope]])
+      .map((p) => images.current.get(p.id))
+      .filter((x): x is LoadedImage => !!x)
     const chunks = sources.map((img) => sampleRgba(img.source))
     const all = new Uint8ClampedArray(chunks.reduce((s, c) => s + c.length, 0))
     let o = 0
@@ -192,7 +247,18 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     return autoAdjust(all)
   }
 
+  /**
+   * Remplace les réglages appliqués à tout le collage.
+   * @param adjust - nouveaux réglages, ou `undefined` pour les retirer
+   * @returns rien (résultat de `setDoc`)
+   */
   const setCollageAdjust = (adjust: Partial<Adjustments> | undefined) => setDoc((d) => ({ ...d, adjust }))
+  /**
+   * Remplace les réglages propres à une photo.
+   * @param i - indice de la photo
+   * @param adjust - nouveaux réglages, ou `undefined` pour les retirer
+   * @returns rien (résultat de `setDoc`)
+   */
   const setPhotoAdjustValue = (i: number, adjust: Partial<Adjustments> | undefined) =>
     setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, adjust } : p)) }))
   const hasColor = !!doc.filter || !!doc.adjust || doc.photos.some((p) => p.adjust)
@@ -211,6 +277,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     [doc.photos, services],
   )
 
+  /** Taille en pixels de la photo de la case i : celle de l'aperçu chargé, sinon celle connue de Drive. */
   const imageSize = useCallback(
     (i: number) => {
       const p = doc.photos[i]
@@ -222,6 +289,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     [doc.photos],
   )
 
+  /** Sélectionne une photo (ou rien) et quitte les modes en cours (échange, recadrage, réglages, pipette). */
   const select = useCallback((i: number | null) => {
     setSelected(i)
     setSelectedOverlay(null)
@@ -231,6 +299,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setEyedropper(null)
   }, [])
 
+  /** Sélectionne un texte ou un sticker (ou rien) ; désélectionne la photo. */
   const selectOverlay = useCallback((id: string | null) => {
     setSelectedOverlay(id)
     setSelected(null)
@@ -239,11 +308,13 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setEyedropper(null)
   }, [])
 
+  /** Remplace un texte ou un sticker par sa version modifiée (même `id`). */
   const updateOverlay = useCallback(
     (o: Overlay) => setDoc((d) => ({ ...d, overlays: (d.overlays ?? []).map((x) => (x.id === o.id ? o : x)) })),
     [setDoc],
   )
 
+  /** Ajoute un texte ou un sticker au premier plan et le sélectionne. */
   const addOverlay = useCallback(
     (o: Overlay) => {
       setDoc((d) => ({ ...d, overlays: [...(d.overlays ?? []), o] }))
@@ -252,11 +323,19 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     [setDoc, selectOverlay],
   )
 
+  /**
+   * Ajoute un texte et place le curseur dans son champ de saisie.
+   * @param preset - style prédéfini ; à défaut, le style par défaut
+   */
   function addText(preset?: TextPreset) {
     addOverlay(newText(t('text.default'), preset))
     setFocusText((n) => n + 1)
   }
 
+  /**
+   * Ajoute en sticker une image choisie dans Drive ; signale un format non pris en charge.
+   * @returns une promesse résolue une fois le choix traité (les erreurs sont affichées, pas propagées)
+   */
   async function addImageSticker() {
     setNotice(null)
     try {
@@ -273,7 +352,11 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     }
   }
 
-  /** Ordre des éléments : devant (+1) ou derrière (−1). */
+  /**
+   * Ordre des éléments : devant (+1) ou derrière (−1).
+   * @param id - identifiant du texte ou du sticker
+   * @param step - `1` pour avancer d'un rang, `-1` pour reculer
+   */
   function moveOverlay(id: string, step: 1 | -1) {
     setDoc((d) => {
       const list = [...(d.overlays ?? [])]
@@ -285,7 +368,11 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     })
   }
 
-  /** Pipette : couleur du pixel touché sur l'aperçu. */
+  /**
+   * Pipette : couleur du pixel touché sur l'aperçu, transmise au réglage qui l'a demandée.
+   * @param x - abscisse en pixels CSS, depuis le bord gauche de l'aperçu
+   * @param y - ordonnée en pixels CSS, depuis le bord haut de l'aperçu
+   */
   function pickColorAt(x: number, y: number) {
     const canvas = canvasEl.current
     const apply = eyedropper
@@ -312,21 +399,33 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo])
 
-  const setCrop = useCallback((i: number, crop: Crop) => {
-    setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, crop } : p)) }))
-  }, [setDoc])
+  /** Remplace le cadrage de la photo d'indice `i`. */
+  const setCrop = useCallback(
+    (i: number, crop: Crop) => {
+      setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, crop } : p)) }))
+    },
+    [setDoc],
+  )
 
-  const swap = useCallback((a: number, b: number) => {
-    setDoc((d) => {
-      const photos = [...d.photos]
-      ;[photos[a], photos[b]] = [photos[b], photos[a]]
-      return { ...d, photos }
-    })
-    setSelected(b)
-    setSwapPick(false)
-  }, [setDoc])
+  /** Échange les photos des cases `a` et `b`, puis sélectionne la case `b`. */
+  const swap = useCallback(
+    (a: number, b: number) => {
+      setDoc((d) => {
+        const photos = [...d.photos]
+        ;[photos[a], photos[b]] = [photos[b], photos[a]]
+        return { ...d, photos }
+      })
+      setSelected(b)
+      setSwapPick(false)
+    },
+    [setDoc],
+  )
 
-  /** Dimensions de la case sélectionnée et de sa photo, pour les réglages au curseur. */
+  /**
+   * Dimensions de la case sélectionnée et de sa photo, pour les réglages au curseur.
+   * @returns la taille de la photo (`img`, en pixels) et celle de la case (`box`, ramenée à un collage
+   * de 1000 unités de long), ou `null` sans sélection ou si la taille de la photo est inconnue
+   */
   function selectedSizes() {
     if (selected === null) return null
     const img = imageSize(selected)
@@ -336,6 +435,14 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     return { img, box: { w: box.w * (ratio >= 1 ? 1000 : 1000 * ratio), h: box.h * (ratio >= 1 ? 1000 / ratio : 1000) } }
   }
 
+  /**
+   * Exécute une action du menu de la photo sélectionnée.
+   *
+   * « Pivoter » arrondit l'angle au quart de tour puis ajoute 90° ; « Supprimer » choisit une disposition
+   * pour une photo de moins.
+   * @param action - action choisie
+   * @returns une promesse résolue une fois l'action faite (« Remplacer » attend le sélecteur Drive)
+   */
   async function onAction(action: PhotoAction) {
     if (selected === null) return
     const photo = doc.photos[selected]
@@ -343,13 +450,13 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setNotice(null)
     if (action === 'swap') setSwapPick((v) => !v)
     else if (action === 'flip') setCrop(selected, { ...photo.crop, flip: !photo.crop.flip })
-    else if (action === 'rotate' && s) setCrop(selected, rotateTo(photo.crop, s.img, s.box, normalizeAngle(Math.round(photo.crop.angle / 90) * 90 + 90)))
+    else if (action === 'rotate' && s)
+      setCrop(selected, rotateTo(photo.crop, s.img, s.box, normalizeAngle(Math.round(photo.crop.angle / 90) * 90 + 90)))
     else if (action === 'crop') setCropMode(true)
     else if (action === 'adjust') {
       setAdjustScope('photo')
       setPhotoAdjust(true)
-    }
-    else if (action === 'delete' && doc.photos.length > 1) {
+    } else if (action === 'delete' && doc.photos.length > 1) {
       const next = nearestLayout(doc.photos.length - 1, layout.family)
       setDoc((d) => ({ ...d, photos: d.photos.filter((_, k) => k !== selected), layoutId: next.id, split: undefined }))
       select(null)
@@ -365,7 +472,9 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         const index = selected
         setDoc((d) => ({
           ...d,
-          photos: d.photos.map((x, k) => (k === index ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } } : x)),
+          photos: d.photos.map((x, k) =>
+            k === index ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } } : x,
+          ),
         }))
       } catch (e) {
         setNotice(toUiError(e))
@@ -394,11 +503,47 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
                 : ''}
         </span>
         <div className="history-buttons">
-          <button type="button" className="round-button small" onClick={history.undo} disabled={!history.canUndo} title={t('editor.undo')} aria-label={t('editor.undo')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg>
+          <button
+            type="button"
+            className="round-button small"
+            onClick={history.undo}
+            disabled={!history.canUndo}
+            title={t('editor.undo')}
+            aria-label={t('editor.undo')}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
+            </svg>
           </button>
-          <button type="button" className="round-button small" onClick={history.redo} disabled={!history.canRedo} title={t('editor.redo')} aria-label={t('editor.redo')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" /></svg>
+          <button
+            type="button"
+            className="round-button small"
+            onClick={history.redo}
+            disabled={!history.canRedo}
+            title={t('editor.redo')}
+            aria-label={t('editor.redo')}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
+            </svg>
           </button>
         </div>
         <button type="button" className="btn btn-primary btn-small" onClick={() => setExporting(true)} disabled={!allLoaded}>
@@ -469,7 +614,16 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
             onKeyDown={(e) => e.key === ' ' && setCompare(true)}
             onKeyUp={() => setCompare(false)}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
               <path d="M12 3v18M9 6H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h4M15 6h4a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-4" />
             </svg>
           </button>
@@ -549,63 +703,87 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
             </div>
           ) : (
             <div className="panel">
-              <PhotoMenu canDelete={doc.photos.length > 1} swapPick={swapPick} onAction={(a) => void onAction(a)} onDone={() => select(null)} />
+              <PhotoMenu
+                canDelete={doc.photos.length > 1}
+                swapPick={swapPick}
+                onAction={(a) => void onAction(a)}
+                onDone={() => select(null)}
+              />
             </div>
           )
         ) : (
           <>
-        <div className="tabs" role="tablist">
-          {TABS.map((id) => (
-            <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
-              {t(`editor.tab.${id}`)}
-            </button>
-          ))}
-        </div>
-        <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
-          {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
-          {tab === 'layout' && (
-            <LayoutPanel photoCount={doc.photos.length} value={layout.id} onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))} />
-          )}
-          {tab === 'borders' && (
-            <BordersPanel
-              value={doc.borders}
-              onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
-              shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
-            />
-          )}
-          {tab === 'background' && <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />}
-          {tab === 'filters' && (
-            <div className="filters-tab">
-              <div className="segmented segmented-small">
-                {(['filters', 'adjust'] as const).map((m) => (
-                  <button key={m} type="button" className={filterMode === m ? 'active' : ''} aria-pressed={filterMode === m} onClick={() => setFilterMode(m)}>
-                    {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
+            <div className="tabs" role="tablist">
+              {TABS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  className={tab === id ? 'active' : ''}
+                  onClick={() => setTab(id)}
+                >
+                  {t(`editor.tab.${id}`)}
+                </button>
+              ))}
+            </div>
+            <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
+              {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
+              {tab === 'layout' && (
+                <LayoutPanel
+                  photoCount={doc.photos.length}
+                  value={layout.id}
+                  onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))}
+                />
+              )}
+              {tab === 'borders' && (
+                <BordersPanel
+                  value={doc.borders}
+                  onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
+                  shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
+                />
+              )}
+              {tab === 'background' && (
+                <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />
+              )}
+              {tab === 'filters' && (
+                <div className="filters-tab">
+                  <div className="segmented segmented-small">
+                    {(['filters', 'adjust'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={filterMode === m ? 'active' : ''}
+                        aria-pressed={filterMode === m}
+                        onClick={() => setFilterMode(m)}
+                      >
+                        {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
+                      </button>
+                    ))}
+                  </div>
+                  {filterMode === 'filters' ? (
+                    <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
+                  ) : (
+                    <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
+                  )}
+                </div>
+              )}
+              {tab === 'text' && (
+                <div className="text-tab">
+                  <button type="button" className="btn btn-primary" onClick={() => addText()}>
+                    {t('text.add')}
                   </button>
-                ))}
-              </div>
-              {filterMode === 'filters' ? (
-                <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
-              ) : (
-                <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
+                  <p className="panel-note">{t('text.stylesHint')}</p>
+                  <PresetGrid onPick={(p) => addText(p)} />
+                </div>
+              )}
+              {tab === 'stickers' && (
+                <StickerBrowser
+                  onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
+                  onPickImage={() => void addImageSticker()}
+                />
               )}
             </div>
-          )}
-          {tab === 'text' && (
-            <div className="text-tab">
-              <button type="button" className="btn btn-primary" onClick={() => addText()}>
-                {t('text.add')}
-              </button>
-              <p className="panel-note">{t('text.stylesHint')}</p>
-              <PresetGrid onPick={(p) => addText(p)} />
-            </div>
-          )}
-          {tab === 'stickers' && (
-            <StickerBrowser
-              onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
-              onPickImage={() => void addImageSticker()}
-            />
-          )}
-        </div>
           </>
         )}
       </div>
@@ -629,9 +807,23 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   )
 }
 
+/**
+ * Icône « Mélanger ».
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
 function ShuffleIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
     </svg>
   )

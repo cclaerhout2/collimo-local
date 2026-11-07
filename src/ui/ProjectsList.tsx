@@ -1,16 +1,27 @@
+/**
+ * Liste des projets de collage déjà enregistrés dans le dossier Collimo, avec leur aperçu.
+ */
 import { useEffect, useState } from 'react'
 import { PROJECT_SUFFIX, projectBaseName } from '../collage/project'
 import { sizedThumbnail } from '../google/drive'
 import type { DriveFileInfo, Services } from '../google/types'
 import { useI18n } from '../i18n'
 
+/** Projet enregistré, avec l'image exportée qui lui correspond s'il y en a une. */
 export interface ProjectEntry {
+  /** Fichier projet (JSON) sur Drive. */
   project: DriveFileInfo
+  /** Nom commun au projet et à son image, sans extension. */
   baseName: string
+  /** Image exportée du même nom, qui sert d'aperçu. */
   image?: DriveFileInfo
 }
 
-/** Associe chaque fichier projet à l'image exportée du même nom. */
+/**
+ * Associe chaque fichier projet à l'image exportée du même nom.
+ * @param files - fichiers du dossier Collimo
+ * @returns un élément par fichier projet, dans l'ordre de `files`
+ */
 export function groupProjects(files: DriveFileInfo[]): ProjectEntry[] {
   const images = new Map<string, DriveFileInfo>()
   for (const f of files) {
@@ -25,13 +36,22 @@ export function groupProjects(files: DriveFileInfo[]): ProjectEntry[] {
     })
 }
 
+/** Propriétés de la liste des projets. */
 interface Props {
+  /** Services Google (Drive). */
   services: Services
+  /** Identifiant du dossier Collimo où sont rangés projets et images. */
   collimoFolderId: string
+  /** Ouvre le projet choisi. */
   onOpen: (entry: ProjectEntry) => void
+  /** Signale une erreur à afficher. */
   onError: (e: unknown) => void
 }
 
+/**
+ * Bandeau des projets enregistrés, chargés à l'affichage.
+ * @returns la section des projets
+ */
 export function ProjectsList({ services, collimoFolderId, onOpen, onError }: Props) {
   const { t, lang } = useI18n()
   const [entries, setEntries] = useState<ProjectEntry[] | null>(null)

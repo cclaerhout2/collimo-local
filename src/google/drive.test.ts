@@ -38,9 +38,7 @@ describe('requêtes Drive', () => {
   })
 
   it('cherche le dossier Collimo par nom, type et parent', () => {
-    expect(collimoFolderQuery('abc')).toBe(
-      `name = 'Collimo' and mimeType = '${FOLDER_MIME}' and 'abc' in parents and trashed = false`,
-    )
+    expect(collimoFolderQuery('abc')).toBe(`name = 'Collimo' and mimeType = '${FOLDER_MIME}' and 'abc' in parents and trashed = false`)
   })
 
   it('active les Drive partagés et vise le bon Drive', () => {
@@ -91,9 +89,7 @@ describe('client Drive', () => {
   })
 
   it('crée le dossier Collimo quand il manque', async () => {
-    const { impl, calls } = fakeFetch(({ init }) =>
-      init.method === 'POST' ? { body: { id: 'created' } } : { body: { files: [] } },
-    )
+    const { impl, calls } = fakeFetch(({ init }) => (init.method === 'POST' ? { body: { id: 'created' } } : { body: { files: [] } }))
     const drive = createDriveClient(() => 'T', impl)
     expect(await drive.ensureCollimoFolder('parent')).toBe('created')
     const post = calls.find((c) => c.init.method === 'POST')!
@@ -108,7 +104,9 @@ describe('client Drive', () => {
 
   it('remonte le message d’erreur de Drive', async () => {
     const { impl } = fakeFetch(() => ({ status: 403, body: { error: { message: 'Insufficient permissions' } } }))
-    const error = await createDriveClient(() => 'T', impl).getFolder('x').catch((e: unknown) => e)
+    const error = await createDriveClient(() => 'T', impl)
+      .getFolder('x')
+      .catch((e: unknown) => e)
     expect(error).toBeInstanceOf(DriveApiError)
     expect((error as DriveApiError).message).toBe('Insufficient permissions')
   })

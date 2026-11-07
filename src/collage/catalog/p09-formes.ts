@@ -1,10 +1,19 @@
+/**
+ * Dispositions « en forme » du catalogue pour 9 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { Pt } from '../path'
 import { cutFrame, poly, puzzle, shapeAt, shapeGrid, type CellDef } from '../shapes'
 import type { LayoutDef } from '../types'
 import { byReading, curvedGrid, ringToward } from './p06-formes'
 
 // Grand losange central entouré de 8 petits losanges, deux le long de chaque côté.
-const DM: Pt[] = [[0.5, 0.18], [0.82, 0.5], [0.5, 0.82], [0.18, 0.5]]
+const DM: Pt[] = [
+  [0.5, 0.18],
+  [0.82, 0.5],
+  [0.5, 0.82],
+  [0.18, 0.5],
+]
 const around: CellDef[] = DM.flatMap((p, i) => {
   const q = DM[(i + 1) % 4]
   const dx = q[0] - p[0]
@@ -24,7 +33,29 @@ export const P09_FORMES: LayoutDef[] = [
   { id: 'p09-05', photos: 9, family: 'puzzle', geo: puzzle(3, 3) },
   { id: 'p09-06', photos: 9, family: 'geometrie', geo: byReading([poly(...DM), ...around]) },
   { id: 'p09-08', photos: 9, family: 'ronds', geo: shapeGrid('circle', 3, 3, undefined, 0.02) },
-  { id: 'p09-14', photos: 9, family: 'coupe', geo: cutFrame([[[0.28, 0], [0.38, 1]], [[0.62, 0], [0.7, 1]], [[0, 0.38], [1, 0.25]], [[0, 0.72], [1, 0.6]]]) },
+  {
+    id: 'p09-14',
+    photos: 9,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0.28, 0],
+        [0.38, 1],
+      ],
+      [
+        [0.62, 0],
+        [0.7, 1],
+      ],
+      [
+        [0, 0.38],
+        [1, 0.25],
+      ],
+      [
+        [0, 0.72],
+        [1, 0.6],
+      ],
+    ]),
+  },
   {
     id: 'p09-15',
     photos: 9,
@@ -39,17 +70,20 @@ export const P09_FORMES: LayoutDef[] = [
     id: 'p09-18',
     photos: 9,
     family: 'geometrie',
-    geo: byReading([
-      shapeAt('hexagon-flat', 0.5, 0.15, 0.3),
-      shapeAt('hexagon-flat', 0.5, 0.43, 0.3),
-      shapeAt('hexagon-flat', 0.5, 0.7, 0.3),
-      shapeAt('hexagon-flat', 0.24, 0.29, 0.3),
-      shapeAt('hexagon-flat', 0.24, 0.57, 0.3),
-      shapeAt('hexagon-flat', 0.24, 0.84, 0.3),
-      shapeAt('hexagon-flat', 0.76, 0.29, 0.3),
-      shapeAt('hexagon-flat', 0.76, 0.57, 0.3),
-      shapeAt('hexagon-flat', 0.76, 0.84, 0.3),
-    ], 0.04),
+    geo: byReading(
+      [
+        shapeAt('hexagon-flat', 0.5, 0.15, 0.3),
+        shapeAt('hexagon-flat', 0.5, 0.43, 0.3),
+        shapeAt('hexagon-flat', 0.5, 0.7, 0.3),
+        shapeAt('hexagon-flat', 0.24, 0.29, 0.3),
+        shapeAt('hexagon-flat', 0.24, 0.57, 0.3),
+        shapeAt('hexagon-flat', 0.24, 0.84, 0.3),
+        shapeAt('hexagon-flat', 0.76, 0.29, 0.3),
+        shapeAt('hexagon-flat', 0.76, 0.57, 0.3),
+        shapeAt('hexagon-flat', 0.76, 0.84, 0.3),
+      ],
+      0.04,
+    ),
   },
   { id: 'p09-21', photos: 9, family: 'ronds', geo: shapeGrid('flower', 3, 3, undefined, 0.02) },
   {

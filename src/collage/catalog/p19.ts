@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 19 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 const C4 = 'c(x,x,x,x)'
@@ -9,6 +13,11 @@ const R5 = 'r(x,x,x,x,x)'
 /**
  * Case d'un pavage relevée sur une vignette de 400 px (cadre de 15 à 385, gouttières de ~15 px) :
  * les gouttières sont retirées, l'écart réel vient du réglage « Bords ».
+ * @param x1 - bord gauche, en pixels de vignette
+ * @param y1 - bord haut, en pixels de vignette
+ * @param x2 - bord droit, en pixels de vignette
+ * @param y2 - bord bas, en pixels de vignette
+ * @returns le rectangle en coordonnées du cadre (0–1)
  */
 const tile = (x1: number, y1: number, x2: number, y2: number) => {
   const s = (v: number) => (v - 15) / 385
@@ -33,8 +42,7 @@ export const P19: LayoutDef[] = [
     id: 'p19-07',
     photos: 19,
     family: 'mixte',
-    split:
-      'r(c(45*x, 60*x, 60*x, 77*x, 60*x), 3.3*c(r(x,x,x), 4*r(1.6*c(1.4*x, x), x), r(x,x,x)), c(60*x, 80*x, 60*x, 60*x, 45*x))',
+    split: 'r(c(45*x, 60*x, 60*x, 77*x, 60*x), 3.3*c(r(x,x,x), 4*r(1.6*c(1.4*x, x), x), r(x,x,x)), c(60*x, 80*x, 60*x, 60*x, 45*x))',
   },
   { id: 'p19-08', photos: 19, family: 'mixte', split: `c(${R5}, ${R5}, ${R5}, r(2.2*x, x, x, x))` },
   { id: 'p19-09', photos: 19, family: 'mixte', split: `r(4.5*c(${R4}, r(x, x, 2.2*x), r(x, 2.2*x, x), ${R4}), ${C5})` },
@@ -114,7 +122,6 @@ export const P19: LayoutDef[] = [
     id: 'p19-18',
     photos: 19,
     family: 'mixte',
-    split:
-      'c(r(55*x, 45*x, 107*x, 47*x, 55*x), 2.1*r(63*x, 48*c(x,x,x), 90*x, 50*c(x,x,x), 60*x), r(55*x, 45*x, 107*x, 47*x, 55*x))',
+    split: 'c(r(55*x, 45*x, 107*x, 47*x, 55*x), 2.1*r(63*x, 48*c(x,x,x), 90*x, 50*c(x,x,x), 60*x), r(55*x, 45*x, 107*x, 47*x, 55*x))',
   },
 ]

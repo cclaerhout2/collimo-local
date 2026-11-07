@@ -56,7 +56,12 @@ write('ph/fill.json', fill)
 const fe = require('@iconify-json/fluent-emoji-flat/icons.json')
 const meta = require('@iconify-json/fluent-emoji-flat/metadata.json')
 const skinTone = /-(light|medium-light|medium|medium-dark|dark)$/
-export const slug = (s) => s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+export const slug = (s) =>
+  s
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
 const feIndex = []
 for (const [category, names] of Object.entries(meta.categories)) {
   const bodies = {}

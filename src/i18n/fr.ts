@@ -1,3 +1,8 @@
+/**
+ * Libellés français de l'interface : la langue de référence, qui définit la liste des clés de messages.
+ * Les valeurs peuvent contenir des variables `{nom}`, remplacées par `translate`.
+ */
+
 /** Libellés français. Toute clé ajoutée ici doit l'être aussi dans en.ts (vérifié par les tests). */
 export const fr = {
   'app.tagline': 'Vos photos, assemblées en un geste.',
@@ -6,18 +11,15 @@ export const fr = {
   'lang.en': 'English',
 
   'signin.title': 'Bienvenue sur Collimo',
-  'signin.text':
-    'Connectez-vous avec votre compte professionnel Google pour créer des collages à partir de vos photos Drive.',
+  'signin.text': 'Connectez-vous avec votre compte professionnel Google pour créer des collages à partir de vos photos Drive.',
   'signin.button': 'Se connecter avec Google',
   'signin.privacy':
     'Vos photos restent dans votre Drive. Collimo ne lit que les dossiers que vous choisissez et n’écrit que ses propres fichiers.',
   'signin.loading': 'Connexion en cours…',
 
-  'error.config':
-    'Configuration incomplète : {vars}. Voir le fichier README pour la mise en place.',
+  'error.config': 'Configuration incomplète : {vars}. Voir le fichier README pour la mise en place.',
   'error.domain': 'Ce compte ({email}) n’appartient pas au domaine autorisé ({domain}).',
-  'error.scopes':
-    'Collimo a besoin de toutes les autorisations demandées pour fonctionner. Reconnectez-vous et cochez-les toutes.',
+  'error.scopes': 'Collimo a besoin de toutes les autorisations demandées pour fonctionner. Reconnectez-vous et cochez-les toutes.',
   'error.popup': 'La fenêtre de connexion a été fermée ou bloquée. Réessayez.',
   'error.expired': 'Votre session a expiré.',
   'error.reconnect': 'Se reconnecter',
@@ -37,8 +39,7 @@ export const fr = {
   'setup.pickFolder': 'Choisir un dossier',
   'setup.pickerTitle': 'Choisissez le dossier de vos photos',
   'setup.selected': 'Dossier choisi : {name}',
-  'setup.collimoNote':
-    'Collimo créera un sous-dossier « Collimo » dans ce dossier pour y ranger vos collages.',
+  'setup.collimoNote': 'Collimo créera un sous-dossier « Collimo » dans ce dossier pour y ranger vos collages.',
   'setup.confirm': 'Continuer',
   'setup.cancel': 'Annuler',
   'setup.checking': 'Vérification du dossier…',
@@ -57,7 +58,6 @@ export const fr = {
   'gallery.max': 'Un collage contient au maximum {max} photos.',
   'gallery.unsupported': 'Format non pris en charge pour l’instant ({type})',
   'gallery.refresh': 'Actualiser',
-
 
   'editor.back': 'Photos',
   'editor.export': 'Exporter',
@@ -200,7 +200,8 @@ export const fr = {
   'export.rendering': 'Création de l’image… {done}/{total}',
   'export.uploading': 'Envoi dans Drive…',
   'export.done': 'Collage enregistré : {name}',
-  'export.doneHint': 'L’image et le fichier projet sont dans le dossier Collimo. Le collage reste ouvert : chaque nouvel enregistrement crée un nouveau collage.',
+  'export.doneHint':
+    'L’image et le fichier projet sont dans le dossier Collimo. Le collage reste ouvert : chaque nouvel enregistrement crée un nouveau collage.',
   'export.openImage': 'Ouvrir l’image',
   'export.openFolder': 'Ouvrir le dossier Collimo',
   'export.download': 'Télécharger',
@@ -215,7 +216,8 @@ export const fr = {
   'menu.factory': 'Usine à dispositions',
   'factory.title': 'Usine à dispositions',
   'factory.back': 'Photos',
-  'factory.intro': 'Créez, modifiez et publiez des dispositions. Elles sont enregistrées dans le Drive partagé « {drive} » et proposées à tout le domaine une fois publiées.',
+  'factory.intro':
+    'Créez, modifiez et publiez des dispositions. Elles sont enregistrées dans le Drive partagé « {drive} » et proposées à tout le domaine une fois publiées.',
   'factory.updated': 'Dernière modification : {date} par {user}',
   'factory.history': 'Historique dans Drive',
   'factory.rejected': '{count} disposition(s) du catalogue sont illisibles et ont été ignorées.',
@@ -258,7 +260,8 @@ export const fr = {
   'factory.cell.stretch': 'Étirer',
   'factory.cell.size': 'Taille',
   'factory.cell.deletePoint': 'Supprimer le point',
-  'factory.cell.none': 'Touchez une case pour la modifier. Glissez un bord pour déplacer une séparation, un point pour modifier un polygone.',
+  'factory.cell.none':
+    'Touchez une case pour la modifier. Glissez un bord pour déplacer une séparation, un point pour modifier un polygone.',
   'factory.cut.hint': 'Touchez une séparation, puis choisissez sa coupe.',
   'factory.cut.line': 'Droite',
   'factory.cut.curve': 'Courbe',
@@ -294,7 +297,8 @@ export const fr = {
   'factory.saving': 'Enregistrement…',
   'factory.saved': 'Enregistré dans le catalogue.',
   'factory.grant.title': 'Autoriser Collimo à modifier le catalogue',
-  'factory.grant.text': 'Le catalogue a été créé par un autre admin. Pour des raisons de sécurité, Collimo ne peut le modifier qu’une fois que vous l’avez choisi vous-même : sélectionnez « {file} » dans la fenêtre qui s’ouvre.',
+  'factory.grant.text':
+    'Le catalogue a été créé par un autre admin. Pour des raisons de sécurité, Collimo ne peut le modifier qu’une fois que vous l’avez choisi vous-même : sélectionnez « {file} » dans la fenêtre qui s’ouvre.',
   'factory.grant.button': 'Choisir le fichier du catalogue',
   'factory.undo': 'Annuler',
   'factory.redo': 'Rétablir',
@@ -315,4 +319,5 @@ export const fr = {
   'mock.banner': 'Mode démo : Drive simulé, aucune donnée réelle.',
 } as const
 
+/** Clé d'un message de l'interface. */
 export type MessageKey = keyof typeof fr

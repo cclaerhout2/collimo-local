@@ -1,14 +1,34 @@
+/**
+ * Dispositions « en forme » du catalogue pour 5 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import { cutFrame, path, pieDisc, poly, rect, shape, shapeAt, SHAPES } from '../shapes'
 import type { LayoutDef } from '../types'
 
-/** Forme de la bibliothèque (carré unité) recopiée en chemin dans le rectangle (x, y, w, h) du cadre. */
+/**
+ * Forme de la bibliothèque (carré unité) recopiée en chemin dans le rectangle (x, y, w, h) du cadre.
+ * @param d - chemin SVG de la forme, dans le carré unité
+ * @param x - bord gauche du rectangle
+ * @param y - bord haut du rectangle
+ * @param w - largeur du rectangle
+ * @param h - hauteur du rectangle
+ * @returns le chemin transformé, coordonnées arrondies à 4 décimales
+ */
 const place = (d: string, x: number, y: number, w: number, h: number) =>
-  d.replace(/(-?\d*\.?\d+)\s+(-?\d*\.?\d+)/g, (_, a: string, b: string) => `${(x + Number(a) * w).toFixed(4)} ${(y + Number(b) * h).toFixed(4)}`)
+  d.replace(
+    /(-?\d*\.?\d+)\s+(-?\d*\.?\d+)/g,
+    (_, a: string, b: string) => `${(x + Number(a) * w).toFixed(4)} ${(y + Number(b) * h).toFixed(4)}`,
+  )
 
 /** Étoile à quatre branches (carré unité). */
 const SPARKLE = 'M0.5 0C0.55 0.38 0.62 0.45 1 0.5C0.62 0.55 0.55 0.62 0.5 1C0.45 0.62 0.38 0.55 0 0.5C0.38 0.45 0.45 0.38 0.5 0Z'
 
-/** Quatre quarts du cadre et un médaillon au centre (dessiné par-dessus, avec un anneau d'écart). */
+/**
+ * Quatre quarts du cadre et un médaillon au centre (dessiné par-dessus, avec un anneau d'écart).
+ * @param d - chemin SVG du médaillon, dans le carré unité
+ * @param size - côté du médaillon, en fraction du cadre
+ * @returns les cinq cases : les quatre quarts puis le médaillon
+ */
 const medallion = (d: string, size: number) => [
   rect(0, 0, 0.5, 0.5),
   rect(0.5, 0, 0.5, 0.5),
@@ -17,7 +37,15 @@ const medallion = (d: string, size: number) => [
   path(place(d, 0.5 - size / 2, 0.5 - size / 2, size, size)),
 ]
 
-/** Formes en couronne, tournées pour pointer vers le centre (angle 0 = en haut). */
+/**
+ * Formes en couronne, tournées pour pointer vers le centre (angle 0 = en haut).
+ * @param s - forme utilisée
+ * @param n - nombre de formes
+ * @param r - rayon de la couronne, en fraction du cadre
+ * @param size - largeur de chaque forme
+ * @param h - hauteur de chaque forme (par défaut `size` ; différente, la forme est étirée)
+ * @returns les cases, dans le sens des aiguilles d'une montre depuis le haut
+ */
 const around = (s: 'heart' | 'diamond', n: number, r: number, size: number, h = size) =>
   Array.from({ length: n }, (_, i) => {
     const a = (i * 360) / n
@@ -87,7 +115,13 @@ export const P05_FORMES: LayoutDef[] = [
     id: 'p05-28',
     photos: 5,
     family: 'ronds',
-    geo: [shapeAt('flower', 0.25, 0.24, 0.37), shapeAt('flower', 0.75, 0.24, 0.37), shapeAt('flower', 0.5, 0.5, 0.33), shapeAt('flower', 0.25, 0.76, 0.37), shapeAt('flower', 0.75, 0.76, 0.37)],
+    geo: [
+      shapeAt('flower', 0.25, 0.24, 0.37),
+      shapeAt('flower', 0.75, 0.24, 0.37),
+      shapeAt('flower', 0.5, 0.5, 0.33),
+      shapeAt('flower', 0.25, 0.76, 0.37),
+      shapeAt('flower', 0.75, 0.76, 0.37),
+    ],
   },
   {
     id: 'p05-32',
@@ -117,7 +151,13 @@ export const P05_FORMES: LayoutDef[] = [
     id: 'p05-37',
     photos: 5,
     family: 'geometrie',
-    geo: [shapeAt('hexagon', 0.21, 0.42, 0.34), shapeAt('hexagon', 0.5, 0.38, 0.34), shapeAt('hexagon', 0.8, 0.3, 0.34), shapeAt('hexagon', 0.35, 0.71, 0.34), shapeAt('hexagon', 0.64, 0.68, 0.34)],
+    geo: [
+      shapeAt('hexagon', 0.21, 0.42, 0.34),
+      shapeAt('hexagon', 0.5, 0.38, 0.34),
+      shapeAt('hexagon', 0.8, 0.3, 0.34),
+      shapeAt('hexagon', 0.35, 0.71, 0.34),
+      shapeAt('hexagon', 0.64, 0.68, 0.34),
+    ],
   },
   {
     id: 'p05-38',

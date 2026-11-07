@@ -1,14 +1,24 @@
+/** Choix de la police d'un texte parmi les polices Google. */
 import { useEffect, useMemo, useState } from 'react'
 import { useI18n } from '../../../i18n'
 import { normalize } from '../../../stickers/keywords'
 import { ensureFont, loadFontCatalog, POPULAR_FONTS, type FontEntry } from '../../../stickers/fonts'
 
+/** Propriétés de {@link FontPicker}. */
 interface Props {
+  /** Famille de la police actuelle. */
   value: string
+  /** Appelé avec la police choisie. */
   onChange: (font: FontEntry) => void
 }
 
-/** Polices Google : les populaires d'abord (affichées dans leur police), puis recherche dans tout le catalogue. */
+/**
+ * Polices Google : les populaires d'abord (affichées dans leur police), puis recherche dans tout le catalogue.
+ *
+ * Les résultats de recherche s'affichent dans la police de l'interface, et sont limités à 80 :
+ * charger chaque police trouvée serait trop lourd.
+ * @returns le champ de recherche, l'état de la liste et la liste des polices
+ */
 export function FontPicker({ value, onChange }: Props) {
   const { t } = useI18n()
   const [catalog, setCatalog] = useState<FontEntry[] | null>(null)
@@ -45,7 +55,9 @@ export function FontPicker({ value, onChange }: Props) {
         onChange={(e) => setQuery(e.target.value)}
         aria-label={t('font.search')}
       />
-      <p className="panel-note">{catalog === null ? t('font.loading') : query ? t('font.results', { count: list.length }) : t('font.popular')}</p>
+      <p className="panel-note">
+        {catalog === null ? t('font.loading') : query ? t('font.results', { count: list.length }) : t('font.popular')}
+      </p>
       <div className="font-list" role="listbox" aria-label={t('text.tab.font')}>
         {list.map((f) => (
           <button

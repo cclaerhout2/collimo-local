@@ -8,11 +8,12 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "lint": "oxlint",
+    "lint": "oxlint src && prettier --check \"src/**/*.{ts,tsx,css}\" \"tools/**/*.mjs\"",
     "preview": "vite preview",
     "deploy:preview": "npm run build && firebase hosting:channel:deploy test --only collimo",
     "deploy": "npm run build && firebase deploy --only hosting:collimo",
-    "gen:assets": "node tools/gen-assets.mjs"
+    "gen:assets": "node tools/gen-assets.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tools/**/*.mjs\""
   },
   "dependencies": {
     "heic-to": "^1.6.7",
@@ -31,6 +32,7 @@
     "google-fonts-complete": "^2.2.3",
     "jsdom": "^31.0.0",
     "oxlint": "^1.90.0",
+    "prettier": "^3.9.10",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"

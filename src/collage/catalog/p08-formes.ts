@@ -1,15 +1,37 @@
+/**
+ * Dispositions « en forme » du catalogue pour 8 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { Pt } from '../path'
 import { cutFrame, poly, puzzle, shapeAt } from '../shapes'
 import type { LayoutDef } from '../types'
 import { byReading, heartPieces, radial } from './p06-formes'
 
 // Étoile à 7 branches au centre, rayons depuis les pointes jusqu'au cadre.
+/**
+ * Point en coordonnées polaires autour du centre du cadre.
+ * @param r - distance au centre, en fraction du cadre
+ * @param deg - angle en degrés (0 = vers la droite, sens des aiguilles d'une montre, y vers le bas)
+ * @returns le point dans le cadre
+ */
 const polar = (r: number, deg: number): Pt => [0.5 + r * Math.cos((deg * Math.PI) / 180), 0.5 + r * Math.sin((deg * Math.PI) / 180)]
 const TIPS: Pt[] = Array.from({ length: 7 }, (_, i) => polar(0.2, -90 + (i * 360) / 7))
 const INNER: Pt[] = Array.from({ length: 7 }, (_, i) => polar(0.11, -90 + ((i + 0.5) * 360) / 7))
 const STAR: Pt[] = TIPS.flatMap((t, i) => [t, INNER[i]])
-const starRays = radial([0.5, 0.5], TIPS, TIPS.map((t) => [t[0] - 0.5, t[1] - 0.5] as Pt), INNER.map((p) => [p]))
+const starRays = radial(
+  [0.5, 0.5],
+  TIPS,
+  TIPS.map((t) => [t[0] - 0.5, t[1] - 0.5] as Pt),
+  INNER.map((p) => [p]),
+)
 
+/**
+ * Hexagone de la bibliothèque centré en (cx, cy).
+ * @param cx - abscisse du centre
+ * @param cy - ordonnée du centre
+ * @param sz - taille de l'hexagone, en fraction du cadre
+ * @returns la case « forme »
+ */
 const hx = (cx: number, cy: number, sz: number) => shapeAt('hexagon', cx, cy, sz)
 
 /** Dispositions en forme pour 8 photo(s) (étape 6), numérotées comme dans l'inventaire. */
@@ -66,21 +88,30 @@ export const P08_FORMES: LayoutDef[] = [
     photos: 8,
     family: 'coeurs',
     geo: [
-      shapeAt('heart', 0.22, 0.2, 0.360),
-      shapeAt('heart', 0.78, 0.2, 0.360),
-      shapeAt('heart', 0.5, 0.33, 0.360),
-      shapeAt('heart', 0.22, 0.48, 0.360),
-      shapeAt('heart', 0.78, 0.48, 0.360),
-      shapeAt('heart', 0.5, 0.6, 0.360),
-      shapeAt('heart', 0.22, 0.8, 0.360),
-      shapeAt('heart', 0.78, 0.8, 0.360),
+      shapeAt('heart', 0.22, 0.2, 0.36),
+      shapeAt('heart', 0.78, 0.2, 0.36),
+      shapeAt('heart', 0.5, 0.33, 0.36),
+      shapeAt('heart', 0.22, 0.48, 0.36),
+      shapeAt('heart', 0.78, 0.48, 0.36),
+      shapeAt('heart', 0.5, 0.6, 0.36),
+      shapeAt('heart', 0.22, 0.8, 0.36),
+      shapeAt('heart', 0.78, 0.8, 0.36),
     ],
   },
   {
     id: 'p08-12',
     photos: 8,
     family: 'geometrie',
-    geo: [hx(0.18, 0.3, 0.3), hx(0.4, 0.2, 0.3), hx(0.62, 0.32, 0.3), hx(0.4, 0.46, 0.3), hx(0.62, 0.52, 0.3), hx(0.84, 0.62, 0.3), hx(0.42, 0.74, 0.3), hx(0.64, 0.84, 0.3)],
+    geo: [
+      hx(0.18, 0.3, 0.3),
+      hx(0.4, 0.2, 0.3),
+      hx(0.62, 0.32, 0.3),
+      hx(0.4, 0.46, 0.3),
+      hx(0.62, 0.52, 0.3),
+      hx(0.84, 0.62, 0.3),
+      hx(0.42, 0.74, 0.3),
+      hx(0.64, 0.84, 0.3),
+    ],
   },
   { id: 'p08-29', photos: 8, family: 'coeurs', geo: heartPieces(3, 2) },
   {
@@ -91,12 +122,34 @@ export const P08_FORMES: LayoutDef[] = [
       shapeAt('heart', 0.2, 0.15, 0.269),
       shapeAt('heart', 0.5, 0.15, 0.269),
       shapeAt('heart', 0.8, 0.15, 0.269),
-      shapeAt('heart', 0.28, 0.47, 0.470),
-      shapeAt('heart', 0.72, 0.47, 0.470),
+      shapeAt('heart', 0.28, 0.47, 0.47),
+      shapeAt('heart', 0.72, 0.47, 0.47),
       shapeAt('heart', 0.2, 0.83, 0.269),
       shapeAt('heart', 0.5, 0.83, 0.269),
       shapeAt('heart', 0.8, 0.83, 0.269),
     ],
   },
-  { id: 'p08-32', photos: 8, family: 'coupe', geo: cutFrame([[[0, 0.28], [1, 0.2]], [[0, 0.47], [1, 0.53]], [[0, 0.78], [1, 0.72]], [[0.47, 0], [0.55, 1]]]) },
+  {
+    id: 'p08-32',
+    photos: 8,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0, 0.28],
+        [1, 0.2],
+      ],
+      [
+        [0, 0.47],
+        [1, 0.53],
+      ],
+      [
+        [0, 0.78],
+        [1, 0.72],
+      ],
+      [
+        [0.47, 0],
+        [0.55, 1],
+      ],
+    ]),
+  },
 ]

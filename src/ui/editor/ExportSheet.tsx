@@ -1,3 +1,4 @@
+/** Feuille d'export : choix du format, de la taille et de la qualité, puis enregistrement du collage dans Drive. */
 import { useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_JPEG_QUALITY,
@@ -15,27 +16,59 @@ import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
 import { ErrorBanner } from '../ErrorBanner'
 
+/** Propriétés de {@link ExportSheet}. */
 interface Props {
+  /** Accès à Google Drive, pour l'envoi. */
   drive: DriveService
+  /** Dossier Collimo de l'utilisateur, où le collage est enregistré. */
   collimoFolderId: string
+  /** Collage à exporter. */
   doc: CollageDoc
+  /** Disposition résolue du collage. */
   layout: Layout
+  /** Proportions du collage (largeur / hauteur). */
   ratio: number
+  /** Charge la photo d'une case avec un plus grand côté d'au moins `maxSide` pixels. */
   loadForCell: (cellIndex: number, maxSide: number) => Promise<ExportImage>
+  /** Charge l'image d'un sticker à la taille finale (`maxSide` en pixels). */
   loadOverlay?: (o: Exclude<Overlay, TextOverlay>, maxSide: number) => Promise<ExportImage>
+  /** Attend que la police d'un texte soit prête avant de le dessiner. */
   prepareText?: (o: TextOverlay) => Promise<void>
+  /** Ferme la feuille. */
   onClose: () => void
+  /** Appelé une fois le collage enregistré dans Drive. */
   onSaved: (saved: SavedCollage) => void
+  /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
 }
 
+/** Étape de l'export : réglages, dessin (photos traitées / total), envoi, puis terminé avec l'aperçu du fichier. */
 type Status =
   | { name: 'idle' }
   | { name: 'rendering'; done: number; total: number }
   | { name: 'uploading' }
   | { name: 'done'; saved: SavedCollage; url: string }
 
-export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadForCell, loadOverlay, prepareText, onClose, onSaved, onReconnect }: Props) {
+/**
+ * Feuille d'export du collage.
+ *
+ * Les tailles proposées sont en pixels du fichier final ; sur iPhone et iPad, elles sont plafonnées
+ * pour rester sous la limite de mémoire des Canvas de Safari.
+ * @returns la boîte de dialogue des réglages d'export, puis l'aperçu et les liens du collage enregistré
+ */
+export function ExportSheet({
+  drive,
+  collimoFolderId,
+  doc,
+  layout,
+  ratio,
+  loadForCell,
+  loadOverlay,
+  prepareText,
+  onClose,
+  onSaved,
+  onReconnect,
+}: Props) {
   const { t } = useI18n()
   const apple = useMemo(() => isAppleMobile(), [])
   const [format, setFormat] = useState<ExportFormat>('jpeg')
@@ -53,10 +86,17 @@ export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadFo
   const busy = status.name === 'rendering' || status.name === 'uploading'
   const doneUrl = status.name === 'done' ? status.url : null
 
-  useEffect(() => () => {
-    if (doneUrl) URL.revokeObjectURL(doneUrl)
-  }, [doneUrl])
+  useEffect(
+    () => () => {
+      if (doneUrl) URL.revokeObjectURL(doneUrl)
+    },
+    [doneUrl],
+  )
 
+  /**
+   * Dessine le collage à la taille choisie et l'enregistre dans Drive, en affichant la progression.
+   * @returns une promesse résolue une fois l'enregistrement fini ou l'erreur affichée
+   */
   async function save() {
     setError(null)
     try {
@@ -120,7 +160,13 @@ export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadFo
               <legend>{t('export.format')}</legend>
               <div className="segmented">
                 {(['jpeg', 'png'] as const).map((f) => (
-                  <button key={f} type="button" className={format === f ? 'active' : ''} aria-pressed={format === f} onClick={() => setFormat(f)}>
+                  <button
+                    key={f}
+                    type="button"
+                    className={format === f ? 'active' : ''}
+                    aria-pressed={format === f}
+                    onClick={() => setFormat(f)}
+                  >
                     {f === 'jpeg' ? 'JPG' : 'PNG'}
                   </button>
                 ))}
@@ -132,7 +178,13 @@ export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadFo
               <legend>{t('export.size')}</legend>
               <div className="size-options">
                 {(['standard', 'hd', 'max'] as const).map((p) => (
-                  <button key={p} type="button" className={`size-option${preset === p ? ' selected' : ''}`} aria-pressed={preset === p} onClick={() => setPreset(p)}>
+                  <button
+                    key={p}
+                    type="button"
+                    className={`size-option${preset === p ? ' selected' : ''}`}
+                    aria-pressed={preset === p}
+                    onClick={() => setPreset(p)}
+                  >
                     <strong>{t(`export.${p}`)}</strong>
                     <span>{t('export.pixels', { width: sizes[p].width, height: sizes[p].height })}</span>
                   </button>
@@ -145,7 +197,15 @@ export function ExportSheet({ drive, collimoFolderId, doc, layout, ratio, loadFo
               <fieldset className="field" disabled={busy}>
                 <legend>{t('export.quality')}</legend>
                 <label className="slider">
-                  <input type="range" min={50} max={100} step={1} value={quality} onChange={(e) => setQuality(Number(e.target.value))} aria-label={t('export.quality')} />
+                  <input
+                    type="range"
+                    min={50}
+                    max={100}
+                    step={1}
+                    value={quality}
+                    onChange={(e) => setQuality(Number(e.target.value))}
+                    aria-label={t('export.quality')}
+                  />
                   <span className="slider-value">{quality}</span>
                 </label>
               </fieldset>

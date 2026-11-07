@@ -1,15 +1,28 @@
+/**
+ * En-tête de l'application : logo, choix de la langue et menu de l'utilisateur connecté.
+ */
 import { useEffect, useRef, useState } from 'react'
 import type { SignedInUser } from '../google/types'
 import { LANGS, useI18n, type Lang } from '../i18n'
 
+/** Propriétés de l'en-tête ; une action absente fait disparaître l'entrée de menu correspondante. */
 interface Props {
+  /** Utilisateur connecté, ou `null` (pas de menu). */
   user: SignedInUser | null
+  /** Change la langue de l'interface. */
   onLangChange: (lang: Lang) => void
+  /** Ouvre le choix de l'emplacement de travail. */
   onChangeLocation?: () => void
+  /** Ouvre l'usine à dispositions (admins seulement). */
   onOpenFactory?: () => void
+  /** Déconnecte l'utilisateur. */
   onSignOut?: () => void
 }
 
+/**
+ * Logo de Collimo, dessiné en SVG avec les couleurs du thème.
+ * @returns le logo, masqué aux lecteurs d'écran
+ */
 export function Logo() {
   return (
     <svg className="logo" viewBox="0 0 32 32" aria-hidden="true">
@@ -21,6 +34,10 @@ export function Logo() {
   )
 }
 
+/**
+ * Barre du haut, présente sur tous les écrans.
+ * @returns l'en-tête
+ */
 export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, onSignOut }: Props) {
   const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)
@@ -28,9 +45,14 @@ export function Header({ user, onLangChange, onChangeLocation, onOpenFactory, on
 
   useEffect(() => {
     if (!open) return
+    /**
+     * Ferme le menu quand on clique en dehors.
+     * @param e - appui du pointeur sur la page
+     */
     const close = (e: PointerEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setOpen(false)
     }
+    // Ferme le menu avec la touche Échap.
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', onKey)

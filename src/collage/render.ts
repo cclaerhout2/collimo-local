@@ -1,3 +1,7 @@
+/**
+ * Dessin d'un collage sur un Canvas 2D : photos dans leurs cases, vignettage, écarts et contours
+ * des cases en forme, décor, puis textes et stickers.
+ */
 import { cellGeometry, decorGeometry, gapPx, outlinePx, type CellGeom } from './cells'
 import { vignetteFor } from './color'
 import { placeImage, type CellBox } from './geometry'
@@ -11,9 +15,16 @@ export interface Drawable {
   height: number
 }
 
+/** Contexte de dessin 2D, à l'écran ou hors écran (export dans un worker). */
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
+/** Objets `Path2D` déjà construits, par texte du chemin ; vidé au-delà de 4000 pour borner la mémoire. */
 const paths = new Map<string, Path2D>()
+/**
+ * Objet `Path2D` d'un chemin SVG, réutilisé d'un appel à l'autre.
+ * @param d - chemin SVG, en pixels
+ * @returns l'objet `Path2D` (partagé, à ne pas modifier)
+ */
 function path2d(d: string): Path2D {
   let p = paths.get(d)
   if (!p) {
@@ -24,7 +35,11 @@ function path2d(d: string): Path2D {
   return p
 }
 
-/** Découpe le dessin à la forme de la case. */
+/**
+ * Découpe le dessin à la forme de la case (chemin, ou rectangle aux coins arrondis).
+ * @param ctx - contexte de dessin
+ * @param cell - géométrie de la case, ou simple boîte en pixels
+ */
 function clipCell(ctx: Ctx, cell: CellGeom | CellBox) {
   const g = 'box' in cell ? cell : { box: cell }
   if (g.path) {
@@ -38,7 +53,13 @@ function clipCell(ctx: Ctx, cell: CellGeom | CellBox) {
   ctx.clip()
 }
 
-/** Dessine une photo dans sa case : couverture complète, décalage, zoom, rotation, miroir. */
+/**
+ * Dessine une photo dans sa case : couverture complète, décalage, zoom, rotation, miroir.
+ * @param ctx - contexte de dessin
+ * @param img - photo à dessiner
+ * @param cell - géométrie de la case, ou simple boîte en pixels
+ * @param crop - cadrage de la photo
+ */
 export function drawPhotoInCell(ctx: Ctx, img: Drawable, cell: CellGeom | CellBox, crop: CollageDoc['photos'][number]['crop']) {
   const box = 'box' in cell ? cell.box : cell
   const p = placeImage(img.width, img.height, box.w, box.h, crop)
@@ -52,7 +73,12 @@ export function drawPhotoInCell(ctx: Ctx, img: Drawable, cell: CellGeom | CellBo
   ctx.restore()
 }
 
-/** Vignettage : bords de la case assombris, d'intensité 0 à 1. */
+/**
+ * Vignettage : assombrit les bords de la case.
+ * @param ctx - contexte de dessin
+ * @param cell - géométrie de la case, ou simple boîte en pixels
+ * @param amount - intensité, de 0 (rien) à 1
+ */
 export function drawVignette(ctx: Ctx, cell: CellGeom | CellBox, amount: number) {
   if (amount <= 0) return
   const box = 'box' in cell ? cell.box : cell
@@ -69,13 +95,24 @@ export function drawVignette(ctx: Ctx, cell: CellGeom | CellBox, amount: number)
   ctx.restore()
 }
 
+/** Réglages de finition des cases, en pixels, pour une taille de collage donnée. */
 export interface CellStyle {
+  /** Couleur du fond, qui sert à tracer l'écart. */
   background: string
+  /** Écart entre cases, en pixels. */
   gap: number
+  /** Épaisseur du contour optionnel, en pixels (0 = aucun). */
   outline: number
   outlineColor: string
 }
 
+/**
+ * Calcule la finition des cases d'un collage à une taille donnée.
+ * @param doc - collage
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @returns couleurs, écart et épaisseur du contour (blanc par défaut)
+ */
 export function cellStyle(doc: CollageDoc, width: number, height: number): CellStyle {
   return {
     background: doc.background,
@@ -86,16 +123,25 @@ export function cellStyle(doc: CollageDoc, width: number, height: number): CellS
 }
 
 /**
- * Finition d'une case en forme : écart (contour couleur du fond) puis contour optionnel.
- * Les rectangles n'en ont pas besoin : leur écart est déjà pris sur leur taille.
+ * Contour optionnel d'une forme de la bibliothèque : aplat dessiné avant la photo.
+ * @param ctx - contexte de dessin
+ * @param cell - géométrie de la case
+ * @param style - finition des cases
  */
-/** Contour optionnel d'une forme de la bibliothèque : aplat dessiné avant la photo. */
 export function underCell(ctx: Ctx, cell: CellGeom, style: CellStyle) {
   if (!cell.under) return
   ctx.fillStyle = style.outlineColor
   ctx.fill(path2d(cell.under))
 }
 
+/**
+ * Finition d'une case en forme : écart (contour couleur du fond) puis contour optionnel.
+ * Les rectangles n'en ont pas besoin, leur écart est déjà pris sur leur taille ; les formes de la
+ * bibliothèque non plus, leur écart est obtenu en les réduisant (voir {@link underCell}).
+ * @param ctx - contexte de dessin
+ * @param cell - géométrie de la case
+ * @param style - finition des cases
+ */
 export function finishCell(ctx: Ctx, cell: CellGeom, style: CellStyle) {
   if (!cell.path || cell.shaped) return
   const p = path2d(cell.path)
@@ -114,8 +160,17 @@ export function finishCell(ctx: Ctx, cell: CellGeom, style: CellStyle) {
   ctx.restore()
 }
 
+/** Couleur « encre » du décor : presque noir, moins dur qu'un noir pur. */
 const INK = '#141414'
 
+/**
+ * Dessine le décor sans photo de la disposition (perforations, cadre…).
+ * @param ctx - contexte de dessin
+ * @param doc - collage (pour la couleur du fond et la marge)
+ * @param layout - disposition
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ */
 export function drawDecor(ctx: Ctx, doc: CollageDoc, layout: Layout, width: number, height: number) {
   for (const d of decorGeometry(layout, width, height, doc.borders)) {
     ctx.fillStyle = d.fill === 'ink' ? INK : d.fill === 'white' ? '#ffffff' : doc.background
@@ -123,6 +178,7 @@ export function drawDecor(ctx: Ctx, doc: CollageDoc, layout: Layout, width: numb
   }
 }
 
+/** Options du rendu d'un collage. */
 export interface RenderOptions {
   /** Couleur des cases dont la photo n'est pas encore chargée (aperçu). */
   placeholder?: string
@@ -131,8 +187,16 @@ export interface RenderOptions {
 }
 
 /**
- * Rendu complet d'un collage. La même fonction sert à l'aperçu et à l'export,
- * ce qui garantit que l'image exportée correspond à ce qui est affiché.
+ * Rendu complet d'un collage : fond, photos dans leurs cases, finitions, décor, puis textes et stickers.
+ * La même fonction sert à l'aperçu et à l'export, ce qui garantit que l'image exportée correspond à ce qui est affiché.
+ * @param ctx - contexte de dessin
+ * @param doc - collage
+ * @param layout - disposition
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param imageFor - photo de la case d'indice donné (déjà filtrée), ou `undefined` si elle n'est pas chargée
+ * @param options - options du rendu
+ * @param overlayFor - image d'un sticker ou d'une icône, ou `undefined` si elle n'est pas chargée
  */
 export function renderCollage(
   ctx: Ctx,

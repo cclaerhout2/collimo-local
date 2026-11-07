@@ -1,17 +1,27 @@
+/** Menu de la photo sélectionnée et panneau de recadrage précis. */
 import { MAX_ZOOM, MIN_ZOOM } from '../../collage/gestures'
 import type { Crop } from '../../collage/types'
 import { useI18n } from '../../i18n'
 
+/** Action proposée par le menu d'une photo. */
 export type PhotoAction = 'swap' | 'flip' | 'rotate' | 'crop' | 'adjust' | 'replace' | 'delete'
 
+/** Propriétés de {@link PhotoMenu}. */
 interface MenuProps {
+  /** Faux s'il ne reste qu'une photo : le collage ne peut pas être vide. */
   canDelete: boolean
+  /** Vrai pendant l'échange : l'utilisateur doit toucher la case avec laquelle échanger. */
   swapPick: boolean
+  /** Appelé avec l'action choisie. */
   onAction: (action: PhotoAction) => void
+  /** Ferme le menu (bouton « OK »). */
   onDone: () => void
 }
 
-/** Menu de la photo sélectionnée, à la place des onglets. */
+/**
+ * Menu de la photo sélectionnée, à la place des onglets.
+ * @returns la consigne des gestes et la barre d'actions
+ */
 export function PhotoMenu({ canDelete, swapPick, onAction, onDone }: MenuProps) {
   const { t } = useI18n()
   const items: { id: PhotoAction; icon: string; disabled?: boolean }[] = [
@@ -36,14 +46,34 @@ export function PhotoMenu({ canDelete, swapPick, onAction, onDone }: MenuProps) 
             aria-pressed={it.id === 'swap' ? swapPick : undefined}
             onClick={() => onAction(it.id)}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d={it.icon} />
             </svg>
             <span>{t(`photo.${it.id}`)}</span>
           </button>
         ))}
         <button type="button" className="photo-action done" onClick={onDone}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M5 12l5 5L20 7" />
           </svg>
           <span>{t('photo.done')}</span>
@@ -53,22 +83,40 @@ export function PhotoMenu({ canDelete, swapPick, onAction, onDone }: MenuProps) 
   )
 }
 
+/** Propriétés de {@link CropPanel}. */
 interface CropProps {
+  /** Cadrage courant de la photo. */
   crop: Crop
+  /** Nouveau zoom (facteur, 1 = photo qui couvre juste la case). */
   onZoom: (zoom: number) => void
+  /** Nouvel angle, en degrés. */
   onAngle: (angle: number) => void
+  /** Remet le cadrage par défaut. */
   onReset: () => void
+  /** Quitte le mode recadrage. */
   onDone: () => void
 }
 
-/** Mode « Recadrer » : réglages précis au curseur, en complément des gestes. */
+/**
+ * Mode « Recadrer » : réglages précis au curseur, en complément des gestes.
+ *
+ * Le curseur de zoom travaille en centièmes, pour un pas fin avec un `step` entier.
+ * @returns les curseurs de zoom et d'angle, et les boutons « Réinitialiser » et « OK »
+ */
 export function CropPanel({ crop, onZoom, onAngle, onReset, onDone }: CropProps) {
   const { t } = useI18n()
   return (
     <div className="sliders">
       <label className="slider">
         <span className="slider-label">{t('crop.zoom')}</span>
-        <input type="range" min={MIN_ZOOM * 100} max={MAX_ZOOM * 100} step={1} value={Math.round(crop.zoom * 100)} onChange={(e) => onZoom(Number(e.target.value) / 100)} />
+        <input
+          type="range"
+          min={MIN_ZOOM * 100}
+          max={MAX_ZOOM * 100}
+          step={1}
+          value={Math.round(crop.zoom * 100)}
+          onChange={(e) => onZoom(Number(e.target.value) / 100)}
+        />
         <span className="slider-value">×{crop.zoom.toFixed(1)}</span>
       </label>
       <label className="slider">

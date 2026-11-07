@@ -1,47 +1,79 @@
+/**
+ * Canevas SVG de l'usine à dispositions : on y dessine et modifie les cases d'une disposition
+ * (déplacement, séparations, sommets, formes), on y choisit les côtés coupés et l'ordre des cases.
+ * Tout est exprimé dans le repère du cadre, de 0 à 1 sur chaque axe.
+ */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { cellPathFrame } from '../../collage/cells'
 import { cellCenter, dragSeparator, insertPoint, movePoint, rectToPoly, translate, type Side } from '../../collage/factory/ops'
 import { serializePath, type Pt } from '../../collage/path'
 import type { CellDef, Decor } from '../../collage/shapes'
 
+/** Outil actif : sélection et modification des cases, choix des coupes, ou numérotation de l'ordre. */
 export type Tool = 'select' | 'cut' | 'order'
+/** Côté droit d'une case, repéré par la case et le numéro du côté. */
 export interface EdgeRef {
+  /** Index de la case. */
   cell: number
+  /** Numéro du côté : celui qui part du sommet `k` vers le suivant. */
   k: number
 }
 
+/** Propriétés du canevas ; l'état est tenu par l'écran de l'usine, le canevas ne fait que le modifier. */
 interface Props {
+  /** Cases de la disposition. */
   cells: CellDef[]
+  /** Décors dessinés par-dessus les cases (traits, ornements). */
   decor?: Decor[]
+  /** Outil actif. */
   tool: Tool
+  /** Index de la case sélectionnée. */
   selected: number | null
+  /** Index du sommet sélectionné dans la case sélectionnée (polygone). */
   point: number | null
+  /** Côté sélectionné en mode Coupes. */
   edge: EdgeRef | null
-  /** Cases déjà numérotées en mode Ordre. */
+  /** Cases déjà numérotées en mode Ordre, dans l'ordre des clics. */
   orderSeq: number[]
+  /** Remplace les cases après une modification. */
   onChange: (cells: CellDef[]) => void
+  /** Sélectionne une case, ou aucune. */
   onSelect: (i: number | null) => void
+  /** Sélectionne un sommet, ou aucun. */
   onSelectPoint: (k: number | null) => void
+  /** Sélectionne un côté, ou aucun. */
   onSelectEdge: (e: EdgeRef | null) => void
+  /** Numérote la case cliquée en mode Ordre. */
   onOrderClick: (i: number) => void
 }
 
-/** Contour d'une case en coordonnées du cadre (0–1). */
+/**
+ * Calcule le contour d'une case en coordonnées du cadre (0–1).
+ * @param c - case à dessiner
+ * @returns le chemin SVG (attribut `d`) du contour
+ */
 export function cellD(c: CellDef): string {
   if (c.kind === 'rect') return `M${c.x} ${c.y}H${c.x + c.w}V${c.y + c.h}H${c.x}Z`
   return serializePath(cellPathFrame(c, 1)!.segs)
 }
 
-/** Sommets d'une case qui a des côtés droits (rectangle ou polygone), dans l'ordre de ses côtés. */
+/**
+ * Donne les sommets d'une case qui a des côtés droits (rectangle ou polygone), dans l'ordre de ses côtés.
+ * @param c - case examinée
+ * @returns les sommets, ou `null` pour une forme ou un chemin courbe
+ */
 export function cellPoints(c: CellDef): Pt[] | null {
   if (c.kind === 'poly') return c.points
   if (c.kind === 'rect') return rectToPoly(c).points
   return null
 }
 
+/** Côtés d'un rectangle, chacun avec sa poignée de séparation. */
 const SIDES: Side[] = ['top', 'right', 'bottom', 'left']
+/** Fractions simples du cadre sur lesquelles les déplacements s'aimantent. */
 const FRACTIONS = [0, 1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1]
 
+/** Glissement en cours, avec les cases d'origine pour recalculer à chaque mouvement depuis le départ. */
 type Drag =
   | { type: 'move'; i: number; from: Pt; orig: CellDef[] }
   | { type: 'side'; i: number; side: Side; orig: CellDef[] }
@@ -49,7 +81,12 @@ type Drag =
   | { type: 'resize'; i: number; orig: CellDef[] }
   | { type: 'rotate'; i: number; orig: CellDef[] }
 
-/** Repères d'aimantation : bords et sommets des autres cases, et fractions simples du cadre. */
+/**
+ * Rassemble les repères d'aimantation : bords et sommets des autres cases, et fractions simples du cadre.
+ * @param cells - cases de la disposition
+ * @param skip - index de la case déplacée, qui ne s'aimante pas sur elle-même
+ * @returns les abscisses et les ordonnées des repères
+ */
 function snapTargets(cells: CellDef[], skip: number): { xs: number[]; ys: number[] } {
   const xs = [...FRACTIONS]
   const ys = [...FRACTIONS]
@@ -68,6 +105,13 @@ function snapTargets(cells: CellDef[], skip: number): { xs: number[]; ys: number
   return { xs, ys }
 }
 
+/**
+ * Aimante une coordonnée sur le repère le plus proche.
+ * @param v - coordonnée à aimanter
+ * @param targets - repères possibles sur le même axe
+ * @param tol - distance maximale d'aimantation, dans le repère 0–1
+ * @returns le repère le plus proche s'il est assez près, sinon `v` arrondi au 1/200 pour garder des valeurs lisibles
+ */
 function snap(v: number, targets: number[], tol = 0.012): number {
   let best = v
   let dist = tol
@@ -81,7 +125,11 @@ function snap(v: number, targets: number[], tol = 0.012): number {
   return best === v ? Math.round(v * 200) / 200 : best
 }
 
-/** Éditeur des cases : sélection, déplacement, séparations, sommets, formes, coupes et ordre. */
+/**
+ * Éditeur des cases : sélection, déplacement, séparations, sommets, formes, coupes et ordre.
+ * @param p - propriétés du canevas
+ * @returns le canevas SVG avec les cases et les poignées de l'outil actif
+ */
 export function FactoryCanvas(p: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<Drag | null>(null)
@@ -96,11 +144,21 @@ export function FactoryCanvas(p: Props) {
   }, [])
 
   const u = 1 / px // une unité écran (pixel CSS) dans le repère 0–1
+  /**
+   * Convertit la position du pointeur en coordonnées du cadre.
+   * @param e - événement qui porte la position à l'écran
+   * @returns le point dans le repère 0–1
+   */
   const toFrame = (e: { clientX: number; clientY: number }): Pt => {
     const r = svgRef.current!.getBoundingClientRect()
     return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]
   }
 
+  /**
+   * Commence un glissement et capture le pointeur, pour continuer à le suivre hors de la poignée.
+   * @param e - appui du pointeur sur une case ou une poignée
+   * @param d - nature du glissement
+   */
   function start(e: ReactPointerEvent, d: Drag) {
     e.stopPropagation()
     e.preventDefault()
@@ -108,6 +166,11 @@ export function FactoryCanvas(p: Props) {
     svgRef.current?.setPointerCapture(e.pointerId)
   }
 
+  /**
+   * Applique le glissement en cours à la position du pointeur, avec aimantation.
+   * Les rotations s'aimantent sur les multiples de 15°.
+   * @param e - déplacement du pointeur
+   */
   function onMove(e: ReactPointerEvent) {
     const d = drag.current
     if (!d) return
@@ -156,11 +219,20 @@ export function FactoryCanvas(p: Props) {
     }
   }
 
+  /**
+   * Termine le glissement en cours.
+   * @param e - relâchement ou annulation du pointeur
+   */
   function onUp(e: ReactPointerEvent) {
     drag.current = null
     if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId)
   }
 
+  /**
+   * Réagit à l'appui sur une case selon l'outil : numérotation en mode Ordre, sinon sélection et début de déplacement.
+   * @param e - appui du pointeur
+   * @param i - index de la case
+   */
   function onCellDown(e: ReactPointerEvent, i: number) {
     if (p.tool === 'order') {
       e.stopPropagation()
@@ -203,7 +275,9 @@ export function FactoryCanvas(p: Props) {
           onPointerDown={(e) => onCellDown(e, i)}
         />
       ))}
-      {p.decor?.map((d, i) => <path key={`d${i}`} d={d.d} className="fc-decor" />)}
+      {p.decor?.map((d, i) => (
+        <path key={`d${i}`} d={d.d} className="fc-decor" />
+      ))}
       {p.cells.map((c, i) => {
         const [x, y] = cellCenter(c)
         const n = p.tool === 'order' ? p.orderSeq.indexOf(i) : i
@@ -216,18 +290,37 @@ export function FactoryCanvas(p: Props) {
       })}
 
       {/* Séparations des rectangles : poignées sur les 4 côtés. */}
-      {p.tool === 'select' && sel?.kind === 'rect' &&
+      {p.tool === 'select' &&
+        sel?.kind === 'rect' &&
         SIDES.map((side) => {
           const c = sel
           const [x1, y1, x2, y2] =
-            side === 'top' ? [c.x, c.y, c.x + c.w, c.y] : side === 'bottom' ? [c.x, c.y + c.h, c.x + c.w, c.y + c.h] : side === 'left' ? [c.x, c.y, c.x, c.y + c.h] : [c.x + c.w, c.y, c.x + c.w, c.y + c.h]
+            side === 'top'
+              ? [c.x, c.y, c.x + c.w, c.y]
+              : side === 'bottom'
+                ? [c.x, c.y + c.h, c.x + c.w, c.y + c.h]
+                : side === 'left'
+                  ? [c.x, c.y, c.x, c.y + c.h]
+                  : [c.x + c.w, c.y, c.x + c.w, c.y + c.h]
           const mx = (x1 + x2) / 2
           const my = (y1 + y2) / 2
           const vertical = side === 'left' || side === 'right'
           return (
-            <g key={side} className={`fc-side ${vertical ? 'v' : 'h'}`} onPointerDown={(e) => start(e, { type: 'side', i: p.selected!, side, orig: p.cells })}>
+            <g
+              key={side}
+              className={`fc-side ${vertical ? 'v' : 'h'}`}
+              onPointerDown={(e) => start(e, { type: 'side', i: p.selected!, side, orig: p.cells })}
+            >
               <line x1={x1} y1={y1} x2={x2} y2={y2} strokeWidth={14 * u} className="fc-hit" />
-              <rect x={mx - (vertical ? 3 : 14) * u} y={my - (vertical ? 14 : 3) * u} width={(vertical ? 6 : 28) * u} height={(vertical ? 28 : 6) * u} rx={3 * u} className="fc-grip" aria-label={side} />
+              <rect
+                x={mx - (vertical ? 3 : 14) * u}
+                y={my - (vertical ? 14 : 3) * u}
+                width={(vertical ? 6 : 28) * u}
+                height={(vertical ? 28 : 6) * u}
+                rx={3 * u}
+                className="fc-grip"
+                aria-label={side}
+              />
             </g>
           )
         })}
@@ -274,8 +367,21 @@ export function FactoryCanvas(p: Props) {
         <g>
           <rect x={sel.x} y={sel.y} width={sel.w} height={sel.h} className="fc-bbox" strokeWidth={1 * u} />
           <line x1={sel.x + sel.w / 2} y1={sel.y} x2={sel.x + sel.w / 2} y2={sel.y - 22 * u} className="fc-bbox" strokeWidth={1 * u} />
-          <circle cx={sel.x + sel.w / 2} cy={sel.y - 22 * u} r={handle} className="fc-rotate" onPointerDown={(e) => start(e, { type: 'rotate', i: p.selected!, orig: p.cells })} />
-          <rect x={sel.x + sel.w - handle} y={sel.y + sel.h - handle} width={handle * 2} height={handle * 2} className="fc-resize" onPointerDown={(e) => start(e, { type: 'resize', i: p.selected!, orig: p.cells })} />
+          <circle
+            cx={sel.x + sel.w / 2}
+            cy={sel.y - 22 * u}
+            r={handle}
+            className="fc-rotate"
+            onPointerDown={(e) => start(e, { type: 'rotate', i: p.selected!, orig: p.cells })}
+          />
+          <rect
+            x={sel.x + sel.w - handle}
+            y={sel.y + sel.h - handle}
+            width={handle * 2}
+            height={handle * 2}
+            className="fc-resize"
+            onPointerDown={(e) => start(e, { type: 'resize', i: p.selected!, orig: p.cells })}
+          />
         </g>
       )}
 
@@ -308,4 +414,9 @@ export function FactoryCanvas(p: Props) {
   )
 }
 
+/**
+ * Arrondit une coordonnée au dix-millième, pour garder des dispositions lisibles.
+ * @param v - coordonnée
+ * @returns la coordonnée arrondie
+ */
 const round = (v: number) => Math.round(v * 10000) / 10000

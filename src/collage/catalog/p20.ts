@@ -1,15 +1,31 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 20 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef, Rect } from '../types'
 
 const C4 = 'c(x,x,x,x)'
 const C5 = 'c(x,x,x,x,x)'
 const C6 = 'c(x,x,x,x,x,x)'
 
-/** Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px. */
+/**
+ * Rectangle libre à partir de coordonnées relevées sur une vignette de 400 px.
+ * @param x1 - bord gauche, en pixels de vignette
+ * @param y1 - bord haut, en pixels de vignette
+ * @param x2 - bord droit, en pixels de vignette
+ * @param y2 - bord bas, en pixels de vignette
+ * @returns le rectangle en coordonnées du cadre (0–1)
+ */
 const px = (x1: number, y1: number, x2: number, y2: number): Rect => ({ x: x1 / 400, y: y1 / 400, w: (x2 - x1) / 400, h: (y2 - y1) / 400 })
 
 /**
  * Case d'un pavage relevée sur une vignette de 400 px (cadre de 15 à 385, gouttières de ~15 px) :
  * les gouttières sont retirées, l'écart réel vient du réglage « Bords ».
+ * @param x1 - bord gauche, en pixels de vignette
+ * @param y1 - bord haut, en pixels de vignette
+ * @param x2 - bord droit, en pixels de vignette
+ * @param y2 - bord bas, en pixels de vignette
+ * @returns le rectangle en coordonnées du cadre (0–1)
  */
 const tile = (x1: number, y1: number, x2: number, y2: number): Rect => {
   const s = (v: number) => (v - 15) / 385
@@ -17,7 +33,11 @@ const tile = (x1: number, y1: number, x2: number, y2: number): Rect => {
   return { x: s(x1), y: s(y1), w: e(x2) - s(x1), h: e(y2) - s(y1) }
 }
 
-/** Grille 5 × 5 dont on retire les cases `holes` (« ligne,colonne »), en coordonnées de vignette. */
+/**
+ * Grille 5 × 5 dont on retire les cases `holes`, en coordonnées de vignette.
+ * @param holes - cases retirées, sous la forme « ligne,colonne »
+ * @returns les cases restantes, rangée par rangée
+ */
 function gridWithHoles(holes: string[]): Rect[] {
   const edges = [15, 95, 172, 248, 325]
   const out: Rect[] = []

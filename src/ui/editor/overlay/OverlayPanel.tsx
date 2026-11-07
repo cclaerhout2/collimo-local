@@ -1,3 +1,7 @@
+/**
+ * Panneau du texte ou sticker sélectionné : actions (dupliquer, ordre, supprimer) et, pour un texte,
+ * saisie, styles prédéfinis, police, couleurs et effets, alignement.
+ */
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { applyPreset, TEXT_PRESETS, type TextPreset } from '../../../collage/overlays'
 import type { IconOverlay, Overlay, TextEffects, TextOverlay } from '../../../collage/types'
@@ -6,7 +10,11 @@ import { ensureFont, nearestWeight } from '../../../stickers/fonts'
 import { ColorPicker, Range } from './ColorPicker'
 import { FontPicker } from './FontPicker'
 
-/** Aperçu CSS d'un style (approximation du rendu Canvas, pour les vignettes). */
+/**
+ * Aperçu CSS d'un style (approximation du rendu Canvas, pour les vignettes).
+ * @param p - style prédéfini
+ * @returns le style CSS à appliquer au « Aa » de la vignette
+ */
 export function presetStyle(p: TextPreset): CSSProperties {
   const shadows: string[] = []
   if (p.effects?.glow?.on) shadows.push(`0 0 6px ${p.effects.glow.color}`, `0 0 12px ${p.effects.glow.color}`)
@@ -24,7 +32,16 @@ export function presetStyle(p: TextPreset): CSSProperties {
   }
 }
 
-export function PresetGrid({ onPick }: { onPick: (p: TextPreset) => void }) {
+/**
+ * Grille des styles de texte prédéfinis ; leurs polices sont chargées dès l'affichage pour des vignettes fidèles.
+ * @returns un bouton « Aa » par style
+ */
+export function PresetGrid({
+  onPick,
+}: {
+  /** Appelé avec le style choisi. */
+  onPick: (p: TextPreset) => void
+}) {
   useEffect(() => {
     for (const p of TEXT_PRESETS) void ensureFont(p.font?.family ?? 'Montserrat', p.font?.weight ?? 700, false)
   }, [])
@@ -39,23 +56,44 @@ export function PresetGrid({ onPick }: { onPick: (p: TextPreset) => void }) {
   )
 }
 
+/** Sous-onglet du panneau de texte. */
 type TextTab = 'edit' | 'styles' | 'font' | 'color' | 'align'
+/** Réglage affiché dans le sous-onglet « Couleur » : couleur du texte, un effet, ou l'opacité. */
 type ColorTab = 'text' | 'stroke' | 'shadow' | 'glow' | 'label' | 'opacity'
 
+/** Propriétés de {@link OverlayPanel}. */
 interface Props {
+  /** Texte ou sticker sélectionné. */
   overlay: Overlay
+  /** Appelé avec l'élément modifié (en entier, pas seulement les champs changés). */
   onChange: (patch: Overlay) => void
+  /** Ajoute une copie de l'élément. */
   onDuplicate: () => void
+  /** Avance l'élément d'un rang. */
   onForward: () => void
+  /** Recule l'élément d'un rang. */
   onBackward: () => void
+  /** Supprime l'élément. */
   onDelete: () => void
+  /** Désélectionne l'élément. */
   onDone: () => void
+  /** Active la pipette ; `apply` recevra la couleur touchée sur l'aperçu. */
   onEyedropper: (apply: (color: string) => void) => void
+  /** Vrai pendant que la pipette attend un toucher. */
   eyedropperActive: boolean
-  /** Demande de mettre le champ texte au premier plan (double-clic sur le texte). */
+  /** Compteur qui change pour demander de mettre le champ texte au premier plan (double-clic, nouveau texte). */
   focusTextToken: number
 }
 
+/**
+ * Panneau du texte ou sticker sélectionné.
+ *
+ * Pour un sticker : actions, opacité et, pour une icône Phosphor (monochrome), sa couleur.
+ * Pour un texte : actions et sous-onglets de saisie, styles, police, couleurs et effets, alignement.
+ * Régler un effet l'active, pour qu'on voie tout de suite le résultat.
+ * @param props - voir {@link Props}
+ * @returns le panneau de l'élément
+ */
 export function OverlayPanel(props: Props) {
   const { overlay: o, onChange, onEyedropper, eyedropperActive } = props
   const { t } = useI18n()
@@ -99,6 +137,12 @@ export function OverlayPanel(props: Props) {
   )
 
   const opacity = <Range label={t('color.opacity')} value={o.opacity} onChange={(v) => onChange({ ...o, opacity: v })} />
+  /**
+   * Sélecteur de couleur branché sur la pipette.
+   * @param value - couleur actuelle
+   * @param apply - reçoit la couleur choisie (nuancier, couleur libre ou pipette)
+   * @returns le sélecteur de couleur
+   */
   const picker = (value: string, apply: (c: string) => void) => (
     <ColorPicker value={value} onChange={apply} onEyedropper={() => onEyedropper(apply)} eyedropperActive={eyedropperActive} />
   )
@@ -117,8 +161,19 @@ export function OverlayPanel(props: Props) {
   }
 
   const text = o as TextOverlay
+  /**
+   * Modifie un effet du texte (contour, ombre, halo, étiquette) en gardant ses autres réglages.
+   * @param k - effet à modifier
+   * @param patch - réglages de l'effet à changer
+   * @returns rien (résultat de `onChange`)
+   */
   const setEffect = <K extends keyof TextEffects>(k: K, patch: Partial<TextEffects[K]>) =>
     onChange({ ...text, effects: { ...text.effects, [k]: { ...text.effects[k], ...patch } } })
+  /**
+   * Case à cocher qui active ou désactive un effet.
+   * @param k - effet concerné
+   * @returns la case à cocher et son libellé
+   */
   const toggle = (k: Exclude<ColorTab, 'text' | 'opacity'>) => (
     <label className="toggle">
       <input type="checkbox" checked={text.effects[k].on} onChange={(e) => setEffect(k, { on: e.target.checked })} />
@@ -131,7 +186,14 @@ export function OverlayPanel(props: Props) {
       {actions}
       <div className="subtabs" role="tablist">
         {(['edit', 'styles', 'font', 'color', 'align'] as const).map((id) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            className={tab === id ? 'active' : ''}
+            onClick={() => setTab(id)}
+          >
             {t(`text.tab.${id}`)}
           </button>
         ))}
@@ -170,7 +232,9 @@ export function OverlayPanel(props: Props) {
             </div>
             <FontPicker
               value={text.font.family}
-              onChange={(f) => onChange({ ...text, font: { ...text.font, family: f.family, weight: nearestWeight(f.weights, text.font.weight) } })}
+              onChange={(f) =>
+                onChange({ ...text, font: { ...text.font, family: f.family, weight: nearestWeight(f.weights, text.font.weight) } })
+              }
             />
           </>
         )}
@@ -189,7 +253,11 @@ export function OverlayPanel(props: Props) {
                 {toggle('stroke')}
                 {picker(text.effects.stroke.color, (c) => setEffect('stroke', { color: c, on: true }))}
                 <div className="sliders">
-                  <Range label={t('effect.width')} value={text.effects.stroke.width} onChange={(v) => setEffect('stroke', { width: v, on: true })} />
+                  <Range
+                    label={t('effect.width')}
+                    value={text.effects.stroke.width}
+                    onChange={(v) => setEffect('stroke', { width: v, on: true })}
+                  />
                 </div>
               </>
             )}
@@ -198,8 +266,16 @@ export function OverlayPanel(props: Props) {
                 {toggle('shadow')}
                 {picker(text.effects.shadow.color, (c) => setEffect('shadow', { color: c, on: true }))}
                 <div className="sliders">
-                  <Range label={t('effect.blur')} value={text.effects.shadow.blur} onChange={(v) => setEffect('shadow', { blur: v, on: true })} />
-                  <Range label={t('effect.distance')} value={text.effects.shadow.distance} onChange={(v) => setEffect('shadow', { distance: v, on: true })} />
+                  <Range
+                    label={t('effect.blur')}
+                    value={text.effects.shadow.blur}
+                    onChange={(v) => setEffect('shadow', { blur: v, on: true })}
+                  />
+                  <Range
+                    label={t('effect.distance')}
+                    value={text.effects.shadow.distance}
+                    onChange={(v) => setEffect('shadow', { distance: v, on: true })}
+                  />
                 </div>
               </>
             )}
@@ -208,7 +284,11 @@ export function OverlayPanel(props: Props) {
                 {toggle('glow')}
                 {picker(text.effects.glow.color, (c) => setEffect('glow', { color: c, on: true }))}
                 <div className="sliders">
-                  <Range label={t('effect.blur')} value={text.effects.glow.blur} onChange={(v) => setEffect('glow', { blur: v, on: true })} />
+                  <Range
+                    label={t('effect.blur')}
+                    value={text.effects.glow.blur}
+                    onChange={(v) => setEffect('glow', { blur: v, on: true })}
+                  />
                 </div>
               </>
             )}
@@ -217,8 +297,16 @@ export function OverlayPanel(props: Props) {
                 {toggle('label')}
                 {picker(text.effects.label.color, (c) => setEffect('label', { color: c, on: true }))}
                 <div className="sliders">
-                  <Range label={t('effect.padding')} value={text.effects.label.padding} onChange={(v) => setEffect('label', { padding: v, on: true })} />
-                  <Range label={t('effect.radius')} value={text.effects.label.radius} onChange={(v) => setEffect('label', { radius: v, on: true })} />
+                  <Range
+                    label={t('effect.padding')}
+                    value={text.effects.label.padding}
+                    onChange={(v) => setEffect('label', { padding: v, on: true })}
+                  />
+                  <Range
+                    label={t('effect.radius')}
+                    value={text.effects.label.radius}
+                    onChange={(v) => setEffect('label', { radius: v, on: true })}
+                  />
                 </div>
               </>
             )}
@@ -228,7 +316,13 @@ export function OverlayPanel(props: Props) {
         {tab === 'align' && (
           <div className="segmented">
             {(['left', 'center', 'right'] as const).map((a) => (
-              <button key={a} type="button" className={text.align === a ? 'active' : ''} aria-pressed={text.align === a} onClick={() => onChange({ ...text, align: a })}>
+              <button
+                key={a}
+                type="button"
+                className={text.align === a ? 'active' : ''}
+                aria-pressed={text.align === a}
+                onClick={() => onChange({ ...text, align: a })}
+              >
                 {t(`text.${a}`)}
               </button>
             ))}

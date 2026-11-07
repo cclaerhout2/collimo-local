@@ -204,6 +204,30 @@ Le code est testé avec un Drive simulé. Avant d'aller plus loin, vérifier sur
 
 Le décodeur HEIC (`heic-to`, basé sur libheif) est sous licence LGPL-3.0. Il est chargé comme un module séparé, seulement quand une photo HEIC est utilisée.
 
+## Conventions de code
+
+Le code suit deux standards, vérifiés automatiquement par `npm test` et `npm run lint` :
+
+**Présentation** : [Prettier](https://prettier.io) (`.prettierrc.json` : sans point-virgule, apostrophes simples, lignes de 140 caractères au plus). `npm run format` met tout le code en forme.
+
+**Documentation** : [TSDoc](https://tsdoc.org), le standard de TypeScript (l'équivalent de Javadoc en Java ou des docstrings en Python), en français :
+
+- chaque fichier commence par un bloc `/** … */` qui dit à quoi il sert ;
+- chaque fonction, composant, hook, type, interface et constante exportée a un bloc `/** … */` juste au-dessus ; la première phrase dit ce qu'il fait ;
+- chaque paramètre a sa ligne `@param nom - rôle`, et toute valeur renvoyée sa ligne `@returns …` ; `@throws` signale une erreur levée volontairement, `@remarks` les explications plus longues, `@example` un exemple d'appel ;
+- les propriétés d'un composant React sont documentées sur leur interface (`Props`), champ par champ ;
+- les commentaires `//` à l'intérieur des fonctions expliquent le *pourquoi* d'un passage délicat, pas ce que le code dit déjà.
+
+```ts
+/**
+ * Taille en pixels d'un collage dont le plus grand côté vaut `long`.
+ * @param ratio - largeur / hauteur du collage
+ * @param long - longueur du plus grand côté, en pixels
+ * @returns la largeur et la hauteur, arrondies au pixel
+ */
+export function sizeForLongSide(ratio: number, long: number): { width: number; height: number } {
+```
+
 ## Structure
 
 ```

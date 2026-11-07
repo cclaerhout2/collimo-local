@@ -1,10 +1,20 @@
+/**
+ * Dispositions « en forme » du catalogue pour 6 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ * Le fichier fournit aussi des outils de construction partagés par les dispositions de 6 à 10 photos.
+ */
 import type { Pt } from '../path'
 import { cutFrame, poly, shape, shapeAt, type CellDef, type ShapeName } from '../shapes'
 import type { LayoutDef } from '../types'
 
 // --- Outils locaux, partagés par p06 à p10 ---
 
-/** Cellules dans l'ordre de lecture (rangées puis colonnes), d'après le centre de leur boîte. */
+/**
+ * Trie des cases dans l'ordre de lecture (rangées puis colonnes), d'après le centre de leur boîte.
+ * @param cells - cases à trier (les chemins comptent comme centrés dans le cadre)
+ * @param tol - écart vertical en dessous duquel deux centres sont sur la même rangée (fraction du cadre)
+ * @returns une copie triée de `cells`
+ */
 export function byReading(cells: CellDef[], tol = 0.08): CellDef[] {
   const c = (d: CellDef): Pt => {
     if (d.kind === 'poly') {
@@ -25,6 +35,11 @@ export function byReading(cells: CellDef[], tol = 0.08): CellDef[] {
 /**
  * Grille à séparations courbes : verticales x = v(y), horizontales y = h(x) (intérieures seulement,
  * les bords du cadre sont ajoutés). Cases échantillonnées en polygones, par rangées.
+ * @param vs - séparations verticales intérieures, de gauche à droite : x en fonction de y
+ * @param hs - séparations horizontales intérieures, de haut en bas : y en fonction de x
+ * @param n - nombre de points échantillonnés sur chaque côté d'une case
+ * @returns les cases, rangée par rangée, de gauche à droite
+ * @remarks Les coins sont trouvés par itération de point fixe (30 tours), suffisant pour des courbes douces.
  */
 export function curvedGrid(vs: ((y: number) => number)[], hs: ((x: number) => number)[], n = 14): CellDef[] {
   const V = [() => 0, ...vs, () => 1]
@@ -63,10 +78,18 @@ export function curvedGrid(vs: ((y: number) => number)[], hs: ((x: number) => nu
   return out
 }
 
-/** Point où la demi-droite (p, dir) sort du cadre. */
+/**
+ * Point où la demi-droite (p, dir) sort du cadre.
+ * @param p - origine, à l'intérieur du cadre
+ * @param dir - direction (non nécessairement normée)
+ * @returns le point de sortie, sur un bord du cadre
+ */
 export function rayHit(p: Pt, dir: Pt): Pt {
   const [dx, dy] = dir
-  const ts = [dx > 1e-9 ? (1 - p[0]) / dx : dx < -1e-9 ? -p[0] / dx : Infinity, dy > 1e-9 ? (1 - p[1]) / dy : dy < -1e-9 ? -p[1] / dy : Infinity]
+  const ts = [
+    dx > 1e-9 ? (1 - p[0]) / dx : dx < -1e-9 ? -p[0] / dx : Infinity,
+    dy > 1e-9 ? (1 - p[1]) / dy : dy < -1e-9 ? -p[1] / dy : Infinity,
+  ]
   const t = Math.min(...ts)
   return [p[0] + dx * t, p[1] + dy * t]
 }
@@ -75,12 +98,22 @@ export function rayHit(p: Pt, dir: Pt): Pt {
  * Zones entre des demi-droites qui partent d'un motif central : la demi-droite i part de starts[i]
  * dans la direction dirs[i] ; la zone i va de la demi-droite i à la suivante, en suivant le cadre,
  * puis revient par `inner[i]` (points du motif entre starts[i+1] et starts[i]).
+ * @param c - centre du motif, qui sert à ordonner les points du cadre par angle
+ * @param starts - points de départ des demi-droites, dans l'ordre angulaire
+ * @param dirs - direction de chaque demi-droite
+ * @param inner - points du motif à intercaler au retour de chaque zone (facultatif)
+ * @returns une case polygonale par demi-droite
  */
 export function radial(c: Pt, starts: Pt[], dirs: Pt[], inner: Pt[][] = []): CellDef[] {
   const n = starts.length
   const hits = starts.map((s, i) => rayHit(s, dirs[i]))
   const ang = (p: Pt) => Math.atan2(p[1] - c[1], p[0] - c[0])
-  const corners: Pt[] = [[0, 0], [1, 0], [1, 1], [0, 1]]
+  const corners: Pt[] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ]
   const out: CellDef[] = []
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
@@ -101,8 +134,22 @@ export function radial(c: Pt, starts: Pt[], dirs: Pt[], inner: Pt[][] = []): Cel
 /**
  * Grand cœur découpé : carré sur la pointe (sommets haut, droite, bas, gauche) divisé en nu × nv
  * losanges, plus deux lobes en demi-cercle sur les côtés hauts.
+ * @param nu - nombre de divisions le long du côté gauche → haut
+ * @param nv - nombre de divisions le long du côté gauche → bas
+ * @param T - sommet haut du carré
+ * @param R - sommet droit du carré
+ * @param B - sommet bas (pointe du cœur)
+ * @param L - sommet gauche du carré
+ * @returns les deux lobes (gauche, droit), puis les losanges dans l'ordre de lecture
  */
-export function heartPieces(nu: number, nv: number, T: Pt = [0.5, 0.22], R: Pt = [0.88, 0.6], B: Pt = [0.5, 0.98], L: Pt = [0.12, 0.6]): CellDef[] {
+export function heartPieces(
+  nu: number,
+  nv: number,
+  T: Pt = [0.5, 0.22],
+  R: Pt = [0.88, 0.6],
+  B: Pt = [0.5, 0.98],
+  L: Pt = [0.12, 0.6],
+): CellDef[] {
   const k = 0.5523
   // Lobe sur le segment a→b, bombé vers l'extérieur (côté opposé au centre du carré).
   const lobe = (a: Pt, b: Pt): CellDef => {
@@ -131,11 +178,22 @@ export function heartPieces(nu: number, nv: number, T: Pt = [0.5, 0.22], R: Pt =
   const P = (u: number, v: number): Pt => [L[0] + u * (T[0] - L[0]) + v * (B[0] - L[0]), L[1] + u * (T[1] - L[1]) + v * (B[1] - L[1])]
   const pieces: CellDef[] = []
   for (let i = 0; i < nu; i++)
-    for (let j = 0; j < nv; j++) pieces.push(poly(P(i / nu, j / nv), P((i + 1) / nu, j / nv), P((i + 1) / nu, (j + 1) / nv), P(i / nu, (j + 1) / nv)))
+    for (let j = 0; j < nv; j++)
+      pieces.push(poly(P(i / nu, j / nv), P((i + 1) / nu, j / nv), P((i + 1) / nu, (j + 1) / nv), P(i / nu, (j + 1) / nv)))
   return [lobe(L, T), lobe(T, R), ...byReading(pieces, 0.04)]
 }
 
-/** Formes en couronne, pointe vers le centre (cœurs). */
+/**
+ * Formes en couronne, pointe vers le centre (cœurs).
+ * @param s - forme utilisée
+ * @param n - nombre de formes
+ * @param size - taille de chaque forme, en fraction du cadre
+ * @param radius - rayon de la couronne
+ * @param cx - abscisse du centre de la couronne
+ * @param cy - ordonnée du centre de la couronne
+ * @param start - décalage angulaire de la première forme, en degrés (0 = en haut)
+ * @returns les cases, dans le sens des aiguilles d'une montre
+ */
 export function ringToward(s: ShapeName, n: number, size: number, radius: number, cx = 0.5, cy = 0.5, start = 0): CellDef[] {
   return Array.from({ length: n }, (_, i) => {
     const deg = start - 90 + (i * 360) / n
@@ -144,11 +202,20 @@ export function ringToward(s: ShapeName, n: number, size: number, radius: number
   })
 }
 
-/** Ovale (cercle étiré) centré en (cx, cy). */
-export const oval = (cx: number, cy: number, w: number, h: number): CellDef => shape('circle', cx - w / 2, cy - h / 2, w, h, { stretch: true })
+/**
+ * Ovale (cercle étiré) centré en (cx, cy).
+ * @param cx - abscisse du centre
+ * @param cy - ordonnée du centre
+ * @param w - largeur
+ * @param h - hauteur
+ * @returns la case « forme » correspondante
+ */
+export const oval = (cx: number, cy: number, w: number, h: number): CellDef =>
+  shape('circle', cx - w / 2, cy - h / 2, w, h, { stretch: true })
 
 // --- 6 photos ---
 
+// Séparations courbes de la grille 3 × 2 : deux verticales x = f(y), une horizontale y = g(x).
 const f1 = (y: number) => 0.31 + 0.08 * Math.sin(Math.PI * y) - 0.02 * y
 const f2 = (y: number) => 0.69 - 0.08 * Math.sin(Math.PI * y) + 0.02 * y
 const g1 = (x: number) => 0.56 - 0.1 * Math.sin(Math.PI * x)
@@ -173,10 +240,29 @@ export const P06_FORMES: LayoutDef[] = [
     id: 'p06-12',
     photos: 6,
     family: 'ronds',
-    geo: [oval(0.19, 0.26, 0.31, 0.47), oval(0.5, 0.26, 0.31, 0.47), oval(0.81, 0.26, 0.31, 0.47), oval(0.19, 0.74, 0.31, 0.47), oval(0.5, 0.74, 0.31, 0.47), oval(0.81, 0.74, 0.31, 0.47)],
+    geo: [
+      oval(0.19, 0.26, 0.31, 0.47),
+      oval(0.5, 0.26, 0.31, 0.47),
+      oval(0.81, 0.26, 0.31, 0.47),
+      oval(0.19, 0.74, 0.31, 0.47),
+      oval(0.5, 0.74, 0.31, 0.47),
+      oval(0.81, 0.74, 0.31, 0.47),
+    ],
   },
   { id: 'p06-17', photos: 6, family: 'coeurs', geo: ringToward('heart', 6, 0.34, 0.32) },
-  { id: 'p06-18', photos: 6, family: 'ronds', geo: byReading([shapeAt('circle', 0.5, 0.17, 0.30), shapeAt('circle', 0.78, 0.33, 0.30), shapeAt('circle', 0.78, 0.67, 0.30), shapeAt('circle', 0.5, 0.83, 0.30), shapeAt('circle', 0.22, 0.67, 0.30), shapeAt('circle', 0.22, 0.33, 0.30)]) },
+  {
+    id: 'p06-18',
+    photos: 6,
+    family: 'ronds',
+    geo: byReading([
+      shapeAt('circle', 0.5, 0.17, 0.3),
+      shapeAt('circle', 0.78, 0.33, 0.3),
+      shapeAt('circle', 0.78, 0.67, 0.3),
+      shapeAt('circle', 0.5, 0.83, 0.3),
+      shapeAt('circle', 0.22, 0.67, 0.3),
+      shapeAt('circle', 0.22, 0.33, 0.3),
+    ]),
+  },
   {
     id: 'p06-19',
     photos: 6,
@@ -196,14 +282,58 @@ export const P06_FORMES: LayoutDef[] = [
     family: 'coeurs',
     geo: [
       shapeAt('heart', 0.33, 0.21, 0.32, { rotate: -12 }),
-      shapeAt('heart', 0.63, 0.2, 0.30, { rotate: 14 }),
+      shapeAt('heart', 0.63, 0.2, 0.3, { rotate: 14 }),
       shapeAt('heart', 0.22, 0.48, 0.34, { rotate: -16 }),
       shapeAt('heart', 0.76, 0.42, 0.28, { rotate: 12 }),
       shapeAt('heart', 0.27, 0.77, 0.34, { rotate: 6 }),
       shapeAt('heart', 0.66, 0.69, 0.48, { rotate: -10 }),
     ],
   },
-  { id: 'p06-27', photos: 6, family: 'coupe', geo: cutFrame([[[0.2, 0], [0.8, 1]], [[0.8, 0], [0.2, 1]], [[0, 0.5], [1, 0.5]]]) },
-  { id: 'p06-28', photos: 6, family: 'coupe', geo: cutFrame([[[0, 0.33], [0.33, 0]], [[0, 0.67], [0.67, 0]], [[0, 1], [1, 0]], [[0.33, 1], [1, 0.33]], [[0.67, 1], [1, 0.67]]]) },
+  {
+    id: 'p06-27',
+    photos: 6,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0.2, 0],
+        [0.8, 1],
+      ],
+      [
+        [0.8, 0],
+        [0.2, 1],
+      ],
+      [
+        [0, 0.5],
+        [1, 0.5],
+      ],
+    ]),
+  },
+  {
+    id: 'p06-28',
+    photos: 6,
+    family: 'coupe',
+    geo: cutFrame([
+      [
+        [0, 0.33],
+        [0.33, 0],
+      ],
+      [
+        [0, 0.67],
+        [0.67, 0],
+      ],
+      [
+        [0, 1],
+        [1, 0],
+      ],
+      [
+        [0.33, 1],
+        [1, 0.33],
+      ],
+      [
+        [0.67, 1],
+        [1, 0.67],
+      ],
+    ]),
+  },
   { id: 'p06-31', photos: 6, family: 'coeurs', geo: heartPieces(2, 2) },
 ]

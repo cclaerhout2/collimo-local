@@ -1,3 +1,6 @@
+/**
+ * Galerie : projets déjà enregistrés, puis photos du dossier choisi, à sélectionner pour créer un collage.
+ */
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { MAX_PHOTOS } from '../config'
 import type { Location, Photo, Services } from '../google/types'
@@ -6,21 +9,34 @@ import { pruneSelection, toggleSelection } from '../lib/selection'
 import { ProjectsList, type ProjectEntry } from './ProjectsList'
 import { Thumbnail } from './Thumbnail'
 
+/** Propriétés de l'écran de la galerie. */
 interface Props {
+  /** Services Google (Drive). */
   services: Services
+  /** Emplacement de travail : Drive, dossier de photos et dossier Collimo. */
   location: Location
+  /** Identifiants des photos sélectionnées, dans l'ordre de sélection. */
   selection: string[]
+  /** Modifie la sélection ; elle est gardée par l'app pour survivre à un passage par l'éditeur. */
   onSelectionChange: Dispatch<SetStateAction<string[]>>
+  /** Crée un collage avec les photos sélectionnées, dans l'ordre. */
   onCreate: (photos: Photo[]) => void
+  /** Ouvre un projet enregistré. */
   onOpenProject: (entry: ProjectEntry) => void
+  /** Signale une erreur à afficher. */
   onError: (e: unknown) => void
 }
 
+/**
+ * Écran de la galerie, avec la barre de sélection en bas.
+ * @returns l'écran de la galerie
+ */
 export function GalleryScreen({ services, location, selection, onSelectionChange, onCreate, onOpenProject, onError }: Props) {
   const { t } = useI18n()
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [limitHint, setLimitHint] = useState(false)
 
+  /** Charge la liste des photos et retire de la sélection celles qui ne sont plus disponibles. */
   const load = useCallback(async () => {
     try {
       const list = await services.drive.listPhotos(location.folder, location.drive.id)
@@ -37,6 +53,10 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
     void load()
   }, [load])
 
+  /**
+   * Ajoute une photo à la sélection ou l'en retire, dans la limite du nombre maximal de photos.
+   * @param photo - photo cliquée ; ignorée si son format n'est pas pris en charge
+   */
   function toggle(photo: Photo) {
     if (!photo.supported) return
     const r = toggleSelection(selection, photo.id, MAX_PHOTOS)
@@ -55,11 +75,15 @@ export function GalleryScreen({ services, location, selection, onSelectionChange
           <p className="crumbs">{t('gallery.location', { drive: driveName, folder: location.folder.name })}</p>
           {photos && <p className="muted">{t('gallery.count', { count: photos.length })}</p>}
         </div>
-        <button type="button" className="btn btn-ghost btn-small" onClick={() => {
+        <button
+          type="button"
+          className="btn btn-ghost btn-small"
+          onClick={() => {
             setPhotos(null)
             void load()
           }}
-          disabled={!photos}>
+          disabled={!photos}
+        >
           {t('gallery.refresh')}
         </button>
       </div>

@@ -1,5 +1,17 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 9 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef, Rect } from '../types'
 
+/**
+ * Rectangle donné par deux coins opposés, en coordonnées du cadre (0–1).
+ * @param x0 - bord gauche
+ * @param y0 - bord haut
+ * @param x1 - bord droit
+ * @param y1 - bord bas
+ * @returns le rectangle (x, y, w, h)
+ */
 const box = (x0: number, y0: number, x1: number, y1: number): Rect => ({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
 
 /** Dispositions en rectangles pour 9 photo(s), dans l'ordre des captures de référence. */

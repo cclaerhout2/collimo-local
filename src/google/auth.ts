@@ -1,7 +1,9 @@
+/** Service de connexion Google réel (Google Identity Services), qui fournit le jeton d'accès aux API. */
 import { SCOPES, type AppConfig } from '../config'
 import { loadScript } from './loadScript'
 import { AuthError, SessionExpiredError, type AuthService } from './types'
 
+/** Adresse du script Google Identity Services. */
 const GIS_SRC = 'https://accounts.google.com/gsi/client'
 /** Marge avant expiration : on considère le jeton périmé 60 s avant l'heure annoncée. */
 const EXPIRY_MARGIN_MS = 60_000
@@ -9,6 +11,9 @@ const EXPIRY_MARGIN_MS = 60_000
 /**
  * Connexion par Google Identity Services (jeton OAuth côté navigateur).
  * Le jeton dure environ une heure ; ensuite l'utilisateur se reconnecte d'un clic.
+ * @param config - configuration de l'app (identifiant client OAuth, domaine autorisé)
+ * @returns le service de connexion ; `signIn` lève une `AuthError` si la connexion échoue ou si
+ * toutes les autorisations ne sont pas accordées
  */
 export function createGoogleAuth(config: AppConfig): AuthService {
   let token: string | null = null
@@ -24,8 +29,7 @@ export function createGoogleAuth(config: AppConfig): AuthService {
           hd: config.allowedDomain || undefined,
           include_granted_scopes: true,
           callback: (r) => (r.error ? reject(new AuthError('other', r.error_description ?? r.error)) : resolve(r)),
-          error_callback: (e) =>
-            reject(new AuthError(e.type === 'unknown' ? 'other' : 'popup', e.message)),
+          error_callback: (e) => reject(new AuthError(e.type === 'unknown' ? 'other' : 'popup', e.message)),
         })
         client.requestAccessToken({ prompt: token ? '' : 'select_account' })
       })

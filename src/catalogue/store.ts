@@ -8,10 +8,13 @@ import { CATALOGUE_FILE_NAME, emptyCatalogue, parseCatalogue, type CatalogueData
 import { DriveApiError } from '../google/drive'
 import type { DriveJsonFile, DriveService, SharedDriveInfo } from '../google/types'
 
+/** Catalogue chargé, avec le Drive partagé qui le contient et les droits de l'utilisateur. */
 export interface CatalogueState {
+  /** Drive partagé du catalogue. */
   drive: SharedDriveInfo
   /** Fichier du catalogue ; null tant qu'aucun admin n'a rien enregistré. */
   file: DriveJsonFile | null
+  /** Contenu lu (catalogue vide s'il n'y a pas encore de fichier). */
   data: CatalogueData
   /** Peut ouvrir l'usine (droit d'écriture sur le Drive du catalogue). */
   isAdmin: boolean
@@ -30,9 +33,20 @@ export class CatalogueGrantError extends Error {
 /** Le catalogue n'est pas accessible en écriture pour cet utilisateur. */
 export class CatalogueReadOnlyError extends Error {}
 
-/** Charge le catalogue ; null si le Drive partagé n'existe pas ou n'est pas visible pour l'utilisateur. */
-export async function loadCatalogue(drive: DriveService, config: Pick<AppConfig, 'catalogueDriveId' | 'catalogueDriveName'>): Promise<CatalogueState | null> {
-  const shared = await drive.findSharedDrive(config.catalogueDriveId ? { id: config.catalogueDriveId } : { name: config.catalogueDriveName })
+/**
+ * Charge le catalogue.
+ * @param drive - client Drive de l'utilisateur
+ * @param config - identifiant ou, à défaut, nom du Drive partagé du catalogue
+ * @returns l'état du catalogue, ou `null` si le Drive partagé n'existe pas ou n'est pas visible pour l'utilisateur
+ * @throws `CatalogueFormatError` si le fichier présent n'est pas un catalogue
+ */
+export async function loadCatalogue(
+  drive: DriveService,
+  config: Pick<AppConfig, 'catalogueDriveId' | 'catalogueDriveName'>,
+): Promise<CatalogueState | null> {
+  const shared = await drive.findSharedDrive(
+    config.catalogueDriveId ? { id: config.catalogueDriveId } : { name: config.catalogueDriveName },
+  )
   if (!shared) return null
   const file = await drive.findRootFile(shared.id, CATALOGUE_FILE_NAME)
   let data = emptyCatalogue()
@@ -44,6 +58,13 @@ export async function loadCatalogue(drive: DriveService, config: Pick<AppConfig,
 /**
  * Enregistre une modification : relit d'abord le fichier sur Drive (un autre admin a pu publier
  * entre-temps), applique `change` à cette version, puis réécrit. Drive garde les versions précédentes.
+ * @param drive - client Drive de l'utilisateur
+ * @param state - état actuel du catalogue
+ * @param change - modification à appliquer au catalogue relu (fonction pure)
+ * @param user - adresse e-mail de l'auteur, notée dans `updatedBy`
+ * @returns le nouvel état, avec le fichier écrit
+ * @throws {@link CatalogueReadOnlyError} si l'utilisateur n'est pas admin
+ * @throws {@link CatalogueGrantError} si Collimo n'est pas encore autorisé à modifier le fichier
  */
 export async function saveCatalogue(
   drive: DriveService,

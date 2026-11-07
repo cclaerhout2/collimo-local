@@ -8,11 +8,13 @@ import { mapPath, parsePath, pathBBox, polyPath, serializePath, type Pt, type Se
 import { polyCutPath, SHAPES, type CellDef } from './shapes'
 import type { Borders, Layout, Rect } from './types'
 
+/** Géométrie d'une case en pixels, prête à dessiner. */
 export interface CellGeom {
   /** Boîte de la photo : elle la couvre entièrement. */
   box: CellBox
   /** Contour en pixels (absent pour une case rectangulaire). */
   path?: string
+  /** Remplissage pair-impair du contour (pour les chemins percés de trous). */
   evenodd?: boolean
   /**
    * Forme de la bibliothèque : l'écart est obtenu en la réduisant (pas de contour tracé, qui
@@ -20,6 +22,7 @@ export interface CellGeom {
    * est un aplat dessiné derrière (`under`).
    */
   shaped?: boolean
+  /** Chemin en pixels de l'aplat de contour, dessiné derrière la forme. */
   under?: string
   /** Case isolée (aucune voisine) : pas d'écart tracé autour. */
   noGap?: boolean
@@ -28,7 +31,13 @@ export interface CellGeom {
 /** Épaisseur maximale du contour optionnel, en part du plus petit côté. */
 export const MAX_OUTLINE = 0.02
 
+/** Chemins déjà lus, par texte du chemin : la bibliothèque et le catalogue réutilisent les mêmes. */
 const parsed = new Map<string, Seg[]>()
+/**
+ * Lit un chemin SVG, en gardant le résultat pour les appels suivants.
+ * @param d - chemin SVG
+ * @returns les segments absolus (à ne pas modifier : ils sont partagés)
+ */
 function segs(d: string): Seg[] {
   let s = parsed.get(d)
   if (!s) {
@@ -38,7 +47,13 @@ function segs(d: string): Seg[] {
   return s
 }
 
-/** Chemin d'une case en forme, en coordonnées du cadre (0–1), à partir d'un cadre de rapport `aspect`. */
+/**
+ * Chemin d'une case en forme, en coordonnées du cadre (0–1).
+ * @param c - définition de la case
+ * @param aspect - rapport largeur / hauteur de la zone de dessin, en pixels ; sert à garder les proportions des formes et à les faire tourner sans les déformer
+ * @param scale - facteur de taille d'une forme de la bibliothèque autour de son centre (1 = taille de son rectangle)
+ * @returns les segments et le mode de remplissage, ou `null` pour une case rectangulaire
+ */
 export function cellPathFrame(c: CellDef, aspect: number, scale = 1): { segs: Seg[]; evenodd?: boolean } | null {
   if (c.kind === 'rect') return null
   if (c.kind === 'poly') return { segs: segs(c.cuts?.some(Boolean) ? polyCutPath(c.points, c.cuts) : polyPath(c.points)) }
@@ -68,6 +83,11 @@ export function cellPathFrame(c: CellDef, aspect: number, scale = 1): { segs: Se
   return { segs: mapPath(segs(SHAPES[c.shape]), fn) }
 }
 
+/**
+ * Boîte englobante d'une case, en coordonnées du cadre (0–1).
+ * @param c - définition de la case
+ * @returns la boîte ; pour une forme, son rectangle de pose
+ */
 export function defBBox(c: CellDef): Rect {
   if (c.kind === 'rect' || c.kind === 'shape') return { x: c.x, y: c.y, w: c.w, h: c.h }
   return pathBBox(cellPathFrame(c, 1)!.segs)
@@ -77,6 +97,11 @@ export function defBBox(c: CellDef): Rect {
  * Cases d'une disposition en pixels, pour un collage de taille (width, height).
  * Les derniers résultats sont gardés : pendant un geste, l'aperçu, la couche des gestes et l'export
  * redemandent la même géométrie plusieurs fois par image.
+ * @param layout - disposition
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param borders - réglages des bords
+ * @returns la géométrie de chaque case, dans l'ordre des cases (tableau partagé, à ne pas modifier)
  */
 export function cellGeometry(layout: Layout, width: number, height: number, borders: Borders): CellGeom[] {
   const key = `${width}|${height}|${borders.spacing}|${borders.margin}|${borders.radius}|${borders.outline ?? 0}`
@@ -93,8 +118,17 @@ export function cellGeometry(layout: Layout, width: number, height: number, bord
   return out
 }
 
+/** Derniers résultats de {@link cellGeometry}, par disposition puis par taille et bords (8 au plus par disposition). */
 const geomCache = new WeakMap<Layout, Map<string, CellGeom[]>>()
 
+/**
+ * Calcule les cases d'une disposition en pixels (sans cache : voir {@link cellGeometry}).
+ * @param layout - disposition
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param borders - réglages des bords
+ * @returns la géométrie de chaque case, dans l'ordre des cases
+ */
 function computeCellGeometry(layout: Layout, width: number, height: number, borders: Borders): CellGeom[] {
   if (!layout.geo) return cellBoxes(layout.cells, width, height, borders).map((box) => ({ box }))
   const { outer, areaW, areaH } = drawingArea(width, height, borders)
@@ -138,7 +172,14 @@ function computeCellGeometry(layout: Layout, width: number, height: number, bord
   })
 }
 
-/** Chemins du décor, en pixels. */
+/**
+ * Chemins du décor, en pixels.
+ * @param layout - disposition
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param borders - réglages des bords (la marge déplace la zone de dessin)
+ * @returns les éléments de décor, chemin converti en pixels ; vide si la disposition n'en a pas
+ */
 export function decorGeometry(layout: Layout, width: number, height: number, borders: Borders) {
   if (!layout.decor) return []
   const { outer, areaW, areaH } = drawingArea(width, height, borders)
@@ -148,11 +189,24 @@ export function decorGeometry(layout: Layout, width: number, height: number, bor
   }))
 }
 
-/** Écart en pixels (épaisseur du contour couleur du fond autour des cases en forme). */
+/**
+ * Écart en pixels (épaisseur du contour couleur du fond autour des cases en forme).
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param borders - réglages des bords
+ * @returns l'écart, en pixels
+ */
 export function gapPx(width: number, height: number, borders: Borders): number {
   return borders.spacing * MAX_SPACING * Math.min(width, height)
 }
 
+/**
+ * Épaisseur en pixels du contour optionnel autour des cases en forme.
+ * @param width - largeur du collage, en pixels
+ * @param height - hauteur du collage, en pixels
+ * @param borders - réglages des bords
+ * @returns l'épaisseur, en pixels (0 sans contour)
+ */
 export function outlinePx(width: number, height: number, borders: Borders): number {
   return (borders.outline ?? 0) * MAX_OUTLINE * Math.min(width, height)
 }

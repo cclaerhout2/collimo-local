@@ -1,3 +1,7 @@
+/**
+ * Export d'un collage en fichier image : choix de la taille selon le préréglage et l'appareil,
+ * puis dessin hors écran en pleine résolution, photo par photo pour limiter la mémoire.
+ */
 import { cellGeometry } from './cells'
 import { sizeForLongSide } from './geometry'
 import { drawOverlay, overlayBox } from './overlays'
@@ -6,17 +10,29 @@ import { processPhoto } from './colorProcessor'
 import { cellStyle, drawDecor, drawPhotoInCell, drawVignette, finishCell, underCell, type Drawable } from './render'
 import type { CollageDoc, Layout, Overlay, PlacedPhoto, TextOverlay } from './types'
 
+/** Format du fichier exporté. */
 export type ExportFormat = 'jpeg' | 'png'
+/** Préréglage de taille d'export : standard, haute définition, ou taille native des photos. */
 export type ExportPreset = 'standard' | 'hd' | 'max'
 
+/** Plus grand côté de l'export standard, en pixels ; c'est aussi le minimum de tous les préréglages. */
 export const STANDARD_SIDE = 2048
+/** Plus grand côté de l'export haute définition, en pixels (et du préréglage « Maximum » si les tailles des photos sont inconnues). */
 export const HD_SIDE = 5000
 /** iPhone et iPad limitent la taille d'image du navigateur (environ 16 millions de pixels). */
 export const IOS_MAX_SIDE = 4000
 /** Plafond de sécurité du préréglage « Maximum » sur ordinateur et Android. */
 export const DESKTOP_MAX_SIDE = 8000
+/** Qualité JPEG par défaut, de 1 à 100. */
 export const DEFAULT_JPEG_QUALITY = 90
 
+/**
+ * Indique si l'appareil est un iPhone, iPod ou iPad (y compris les iPad qui se présentent comme un Mac).
+ * @param ua - chaîne d'identification du navigateur
+ * @param platform - plateforme annoncée par le navigateur
+ * @param touchPoints - nombre de points de contact tactile pris en charge
+ * @returns `true` sur iPhone, iPod et iPad
+ */
 export function isAppleMobile(ua = navigator.userAgent, platform = navigator.platform, touchPoints = navigator.maxTouchPoints): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (platform === 'MacIntel' && touchPoints > 1)
 }
@@ -24,6 +40,11 @@ export function isAppleMobile(ua = navigator.userAgent, platform = navigator.pla
 /**
  * Plus grand côté nécessaire pour que chaque photo soit affichée sans agrandissement :
  * pour chaque case, la taille qui place la photo à l'échelle 1, puis la plus grande de ces tailles.
+ * La rotation n'est pas prise en compte.
+ * @param doc - collage
+ * @param layout - disposition
+ * @param ratio - largeur / hauteur du collage
+ * @returns le plus grand côté en pixels, ou `null` si aucune photo n'a de dimensions connues
  */
 export function nativeLongSide(doc: CollageDoc, layout: Layout, ratio: number): number | null {
   const rw = ratio >= 1 ? 1 : ratio
@@ -40,8 +61,12 @@ export function nativeLongSide(doc: CollageDoc, layout: Layout, ratio: number): 
 }
 
 /**
- * Plus grand côté de la source nécessaire pour dessiner la photo dans une case (w × h px) sans
+ * Plus grand côté de la source nécessaire pour dessiner la photo dans une case sans
  * agrandissement, au zoom et à l'angle du cadrage. Sans dimensions connues, √2 couvre toute rotation.
+ * @param w - largeur de la case, en pixels
+ * @param h - hauteur de la case, en pixels
+ * @param photo - dimensions d'origine et cadrage de la photo
+ * @returns le plus grand côté utile de la photo décodée, en pixels (arrondi au-dessus)
  */
 export function sourceLongSide(w: number, h: number, photo: Pick<PlacedPhoto, 'width' | 'height' | 'crop'>): number {
   const zoom = Math.max(1, photo.crop.zoom)
@@ -55,6 +80,7 @@ export function sourceLongSide(w: number, h: number, photo: Pick<PlacedPhoto, 'w
   return Math.ceil(Math.max(photo.width, photo.height) * scale)
 }
 
+/** Taille de l'image exportée, en pixels. */
 export interface ExportSize {
   width: number
   height: number
@@ -62,6 +88,15 @@ export interface ExportSize {
   cappedForIos: boolean
 }
 
+/**
+ * Taille de l'image exportée pour un préréglage, plafonnée selon l'appareil.
+ * @param preset - préréglage choisi
+ * @param ratio - largeur / hauteur du collage
+ * @param doc - collage (pour la taille native des photos, préréglage « Maximum »)
+ * @param layout - disposition
+ * @param appleMobile - `true` sur iPhone ou iPad, dont le navigateur limite la taille des images
+ * @returns largeur et hauteur en pixels, et si la taille a été réduite à cause de la limite iPhone/iPad
+ */
 export function exportSize(preset: ExportPreset, ratio: number, doc: CollageDoc, layout: Layout, appleMobile: boolean): ExportSize {
   const cap = appleMobile ? IOS_MAX_SIDE : DESKTOP_MAX_SIDE
   let wanted: number
@@ -73,12 +108,21 @@ export function exportSize(preset: ExportPreset, ratio: number, doc: CollageDoc,
   return { ...sizeForLongSide(ratio, long), cappedForIos: appleMobile && wanted > IOS_MAX_SIDE }
 }
 
+/** Image chargée pour l'export, à libérer après usage. */
 export interface ExportImage extends Drawable {
+  /** Libère la mémoire de l'image, dès qu'elle est dessinée. */
   close(): void
 }
 
+/** Canvas hors écran si le navigateur le permet, sinon élément `<canvas>`. */
 type AnyCanvas = OffscreenCanvas | HTMLCanvasElement
 
+/**
+ * Crée un canvas de la taille donnée, hors écran si possible.
+ * @param width - largeur, en pixels
+ * @param height - hauteur, en pixels
+ * @returns le canvas
+ */
 function makeCanvas(width: number, height: number): AnyCanvas {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height)
   const c = document.createElement('canvas')
@@ -87,30 +131,44 @@ function makeCanvas(width: number, height: number): AnyCanvas {
   return c
 }
 
+/**
+ * Encode le contenu d'un canvas en fichier image.
+ * @param canvas - canvas à encoder
+ * @param type - type MIME de l'image
+ * @param quality - qualité de 0 à 1 (JPEG seulement)
+ * @returns le fichier encodé
+ * @throws Error si le navigateur n'a pas pu encoder l'image
+ */
 function toBlob(canvas: AnyCanvas, type: string, quality?: number): Promise<Blob> {
   if ('convertToBlob' in canvas) return canvas.convertToBlob({ type, quality })
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('export impossible'))), type, quality),
-  )
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('export impossible'))), type, quality))
 }
 
 /**
- * Redessine le collage hors écran à la taille finale. Les photos sont chargées une par une
- * (`loadForCell` reçoit le plus grand côté utile) et libérées aussitôt dessinées.
+ * Redessine le collage hors écran à la taille finale et l'encode.
+ * Les photos sont chargées une par une (`loadForCell` reçoit le plus grand côté utile) et libérées
+ * aussitôt dessinées, pour tenir dans la mémoire des téléphones.
+ * @param args - collage, disposition, taille en pixels, format, qualité, et fonctions de chargement
+ * @returns le fichier image
+ * @throws Error si le navigateur ne fournit pas de contexte de dessin ou n'arrive pas à encoder l'image
  */
 export async function exportCollage(args: {
   doc: CollageDoc
   layout: Layout
+  /** Largeur de l'image exportée, en pixels. */
   width: number
+  /** Hauteur de l'image exportée, en pixels. */
   height: number
   format: ExportFormat
   /** Qualité JPEG de 1 à 100. */
   quality: number
+  /** Photo de la case d'indice donné, décodée au plus grand côté utile (`maxSide`, en pixels). */
   loadForCell: (cellIndex: number, maxSide: number) => Promise<ExportImage>
   /** Icône ou image d'un élément, décodée au plus grand côté utile. */
   loadOverlay?: (o: Exclude<Overlay, TextOverlay>, maxSide: number) => Promise<ExportImage>
   /** Attendre que la police d'un texte soit chargée. */
   prepareText?: (o: TextOverlay) => Promise<void>
+  /** Avancement : nombre d'éléments dessinés sur le total (photos puis textes et stickers). */
   onProgress?: (done: number, total: number) => void
 }): Promise<Blob> {
   const { doc, layout, width, height } = args

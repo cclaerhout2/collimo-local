@@ -3,13 +3,23 @@
  * Commandes acceptées : M L H V C S Q T Z, absolues et relatives (pas d'arcs A : les courbes
  * de la bibliothèque sont en Bézier).
  */
+
+/** Point [x, y], dans les unités du chemin (relatives au cadre ou au carré unité, selon l'usage). */
 export type Pt = [number, number]
 
 /** Segment absolu, après lecture. */
 export type Seg = { c: 'M' | 'L'; p: Pt } | { c: 'C'; p1: Pt; p2: Pt; p: Pt } | { c: 'Q'; p1: Pt; p: Pt } | { c: 'Z' }
 
+/** Erreur levée quand un chemin SVG est mal écrit ou utilise une commande non prise en charge. */
 export class PathSyntaxError extends Error {}
 
+/**
+ * Lit un chemin SVG et le convertit en segments absolus.
+ * Les commandes H et V deviennent des L, S devient C et T devient Q (points de contrôle reflétés).
+ * @param d - chemin SVG (attribut `d`)
+ * @returns les segments, en coordonnées absolues
+ * @throws {@link PathSyntaxError} si le chemin est mal écrit ou contient une commande non prise en charge (arcs A)
+ */
 export function parsePath(d: string): Seg[] {
   const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? []
   const out: Seg[] = []
@@ -78,8 +88,18 @@ export function parsePath(d: string): Seg[] {
   return out
 }
 
+/**
+ * Nombre arrondi au millième, écrit sans zéros inutiles.
+ * @param v - nombre à écrire
+ * @returns le texte du nombre
+ */
 const f = (v: number) => (Math.round(v * 1000) / 1000).toString()
 
+/**
+ * Réécrit des segments en chemin SVG, coordonnées arrondies au millième.
+ * @param segs - segments absolus
+ * @returns le chemin SVG (attribut `d`)
+ */
 export function serializePath(segs: Seg[]): string {
   return segs
     .map((s) =>
@@ -94,13 +114,30 @@ export function serializePath(segs: Seg[]): string {
     .join('')
 }
 
+/**
+ * Applique une transformation à tous les points d'un chemin (extrémités et points de contrôle).
+ * @param segs - segments absolus
+ * @param fn - transformation d'un point
+ * @returns les nouveaux segments
+ */
 export function mapPath(segs: Seg[], fn: (p: Pt) => Pt): Seg[] {
   return segs.map((s) =>
-    s.c === 'Z' ? s : s.c === 'C' ? { c: 'C', p1: fn(s.p1), p2: fn(s.p2), p: fn(s.p) } : s.c === 'Q' ? { c: 'Q', p1: fn(s.p1), p: fn(s.p) } : { c: s.c, p: fn(s.p) },
+    s.c === 'Z'
+      ? s
+      : s.c === 'C'
+        ? { c: 'C', p1: fn(s.p1), p2: fn(s.p2), p: fn(s.p) }
+        : s.c === 'Q'
+          ? { c: 'Q', p1: fn(s.p1), p: fn(s.p) }
+          : { c: s.c, p: fn(s.p) },
   )
 }
 
-/** Boîte englobante (par les points de contrôle : un peu large sur les courbes, jamais trop petite). */
+/**
+ * Boîte englobante d'un chemin, calculée sur les points de contrôle :
+ * un peu large sur les courbes, jamais trop petite.
+ * @param segs - segments absolus
+ * @returns la boîte, dans les unités du chemin (vide en 0, 0 si le chemin n'a aucun point)
+ */
 export function pathBBox(segs: Seg[]): { x: number; y: number; w: number; h: number } {
   let x0 = Infinity
   let y0 = Infinity
@@ -124,7 +161,11 @@ export function pathBBox(segs: Seg[]): { x: number; y: number; w: number; h: num
   return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
 }
 
-/** Polygone fermé en notation SVG. */
+/**
+ * Polygone fermé en notation SVG.
+ * @param points - sommets du polygone
+ * @returns le chemin SVG fermé
+ */
 export function polyPath(points: Pt[]): string {
   return points.map((p, i) => `${i ? 'L' : 'M'}${f(p[0])} ${f(p[1])}`).join('') + 'Z'
 }

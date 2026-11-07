@@ -21,7 +21,7 @@ const sample = (over: Partial<CustomLayout> = {}): CustomLayout => ({
   ...over,
 })
 
-describe('catalogue de l\'usine', () => {
+describe("catalogue de l'usine", () => {
   it('lit un fichier valide et écarte ce qui est invalide', () => {
     const raw = {
       format: 'collimo-catalogue',
@@ -74,7 +74,7 @@ describe('catalogue de l\'usine', () => {
     expect(again?.data.updatedBy).toBe('demo@entreprise.com')
   })
 
-  it('catalogue créé par un autre admin : demande d\'autorisation puis enregistrement', async () => {
+  it("catalogue créé par un autre admin : demande d'autorisation puis enregistrement", async () => {
     history.replaceState(null, '', '/?catalogue=autoriser')
     const { drive, picker } = createMockServices()
     const state = (await loadCatalogue(drive, cfg))!

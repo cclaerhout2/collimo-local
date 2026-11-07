@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { adjustPixel, autoAdjust, colorPixel, combine, FILTERS, isIdentity, lookPixel, paramsForPhoto, vignetteFor, type RGB } from './color'
+import {
+  adjustPixel,
+  autoAdjust,
+  colorPixel,
+  combine,
+  FILTERS,
+  isIdentity,
+  lookPixel,
+  paramsForPhoto,
+  vignetteFor,
+  type RGB,
+} from './color'
 import { NEUTRAL } from './types'
 
 const grey: RGB = [0.5, 0.5, 0.5]

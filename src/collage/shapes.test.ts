@@ -70,21 +70,40 @@ describe('générateurs', () => {
     expect(puzzle(3, 3)).toHaveLength(9)
     expect(pie(5)).toHaveLength(5)
     expect(pieDisc(3)).toHaveLength(3)
-    expect(hexes([[0, 0], [1, 0], [0, 1]], 0.2, 0.3, 0.3)).toHaveLength(3)
+    expect(
+      hexes(
+        [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+        ],
+        0.2,
+        0.3,
+        0.3,
+      ),
+    ).toHaveLength(3)
     expect(shapeGrid('heart', 3, 2)).toHaveLength(6)
     expect(ring('circle', 8, 0.15, 0.35)).toHaveLength(8)
   })
 
   it('les parts du camembert vont jusqu’aux coins', () => {
     const boxes = pie(4).map(defBBox)
-    const union = boxes.reduce((u, b) => ({ x0: Math.min(u.x0, b.x), y0: Math.min(u.y0, b.y), x1: Math.max(u.x1, b.x + b.w), y1: Math.max(u.y1, b.y + b.h) }), { x0: 1, y0: 1, x1: 0, y1: 0 })
+    const union = boxes.reduce(
+      (u, b) => ({ x0: Math.min(u.x0, b.x), y0: Math.min(u.y0, b.y), x1: Math.max(u.x1, b.x + b.w), y1: Math.max(u.y1, b.y + b.h) }),
+      { x0: 1, y0: 1, x1: 0, y1: 0 },
+    )
     expect(union).toEqual({ x0: 0, y0: 0, x1: 1, y1: 1 })
   })
 })
 
 describe('dispositions en forme', () => {
   it('se construisent et donnent une géométrie en pixels', () => {
-    const layout = buildLayout({ id: 'p03-test', photos: 3, family: 'ronds', geo: [...vCut(0.5, 0.5, 'curve'), shape('circle', 0.3, 0.3, 0.4, 0.4)] })
+    const layout = buildLayout({
+      id: 'p03-test',
+      photos: 3,
+      family: 'ronds',
+      geo: [...vCut(0.5, 0.5, 'curve'), shape('circle', 0.3, 0.3, 0.4, 0.4)],
+    })
     const cells = cellGeometry(layout, 1000, 1000, { spacing: 0.5, margin: 0.5, radius: 0 })
     expect(cells).toHaveLength(3)
     expect(cells.every((c) => c.path && c.box.w > 0)).toBe(true)
@@ -97,10 +116,20 @@ describe('dispositions en forme', () => {
 
 describe('médaillon', () => {
   it('une forme posée sur une autre case reçoit un contour tracé (anneau visible)', () => {
-    const layout = buildLayout({ id: 'p02-medaillon', photos: 2, family: 'incrustation', geo: [{ kind: 'rect', x: 0, y: 0, w: 1, h: 1 }, shape('heart', 0.3, 0.3, 0.4, 0.4)] })
+    const layout = buildLayout({
+      id: 'p02-medaillon',
+      photos: 2,
+      family: 'incrustation',
+      geo: [{ kind: 'rect', x: 0, y: 0, w: 1, h: 1 }, shape('heart', 0.3, 0.3, 0.4, 0.4)],
+    })
     const [, heart] = cellGeometry(layout, 1000, 1000, { spacing: 0.5, margin: 0, radius: 0 })
     expect(heart.shaped).toBeFalsy()
-    const free = buildLayout({ id: 'p02-libre', photos: 2, family: 'coeurs', geo: [shape('heart', 0, 0, 0.45, 0.45), shape('heart', 0.55, 0.55, 0.45, 0.45)] })
+    const free = buildLayout({
+      id: 'p02-libre',
+      photos: 2,
+      family: 'coeurs',
+      geo: [shape('heart', 0, 0, 0.45, 0.45), shape('heart', 0.55, 0.55, 0.45, 0.45)],
+    })
     expect(cellGeometry(free, 1000, 1000, { spacing: 0.5, margin: 0, radius: 0 }).every((c) => c.shaped)).toBe(true)
   })
 })

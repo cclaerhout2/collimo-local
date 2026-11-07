@@ -21,7 +21,10 @@ describe('wrapLines', () => {
 describe('styles et copies', () => {
   it('un style change police, couleur et effets, pas le texte ni la position', () => {
     const t = { ...newText('Bravo'), cx: 0.2, size: 0.3 }
-    const styled = applyPreset(t, TEXT_PRESETS.find((p) => p.id === 'neon')!)
+    const styled = applyPreset(
+      t,
+      TEXT_PRESETS.find((p) => p.id === 'neon')!,
+    )
     expect(styled.text).toBe('Bravo')
     expect([styled.cx, styled.size]).toEqual([0.2, 0.3])
     expect(styled.font.family).toBe('Righteous')

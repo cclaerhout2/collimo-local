@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en forme » du catalogue pour 10 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { Pt } from '../path'
 import { hexes, poly, rect, shapeAt, type CellDef } from '../shapes'
 import type { LayoutDef } from '../types'
@@ -21,9 +25,25 @@ const M: Pt = [0.5, 0.6]
 // Feuille nervurée : axe de P0 à P1, demi-largeur hw(t), 4 nervures par côté → 5 pièces par côté.
 const P0: Pt = [0.14, 0.86]
 const P1: Pt = [0.94, 0.06]
+/**
+ * Point de l'axe de la feuille.
+ * @param t - position le long de l'axe, de 0 (base P0) à 1 (pointe P1)
+ * @returns le point correspondant
+ */
 const ax = (t: number): Pt => [P0[0] + (P1[0] - P0[0]) * t, P0[1] + (P1[1] - P0[1]) * t]
+/**
+ * Demi-largeur de la feuille : nulle aux deux bouts, un peu plus fine vers la pointe.
+ * @param t - position le long de l'axe (0–1)
+ * @returns la demi-largeur, en fraction du cadre
+ */
 const hw = (t: number) => 0.3 * Math.sin(Math.PI * t) * (1 - 0.3 * t)
 const NRM: Pt = [Math.SQRT1_2, Math.SQRT1_2]
+/**
+ * Point du bord de la feuille.
+ * @param t - position le long de l'axe (0–1)
+ * @param s - côté de l'axe : -1 ou 1
+ * @returns le point du bord
+ */
 const edgeAt = (t: number, s: number): Pt => {
   const p = ax(t)
   return [p[0] + s * hw(t) * NRM[0], p[1] + s * hw(t) * NRM[1]]
@@ -54,13 +74,40 @@ export const P10_FORMES: LayoutDef[] = [
     id: 'p10-12',
     photos: 10,
     family: 'coeurs',
-    geo: [poly(F, B, C, K), poly(C, A, K), poly(A, D, L), poly(D, E, G, L), poly(F, K, H), poly(K, A, M), poly(A, L, M), poly(L, G, I), poly(H, K, M, J), poly(M, L, I, J)],
+    geo: [
+      poly(F, B, C, K),
+      poly(C, A, K),
+      poly(A, D, L),
+      poly(D, E, G, L),
+      poly(F, K, H),
+      poly(K, A, M),
+      poly(A, L, M),
+      poly(L, G, I),
+      poly(H, K, M, J),
+      poly(M, L, I, J),
+    ],
   },
   {
     id: 'p10-13',
     photos: 10,
     family: 'geometrie',
-    geo: hexes([[0, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]], 0.235, 0.267, 0.297),
+    geo: hexes(
+      [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [-1, 1],
+        [0, 1],
+        [1, 1],
+        [2, 1],
+        [0, 2],
+        [1, 2],
+        [2, 2],
+      ],
+      0.235,
+      0.267,
+      0.297,
+    ),
   },
   {
     id: 'p10-14',

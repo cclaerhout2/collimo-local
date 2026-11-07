@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 5 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 const third = 1 / 3

@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en forme » du catalogue pour 7 photos : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { Pt } from '../path'
 import { path, poly, puzzle, rect, shapeAt } from '../shapes'
 import type { LayoutDef } from '../types'
@@ -18,9 +22,27 @@ const shutter = radial(
 )
 
 // Hexagone central à plat (r = 0.2) et rayons vers le cadre.
-const HX: Pt[] = [[0.7, 0.5], [0.6, 0.673], [0.4, 0.673], [0.3, 0.5], [0.4, 0.327], [0.6, 0.327]]
-const HT: Pt[] = [[1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5], [0.25, 0], [0.75, 0]]
-const hexRays = radial([0.5, 0.5], HX, HX.map((v, i) => [HT[i][0] - v[0], HT[i][1] - v[1]] as Pt))
+const HX: Pt[] = [
+  [0.7, 0.5],
+  [0.6, 0.673],
+  [0.4, 0.673],
+  [0.3, 0.5],
+  [0.4, 0.327],
+  [0.6, 0.327],
+]
+const HT: Pt[] = [
+  [1, 0.5],
+  [0.75, 1],
+  [0.25, 1],
+  [0, 0.5],
+  [0.25, 0],
+  [0.75, 0],
+]
+const hexRays = radial(
+  [0.5, 0.5],
+  HX,
+  HX.map((v, i) => [HT[i][0] - v[0], HT[i][1] - v[1]] as Pt),
+)
 
 const a = 0.32
 const b = 0.68
@@ -35,13 +57,13 @@ export const P07_FORMES: LayoutDef[] = [
     photos: 7,
     family: 'geometrie',
     geo: [
-      shapeAt('hexagon-flat', 0.500, 0.190, 0.36),
-      shapeAt('hexagon-flat', 0.230, 0.345, 0.36),
-      shapeAt('hexagon-flat', 0.770, 0.345, 0.36),
-      shapeAt('hexagon-flat', 0.500, 0.500, 0.36),
-      shapeAt('hexagon-flat', 0.230, 0.655, 0.36),
-      shapeAt('hexagon-flat', 0.770, 0.655, 0.36),
-      shapeAt('hexagon-flat', 0.500, 0.810, 0.36),
+      shapeAt('hexagon-flat', 0.5, 0.19, 0.36),
+      shapeAt('hexagon-flat', 0.23, 0.345, 0.36),
+      shapeAt('hexagon-flat', 0.77, 0.345, 0.36),
+      shapeAt('hexagon-flat', 0.5, 0.5, 0.36),
+      shapeAt('hexagon-flat', 0.23, 0.655, 0.36),
+      shapeAt('hexagon-flat', 0.77, 0.655, 0.36),
+      shapeAt('hexagon-flat', 0.5, 0.81, 0.36),
     ],
   },
   {

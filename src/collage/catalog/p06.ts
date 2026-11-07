@@ -1,6 +1,14 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 6 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef, Rect } from '../types'
 
-/** Grille 3 × 3 dont on ne garde que certaines cases (col, ligne). */
+/**
+ * Grille 3 × 3 dont on ne garde que certaines cases.
+ * @param cells - cases gardées, en [colonne, ligne] (0 à 2)
+ * @returns les rectangles correspondants, dans l'ordre donné
+ */
 const third = (cells: [number, number][]): Rect[] => cells.map(([c, r]) => ({ x: c / 3, y: r / 3, w: 1 / 3, h: 1 / 3 }))
 
 /** Dispositions en rectangles pour 6 photo(s), dans l'ordre des captures de référence. */
@@ -13,7 +21,19 @@ export const P06: LayoutDef[] = [
   { id: 'p06-06', photos: 6, family: 'mixte', split: 'r(c(5*x,3*x), c(x,x), c(x,2*x))' },
   { id: 'p06-09', photos: 6, family: 'mixte', split: 'c(r(2*x,x), r(x,2*x), r(2*x,x))' },
   { id: 'p06-10', photos: 6, family: 'mixte', split: 'r(c(5*x,3*x), c(x,2*x), c(5*x,3*x))' },
-  { id: 'p06-11', photos: 6, family: 'fond', rects: third([[2, 0], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]) },
+  {
+    id: 'p06-11',
+    photos: 6,
+    family: 'fond',
+    rects: third([
+      [2, 0],
+      [1, 1],
+      [2, 1],
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ]),
+  },
   {
     id: 'p06-13',
     photos: 6,

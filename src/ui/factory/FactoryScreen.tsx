@@ -1,3 +1,11 @@
+/**
+ * Usine à dispositions, réservée aux admins : bibliothèque des dispositions personnalisées et
+ * intégrées, et éditeur pour en dessiner de nouvelles, les publier ou les masquer.
+ *
+ * Les dispositions sont rangées dans un fichier catalogue sur le Drive partagé du catalogue.
+ * Il n'y a pas de liste d'admins dans l'app : les droits Drive en tiennent lieu (est admin qui peut
+ * écrire dans ce Drive partagé), ce qui laisse la gestion des admins aux outils de Google.
+ */
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { defBBox } from '../../collage/cells'
 import { builtinLayouts, buildLayout } from '../../collage/catalog'
@@ -40,34 +48,70 @@ import { useHistory } from '../editor/useHistory'
 import { cellPoints, FactoryCanvas, type EdgeRef, type Tool } from './FactoryCanvas'
 import { FactoryPreview, usePreviewImages } from './FactoryPreview'
 
+/** Propriétés de l'écran de l'usine. */
 interface Props {
+  /** Services Google (Drive et sélecteur Picker). */
   services: Services
+  /** Emplacement de travail, dont les photos servent aux aperçus. */
   location: Location
+  /** Catalogue chargé à la connexion, avec le Drive partagé qui le contient. */
   catalogue: CatalogueState
+  /** Adresse de l'admin connecté, inscrite comme auteur des modifications. */
   userEmail: string
+  /** Transmet le catalogue après un enregistrement réussi. */
   onCatalogueChange: (c: CatalogueState) => void
+  /** Revient à la galerie. */
   onBack: () => void
+  /** Signale une erreur à afficher. */
   onError: (e: unknown) => void
 }
 
+/** Informations d'une disposition en cours d'édition, hors géométrie des cases. */
 interface Draft {
+  /** Identifiant de la disposition dans le catalogue. */
   id: string
   /** Statut enregistré (null = jamais enregistrée). */
   stored: CustomStatus | null
+  /** Nombre de photos de la disposition. */
   photos: number
+  /** Famille sous laquelle elle est rangée dans l'éditeur de collage. */
   family: LayoutFamily
+  /** Place parmi les dispositions intégrées : avant ou après elles. */
   position: 'start' | 'end'
+  /** Décors repris de la disposition d'origine. */
   decor?: Decor[]
+  /** Date de création (ISO 8601). */
   createdAt: string
+  /** Adresse de l'admin qui l'a créée. */
   createdBy: string
 }
 
+/** Nombres de photos proposés, de 1 à 20. */
 const COUNTS = Array.from({ length: 20 }, (_, i) => i + 1)
 
+/**
+ * Extrait d'une disposition du catalogue les informations qu'on modifie dans l'éditeur.
+ * @param l - disposition enregistrée
+ * @returns ses informations, avec son statut comme statut enregistré
+ */
 function metaOf(l: CustomLayout): Draft {
-  return { id: l.id, stored: l.status, photos: l.photos, family: l.family, position: l.position, decor: l.decor, createdAt: l.createdAt, createdBy: l.createdBy }
+  return {
+    id: l.id,
+    stored: l.status,
+    photos: l.photos,
+    family: l.family,
+    position: l.position,
+    decor: l.decor,
+    createdAt: l.createdAt,
+    createdBy: l.createdBy,
+  }
 }
 
+/**
+ * Construit la disposition utilisable par le moteur, pour en dessiner l'icône.
+ * @param l - disposition enregistrée
+ * @returns la disposition, ou `null` si sa géométrie est illisible
+ */
 function asLayout(l: CustomLayout): Layout | null {
   try {
     return buildLayout(l)
@@ -76,6 +120,11 @@ function asLayout(l: CustomLayout): Layout | null {
   }
 }
 
+/**
+ * Écran de l'usine : bibliothèque des dispositions pour un nombre de photos donné, ou éditeur
+ * quand une disposition est ouverte.
+ * @returns la bibliothèque ou l'éditeur de disposition
+ */
 export function FactoryScreen({ services, location, catalogue, userEmail, onCatalogueChange, onBack, onError }: Props) {
   const { t, lang } = useI18n()
   const [count, setCount] = useState(4)
@@ -83,7 +132,7 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
   const [templateOpen, setTemplateOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<MessageKey | null>(null)
-  /** Enregistrement en attente de l'autorisation sur le fichier du catalogue. */
+  /** Enregistrement en attente de l'autorisation sur le fichier du catalogue : la modification à rejouer et la promesse à tenir. */
   const [grant, setGrant] = useState<{ change: (c: CatalogueData) => CatalogueData; resolve: (ok: boolean) => void } | null>(null)
   const [photos, setPhotos] = useState<Photo[] | null>(null)
 
@@ -104,7 +153,13 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
   const builtins = useMemo(() => builtinLayouts().filter((l) => l.photos === count), [count])
   const hidden = new Set(data.hiddenBuiltins)
 
-  /** Enregistre une modification du catalogue ; demande l'autorisation sur le fichier si besoin. */
+  /**
+   * Enregistre une modification du catalogue ; demande l'autorisation sur le fichier si besoin.
+   * Si Collimo n'a pas encore accès au fichier, la promesse reste en attente jusqu'à ce que
+   * l'admin l'autorise (voir {@link authorize}) ou y renonce.
+   * @param change - modification à appliquer à la dernière version du catalogue
+   * @returns `true` si l'enregistrement a réussi
+   */
   const commit = useCallback(
     async (change: (c: CatalogueData) => CatalogueData): Promise<boolean> => {
       setSaving(true)
@@ -125,29 +180,60 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
     [services, catalogue, userEmail, onCatalogueChange, onError],
   )
 
+  /**
+   * Fait choisir le fichier du catalogue dans le sélecteur de Google, puis rejoue l'enregistrement en attente.
+   * Collimo n'a que l'autorisation « drive.file » : il ne touche qu'aux fichiers qu'il a créés
+   * ou que l'utilisateur lui a ouverts. Un catalogue créé par un autre admin lui reste donc fermé tant que
+   * l'admin ne l'a pas choisi lui-même dans le sélecteur ; ce cloisonnement évite de demander l'accès à tout le Drive.
+   */
   async function authorize() {
     const pending = grant
     if (!pending) return
-    const picked = await services.picker.pickFile({ id: catalogue.drive.id, name: catalogue.drive.name }, lang, t('factory.grant.title'), 'application/json')
+    const picked = await services.picker.pickFile(
+      { id: catalogue.drive.id, name: catalogue.drive.name },
+      lang,
+      t('factory.grant.title'),
+      'application/json',
+    )
     if (!picked) return
     setGrant(null)
     pending.resolve(await commit(pending.change))
   }
 
+  /** Renonce à l'autorisation : l'enregistrement en attente échoue sans message. */
   function cancelGrant() {
     grant?.resolve(false)
     setGrant(null)
   }
 
+  /**
+   * Ouvre une disposition dans l'éditeur.
+   * @param meta - informations de la disposition
+   * @param cells - cases à modifier
+   */
   function openEditor(meta: Draft, cells: CellDef[]) {
     setNotice(null)
     setDraft({ meta, cells })
   }
 
+  /**
+   * Ouvre l'éditeur sur une nouvelle disposition, pour le nombre de photos affiché.
+   * @param cells - cases de départ (modèle, copie ou rien)
+   * @param from - disposition copiée, dont on reprend la famille et les décors
+   */
   function newDraft(cells: CellDef[], from?: { family: LayoutFamily; decor?: Decor[] }) {
     const now = new Date().toISOString()
     openEditor(
-      { id: newCustomId(), stored: null, photos: count, family: from?.family ?? (allRects(cells) ? 'grille' : 'mixte'), position: 'end', decor: from?.decor, createdAt: now, createdBy: userEmail },
+      {
+        id: newCustomId(),
+        stored: null,
+        photos: count,
+        family: from?.family ?? (allRects(cells) ? 'grille' : 'mixte'),
+        position: 'end',
+        decor: from?.decor,
+        createdAt: now,
+        createdBy: userEmail,
+      },
       cells,
     )
   }
@@ -185,6 +271,11 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
     )
   }
 
+  /**
+   * Pastille du statut d'une disposition.
+   * @param s - statut
+   * @returns la pastille, traduite
+   */
   const statusBadge = (s: CustomStatus) => <span className={`badge status-${s}`}>{t(`factory.status.${s}`)}</span>
 
   return (
@@ -210,11 +301,22 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
         </p>
       )}
       {catalogue.rejected > 0 && <div className="banner banner-error">{t('factory.rejected', { count: catalogue.rejected })}</div>}
-      {notice && <div className="banner banner-info" role="status">{t(notice)}</div>}
+      {notice && (
+        <div className="banner banner-info" role="status">
+          {t(notice)}
+        </div>
+      )}
 
       <div className="factory-counts" role="radiogroup" aria-label={t('factory.photos')}>
         {COUNTS.map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={n === count} className={`chip${n === count ? ' active' : ''}`} onClick={() => setCount(n)}>
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={n === count}
+            className={`chip${n === count ? ' active' : ''}`}
+            onClick={() => setCount(n)}
+          >
             {n}
           </button>
         ))}
@@ -243,12 +345,22 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
                     {t('factory.duplicate')}
                   </button>
                   {l.status === 'published' && (
-                    <button type="button" className="btn btn-small btn-ghost" disabled={saving} onClick={() => void commit((c) => upsertLayout(c, { ...l, status: 'hidden' }))}>
+                    <button
+                      type="button"
+                      className="btn btn-small btn-ghost"
+                      disabled={saving}
+                      onClick={() => void commit((c) => upsertLayout(c, { ...l, status: 'hidden' }))}
+                    >
                       {t('factory.hide')}
                     </button>
                   )}
                   {l.status === 'hidden' && (
-                    <button type="button" className="btn btn-small btn-ghost" disabled={saving} onClick={() => void commit((c) => upsertLayout(c, { ...l, status: 'published' }))}>
+                    <button
+                      type="button"
+                      className="btn btn-small btn-ghost"
+                      disabled={saving}
+                      onClick={() => void commit((c) => upsertLayout(c, { ...l, status: 'published' }))}
+                    >
                       {t('factory.show')}
                     </button>
                   )}
@@ -285,7 +397,12 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
                   <button type="button" className="btn btn-small btn-ghost" onClick={() => newDraft(toEditable(l), l)}>
                     {t('factory.duplicate')}
                   </button>
-                  <button type="button" className="btn btn-small btn-ghost" disabled={saving} onClick={() => void commit((c) => setBuiltinHidden(c, l.id, !off))}>
+                  <button
+                    type="button"
+                    className="btn btn-small btn-ghost"
+                    disabled={saving}
+                    onClick={() => void commit((c) => setBuiltinHidden(c, l.id, !off))}
+                  >
                     {off ? t('factory.show') : t('factory.hide')}
                   </button>
                 </div>
@@ -310,13 +427,32 @@ export function FactoryScreen({ services, location, catalogue, userEmail, onCata
   )
 }
 
-/** Grille la plus proche d'un carré pour n photos (colonnes × lignes ≥ n). */
+/**
+ * Choisit la grille la plus proche d'un carré pour n photos (colonnes × lignes ≥ n).
+ * @param n - nombre de photos
+ * @returns le nombre de colonnes et de lignes
+ */
 function defaultGrid(n: number): [number, number] {
   const cols = Math.ceil(Math.sqrt(n))
   return [cols, Math.ceil(n / cols)]
 }
 
-function TemplateSheet({ count, onCancel, onCreate }: { count: number; onCancel: () => void; onCreate: (cells: CellDef[]) => void }) {
+/**
+ * Fenêtre de départ d'une nouvelle disposition : grille réglable ou page vide.
+ * @returns la fenêtre du modèle
+ */
+function TemplateSheet({
+  count,
+  onCancel,
+  onCreate,
+}: {
+  /** Nombre de photos, qui fixe la grille proposée au départ. */
+  count: number
+  /** Ferme la fenêtre sans rien créer. */
+  onCancel: () => void
+  /** Crée la disposition avec les cases choisies (vide pour partir de rien). */
+  onCreate: (cells: CellDef[]) => void
+}) {
   const { t } = useI18n()
   const [[cols, rows], setGrid] = useState(() => defaultGrid(count))
   const preview = gridTemplate(cols, rows)
@@ -331,7 +467,13 @@ function TemplateSheet({ count, onCancel, onCreate }: { count: number; onCancel:
             {(['cols', 'rows'] as const).map((k) => (
               <label key={k} className="slider">
                 <span className="slider-label">{t(`factory.template.${k}`)}</span>
-                <input type="range" min={1} max={6} value={k === 'cols' ? cols : rows} onChange={(e) => setGrid(k === 'cols' ? [Number(e.target.value), rows] : [cols, Number(e.target.value)])} />
+                <input
+                  type="range"
+                  min={1}
+                  max={6}
+                  value={k === 'cols' ? cols : rows}
+                  onChange={(e) => setGrid(k === 'cols' ? [Number(e.target.value), rows] : [cols, Number(e.target.value)])}
+                />
                 <span className="slider-value">{k === 'cols' ? cols : rows}</span>
               </label>
             ))}
@@ -351,7 +493,19 @@ function TemplateSheet({ count, onCancel, onCreate }: { count: number; onCancel:
   )
 }
 
-function GrantSheet({ onPick, onCancel }: { onPick: () => void; onCancel: () => void }) {
+/**
+ * Fenêtre qui explique pourquoi l'admin doit choisir lui-même le fichier du catalogue avant de l'enregistrer.
+ * @returns la fenêtre d'autorisation
+ */
+function GrantSheet({
+  onPick,
+  onCancel,
+}: {
+  /** Ouvre le sélecteur de fichier. */
+  onPick: () => void
+  /** Renonce à l'enregistrement. */
+  onCancel: () => void
+}) {
   const { t } = useI18n()
   return (
     <div className="sheet-backdrop" onPointerDown={onCancel}>
@@ -371,6 +525,12 @@ function GrantSheet({ onPick, onCancel }: { onPick: () => void; onCancel: () => 
   )
 }
 
+/**
+ * Traduit un problème relevé par les vérifications de la disposition.
+ * @param t - fonction de traduction
+ * @param i - problème relevé
+ * @returns le message, avec les cases numérotées à partir de 1
+ */
 function issueText(t: ReturnType<typeof useI18n>['t'], i: LayoutIssue): string {
   switch (i.code) {
     case 'count':
@@ -386,8 +546,16 @@ function issueText(t: ReturnType<typeof useI18n>['t'], i: LayoutIssue): string {
   }
 }
 
-/** Petite icône d'une forme de la bibliothèque. */
-function ShapeIcon({ name }: { name: ShapeName }) {
+/**
+ * Petite icône d'une forme de la bibliothèque.
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function ShapeIcon({
+  name,
+}: {
+  /** Forme à dessiner. */
+  name: ShapeName
+}) {
   return (
     <svg viewBox="0 0 1 1" width="28" height="28" aria-hidden="true">
       <path d={SHAPES[name]} className="shape-icon" />
@@ -395,16 +563,28 @@ function ShapeIcon({ name }: { name: ShapeName }) {
   )
 }
 
+/** Propriétés de l'éditeur de disposition. */
 interface EditorProps {
+  /** Disposition ouverte : informations et cases. */
   initial: { meta: Draft; cells: CellDef[] }
+  /** Photos pour l'aperçu. */
   images: ReturnType<typeof usePreviewImages>
+  /** Enregistrement en cours. */
   saving: boolean
+  /** Message à afficher après un enregistrement. */
   notice: MessageKey | null
+  /** Fenêtre d'autorisation à afficher par-dessus l'éditeur, ou `null`. */
   grant: ReactNode
+  /** Ferme l'éditeur (après confirmation s'il reste des modifications). */
   onClose: () => void
+  /** Enregistre la disposition avec le statut voulu ; résout `true` en cas de succès. */
   onSave: (meta: Draft, cells: CellDef[], status: CustomStatus) => Promise<boolean>
 }
 
+/**
+ * Éditeur d'une disposition : canevas, outils de l'outil actif, réglages, vérifications, aperçu et enregistrement.
+ * @returns l'écran de l'éditeur de disposition
+ */
 function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave }: EditorProps) {
   const { t } = useI18n()
   const hist = useHistory(() => initial.cells)
@@ -428,6 +608,7 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
   const sel = selected !== null ? cells[selected] : null
 
   const { set, undo, redo } = hist
+  // Remplace les cases, en gardant l'étape dans l'historique.
   const change = (next: CellDef[]) => set(next)
 
   // L'éditeur s'ouvre en haut de la page (la bibliothèque a pu être défilée).
@@ -437,6 +618,10 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
 
   // Raccourcis : annuler / rétablir, supprimer la case ou le point.
   useEffect(() => {
+    /**
+     * Applique les raccourcis clavier, sauf pendant la saisie dans un champ.
+     * @param e - touche enfoncée
+     */
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.closest('input, textarea, select')) return
@@ -459,18 +644,31 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
     return () => window.removeEventListener('keydown', onKey)
   }, [undo, redo, selected, point, set])
 
+  /**
+   * Ajoute une case, la sélectionne et revient à l'outil de sélection.
+   * @param cell - case à ajouter
+   */
   function add(cell: CellDef) {
     set((c) => [...c, cell])
     setSelected(cells.length)
     setTool('select')
   }
 
+  /**
+   * Donne la coupe du côté sélectionné.
+   * @returns la coupe, ou `null` pour un côté droit ou si aucun côté n'est sélectionné
+   */
   function selectedCut(): EdgeCut | null {
     if (!edge) return null
     const c = cells[edge.cell]
     return c?.kind === 'poly' ? (c.cuts?.[edge.k] ?? null) : null
   }
 
+  /**
+   * Applique une coupe au côté sélectionné.
+   * @param kind - type de coupe (`line` rend le côté droit)
+   * @param opts - amplitude et nombre de motifs de la coupe
+   */
   function setCut(kind: EdgeKind, opts = cutDraft) {
     if (!edge) return
     const c = cells[edge.cell]
@@ -490,6 +688,10 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
     }
   }
 
+  /**
+   * Numérote la case cliquée en mode Ordre ; une fois toutes les cases numérotées, applique le nouvel ordre.
+   * @param i - index de la case cliquée
+   */
   function orderClick(i: number) {
     if (orderSeq.includes(i)) return
     const seq = [...orderSeq, i]
@@ -500,6 +702,10 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
     } else setOrderSeq(seq)
   }
 
+  /**
+   * Enregistre la disposition et, si cela réussit, la marque comme sans modification.
+   * @param status - statut voulu : brouillon, publiée ou masquée
+   */
   async function save(status: CustomStatus) {
     const ok = await onSave(meta, cells, status)
     if (ok) {
@@ -543,10 +749,24 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
           ))}
         </div>
         <div className="history-buttons">
-          <button type="button" className="round-button small" aria-label={t('factory.undo')} title={t('factory.undo')} disabled={!hist.canUndo} onClick={hist.undo}>
+          <button
+            type="button"
+            className="round-button small"
+            aria-label={t('factory.undo')}
+            title={t('factory.undo')}
+            disabled={!hist.canUndo}
+            onClick={hist.undo}
+          >
             ↶
           </button>
-          <button type="button" className="round-button small" aria-label={t('factory.redo')} title={t('factory.redo')} disabled={!hist.canRedo} onClick={hist.redo}>
+          <button
+            type="button"
+            className="round-button small"
+            aria-label={t('factory.redo')}
+            title={t('factory.redo')}
+            disabled={!hist.canRedo}
+            onClick={hist.redo}
+          >
             ↷
           </button>
         </div>
@@ -577,7 +797,20 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
                 <button type="button" className="btn btn-small" onClick={() => add({ kind: 'rect', x: 0.35, y: 0.35, w: 0.3, h: 0.3 })}>
                   + {t('factory.add.rect')}
                 </button>
-                <button type="button" className="btn btn-small" onClick={() => add({ kind: 'poly', points: [[0.5, 0.3], [0.7, 0.66], [0.3, 0.66]] })}>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  onClick={() =>
+                    add({
+                      kind: 'poly',
+                      points: [
+                        [0.5, 0.3],
+                        [0.7, 0.66],
+                        [0.3, 0.66],
+                      ],
+                    })
+                  }
+                >
                   + {t('factory.add.triangle')}
                 </button>
                 <button type="button" className="btn btn-small" aria-expanded={shapesOpen} onClick={() => setShapesOpen((v) => !v)}>
@@ -617,7 +850,11 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
                       </>
                     )}
                     {sel.kind === 'rect' && (
-                      <button type="button" className="btn btn-small" onClick={() => set((c) => c.map((q, k) => (k === selected && q.kind === 'rect' ? rectToPoly(q) : q)))}>
+                      <button
+                        type="button"
+                        className="btn btn-small"
+                        onClick={() => set((c) => c.map((q, k) => (k === selected && q.kind === 'rect' ? rectToPoly(q) : q)))}
+                      >
                         {t('factory.cell.toPoly')}
                       </button>
                     )}
@@ -661,13 +898,23 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
                         <span className="slider-value">{sel.rotate ?? 0}°</span>
                       </label>
                       <label className="check">
-                        <input type="checkbox" checked={!!sel.stretch} onChange={(e) => set((c) => c.map((q, k) => (k === selected ? { ...sel, stretch: e.target.checked || undefined } : q)))} />
+                        <input
+                          type="checkbox"
+                          checked={!!sel.stretch}
+                          onChange={(e) =>
+                            set((c) => c.map((q, k) => (k === selected ? { ...sel, stretch: e.target.checked || undefined } : q)))
+                          }
+                        />
                         {t('factory.cell.stretch')}
                       </label>
                     </div>
                   )}
                   <label className="check">
-                    <input type="checkbox" checked={!!sel.over} onChange={(e) => set((c) => c.map((q, k) => (k === selected ? { ...q, over: e.target.checked || undefined } : q)))} />
+                    <input
+                      type="checkbox"
+                      checked={!!sel.over}
+                      onChange={(e) => set((c) => c.map((q, k) => (k === selected ? { ...q, over: e.target.checked || undefined } : q)))}
+                    />
                     {t('factory.cell.over')}
                   </label>
                 </div>
@@ -795,14 +1042,23 @@ function LayoutEditor({ initial, images, saving, notice, grant, onClose, onSave 
           <FactoryPreview cells={settled} decor={meta.decor} images={images} />
 
           <section className="factory-panel factory-save">
-            {notice && !dirty && <p className="check-ok" role="status">{t(notice)}</p>}
+            {notice && !dirty && (
+              <p className="check-ok" role="status">
+                {t(notice)}
+              </p>
+            )}
             {published && <p className="muted small">{t('factory.publishedNote')}</p>}
             {!published && (
               <button type="button" className="btn" disabled={saving || !dirty} onClick={() => void save('draft')}>
                 {saving ? t('factory.saving') : t('factory.saveDraft')}
               </button>
             )}
-            <button type="button" className="btn btn-primary" disabled={saving || issues.length > 0 || (published && !dirty)} onClick={() => void save(meta.stored === 'hidden' ? 'hidden' : 'published')}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saving || issues.length > 0 || (published && !dirty)}
+              onClick={() => void save(meta.stored === 'hidden' ? 'hidden' : 'published')}
+            >
               {published ? t('factory.publishChanges') : t('factory.publish')}
             </button>
           </section>

@@ -1,6 +1,18 @@
+/**
+ * Dispositions « en forme » du catalogue pour 1 photo : polygones, chemins SVG et formes de la bibliothèque
+ * (champ `geo`), en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import { path, poly, shape, shapeAt } from '../shapes'
 import type { LayoutDef } from '../types'
 
+/**
+ * Rectangle en chemin SVG (sous-chemin fermé), en coordonnées du cadre (0–1).
+ * @param x - bord gauche
+ * @param y - bord haut
+ * @param w - largeur
+ * @param h - hauteur
+ * @returns le sous-chemin `M…Z` du rectangle
+ */
 const r = (x: number, y: number, w: number, h: number) => `M${x} ${y}H${x + w}V${y + h}H${x}Z`
 
 /** Une photo vue à travers une grille 3 × 3 de fenêtres. */
@@ -12,7 +24,15 @@ const FILM_HOLES = Array.from({ length: 15 }, (_, i) => 0.075 + i * 0.058)
   .map((y) => r(0.215, y, 0.035, 0.03) + r(0.75, y, 0.035, 0.03))
   .join('')
 
-/** Cadre d'appareil photo (icône « recadrer ») : deux équerres et un objectif. */
+/**
+ * Anneau (objectif de l'appareil photo) en chemin SVG : deux cercles en courbes de Bézier
+ * (k = 0,5523 approche un quart de cercle), l'intérieur tracé en sens inverse pour faire un trou.
+ * @param cx - abscisse du centre
+ * @param cy - ordonnée du centre
+ * @param ro - rayon extérieur
+ * @param ri - rayon intérieur
+ * @returns le chemin de l'anneau
+ */
 const ring = (cx: number, cy: number, ro: number, ri: number) => {
   const k = 0.5523
   const o = (rr: number) =>
@@ -22,6 +42,7 @@ const ring = (cx: number, cy: number, ro: number, ri: number) => {
     `M${cx} ${cy - rr}C${cx - rr * k} ${cy - rr} ${cx - rr} ${cy - rr * k} ${cx - rr} ${cy}C${cx - rr} ${cy + rr * k} ${cx - rr * k} ${cy + rr} ${cx} ${cy + rr}C${cx + rr * k} ${cy + rr} ${cx + rr} ${cy + rr * k} ${cx + rr} ${cy}C${cx + rr} ${cy - rr * k} ${cx + rr * k} ${cy - rr} ${cx} ${cy - rr}Z`
   return o(ro) + i(ri)
 }
+// Cadre d'appareil photo (icône « recadrer ») : deux équerres et un objectif.
 // Union des deux équerres (contour extérieur + carré intérieur évidé), puis l'objectif ; règle « evenodd ».
 const CAMERA =
   'M0.15 0.05H0.23V0.15H0.85V0.72H0.95V0.8H0.85V0.95H0.77V0.8H0.15V0.23H0.05V0.15H0.15Z' +

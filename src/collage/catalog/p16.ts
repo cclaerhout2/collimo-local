@@ -1,3 +1,7 @@
+/**
+ * Dispositions « en rectangles » du catalogue pour 16 photos : découpes (`split`) ou rectangles libres (`rects`),
+ * en coordonnées relatives au cadre (0–1, origine en haut à gauche).
+ */
 import type { LayoutDef } from '../types'
 
 const C4 = 'c(x,x,x,x)'
@@ -46,8 +50,7 @@ export const P16: LayoutDef[] = [
     id: 'p16-16',
     photos: 16,
     family: 'mixte',
-    split:
-      'r(c(3*x, 1.7*x, 1.7*x, 3.2*r(x,x)), c(1.5*x, 1.5*x, 3.3*r(x,x), 1.5*x, 1.5*x), c(3*r(x,x), 1.7*x, 1.7*x, 3.2*x))',
+    split: 'r(c(3*x, 1.7*x, 1.7*x, 3.2*r(x,x)), c(1.5*x, 1.5*x, 3.3*r(x,x), 1.5*x, 1.5*x), c(3*r(x,x), 1.7*x, 1.7*x, 3.2*x))',
   },
   {
     id: 'p16-17',
