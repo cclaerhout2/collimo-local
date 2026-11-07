@@ -33,7 +33,7 @@ if (platform === 'android' || platform === 'ios') {
     .then(async ({ folder }) => {
       if (folder) await (await import('./selftest')).runSelfTest(folder)
     })
-    .catch(() => {})
+    .catch((e: unknown) => console.log(`COLLIMO-SELFTEST indisponible : ${e instanceof Error ? e.message : String(e)}`))
 } else if (import.meta.env.VITE_LOCAL_WEB === '1' && !(BRIDGE_GLOBAL in g)) {
   g[BRIDGE_GLOBAL] = createWebBridge()
   // Ouverture sans réseau, après la première visite.

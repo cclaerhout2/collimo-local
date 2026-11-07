@@ -421,6 +421,7 @@ public class CollimoStoragePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewCont
 
     /// Auto-test de bout en bout (versions de test lancées avec `-collimoSelfTest dossier`).
     @objc func testMode(_ call: CAPPluginCall) {
+        NSLog("COLLIMO-SELFTEST testMode : %@", testFolder ?? "(aucun)")
         if let f = testFolder { call.resolve(["folder": f]) } else { call.resolve([:]) }
     }
 }

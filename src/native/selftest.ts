@@ -3,7 +3,8 @@
  * dossier imposé (voir `install.ts`) : sur le simulateur d'iPhone, où la page ne peut pas être pilotée
  * de l'extérieur, il fait le parcours d'un utilisateur avec les vrais services et le vrai module natif
  * (photos, miniatures, dimensions, collage exporté et enregistré, relecture du projet, réglages), et
- * écrit son résultat dans le journal (`COLLIMO-SELFTEST OK` ou `COLLIMO-SELFTEST ECHEC`).
+ * écrit son résultat dans le journal (`COLLIMO-SELFTEST OK` ou `COLLIMO-SELFTEST ECHEC`) et dans le
+ * fichier `selftest-result.json` du dossier de test, lu par le workflow.
  */
 import { newCollage } from '../App'
 import { layoutById } from '../collage/catalog'
@@ -29,9 +30,23 @@ function check(ok: unknown, what: string): asserts ok {
  * @returns une promesse résolue à la fin du test, réussi ou non (le résultat est dans le journal)
  */
 export async function runSelfTest(folder: string): Promise<void> {
-  const log = (m: string) => console.log(`COLLIMO-SELFTEST ${m}`)
+  const steps: string[] = []
+  const log = (m: string) => {
+    steps.push(m)
+    console.log(`COLLIMO-SELFTEST ${m}`)
+  }
+  const { drive } = createServices(config)
+  /**
+   * Écrit le résultat dans le dossier de test (le journal de la WebView n'est pas toujours visible).
+   * @param ok - test réussi
+   */
+  const report = async (ok: boolean) => {
+    const name = 'selftest-result.json'
+    const data = new TextEncoder().encode(JSON.stringify({ ok, steps }, null, 2))
+    const bridge = (globalThis as unknown as Record<string, import('../desktop/bridge').DesktopBridge>).collimoDesktop
+    await bridge.writeNewFile(folder, name, data).catch(() => {})
+  }
   try {
-    const { drive } = createServices(config)
     log('début')
     const photos = await drive.listPhotos({ id: folder }, null)
     check(photos.length >= 3, `au moins 3 photos (${photos.length})`)
@@ -75,7 +90,9 @@ export async function runSelfTest(folder: string): Promise<void> {
     await drive.saveSettings({ version: 1, lang: 'fr' })
     check((await drive.loadSettings())?.lang === 'fr', 'réglages')
     log('OK')
+    await report(true)
   } catch (e) {
     log(`ECHEC ${e instanceof Error ? e.message : String(e)}`)
+    await report(false)
   }
 }

@@ -17,7 +17,7 @@ const IMPORTS = '/Imports'
 /** Dossier du catalogue de l'usine. */
 const CATALOGUE = '/catalogue'
 
-/** Fichier tel qu'il est rangé dans IndexedDB. */
+/** Fichier tel qu'il est utilisé par le pont. */
 interface StoredFile {
   path: string
   dir: string
@@ -29,6 +29,12 @@ interface StoredFile {
   width?: number
   height?: number
 }
+
+/**
+ * Fichier tel qu'il est écrit dans IndexedDB : son contenu en octets, pas en Blob, car Safari en
+ * navigation privée (et WebKit dans certains modes) refuse d'y ranger des Blob.
+ */
+type DbFile = Omit<StoredFile, 'blob'> & { bytes: ArrayBuffer }
 
 /** Stockage de l'album : fichiers, miniatures, réglages. Remplaçable dans les tests. */
 export interface AlbumStore {
@@ -72,12 +78,28 @@ export function indexedDbStore(name = 'collimo'): AlbumStore {
       req.onerror = () => reject(req.error ?? new Error('IndexedDB indisponible'))
     }))
   const store = async (s: string, mode: IDBTransactionMode = 'readonly') => (await open()).transaction(s, mode).objectStore(s)
+  const fromDb = (f: DbFile | undefined): StoredFile | undefined => {
+    if (!f) return undefined
+    const { bytes, ...rest } = f
+    return { ...rest, blob: new Blob([bytes], { type: f.mimeType }) }
+  }
+  const toDb = async ({ blob, ...rest }: StoredFile): Promise<DbFile> => ({ ...rest, bytes: await blob.arrayBuffer() })
   return {
-    get: async (path) => (await done((await store('files')).get(path))) as StoredFile | undefined,
-    put: async (file) => void (await done((await store('files', 'readwrite')).put(file))),
-    list: async (dir) => (await done((await store('files')).index('dir').getAll(dir))) as StoredFile[],
-    getThumb: async (key) => (await done((await store('thumbs')).get(key))) as Blob | undefined,
-    putThumb: async (key, blob) => void (await done((await store('thumbs', 'readwrite')).put(blob, key))),
+    get: async (path) => fromDb((await done((await store('files')).get(path))) as DbFile | undefined),
+    // Le contenu est lu avant d'ouvrir la transaction, qui se fermerait pendant une attente.
+    put: async (file) => {
+      const rec = await toDb(file)
+      await done((await store('files', 'readwrite')).put(rec))
+    },
+    list: async (dir) => ((await done((await store('files')).index('dir').getAll(dir))) as DbFile[]).map((f) => fromDb(f)!),
+    getThumb: async (key) => {
+      const bytes = (await done((await store('thumbs')).get(key))) as ArrayBuffer | undefined
+      return bytes ? new Blob([bytes], { type: 'image/jpeg' }) : undefined
+    },
+    putThumb: async (key, blob) => {
+      const bytes = await blob.arrayBuffer()
+      await done((await store('thumbs', 'readwrite')).put(bytes, key))
+    },
     getSetting: async (key) => (await done((await store('settings')).get(key))) as unknown,
     putSetting: async (key, value) => void (await done((await store('settings', 'readwrite')).put(value, key))),
   }

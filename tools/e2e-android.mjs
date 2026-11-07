@@ -110,9 +110,26 @@ async function tap(locator) {
 }
 
 /**
- * Appuie sur le bouton Retour d'Android.
+ * Appuie sur le bouton Retour d'Android, comme un utilisateur clavier fermé (aucun champ actif : sinon le
+ * premier appui ne sert qu'à fermer le clavier), et attend que la page affiche l'élément attendu.
+ * @param {import('playwright-core').Page} page - page de Collimo
+ * @param {import('playwright-core').Locator} expected - élément affiché après le retour
  */
-const back = () => adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+async function back(page, expected) {
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur())
+  for (let i = 0; i < 2; i++) {
+    adb('shell', 'input', 'keyevent', 'KEYCODE_BACK')
+    if (
+      await expected.waitFor({ timeout: 8000 }).then(
+        () => true,
+        () => false,
+      )
+    )
+      return
+    console.log('  (Retour sans effet, nouvel essai)')
+  }
+  throw new Error('le bouton Retour n’a pas ramené à l’écran attendu')
+}
 
 await mkdir(OUT, { recursive: true })
 step('préparation : app remise à zéro, 8 photos (dont une HEIC) dans un dossier de l’app')
@@ -184,9 +201,8 @@ try {
   await tap(page.getByRole('button', { name: 'Fermer' }))
 
   step('bouton Retour d’Android : de l’éditeur à la galerie, « Mes collages » à jour')
-  back()
   const cards = page.locator('.project-card')
-  await cards.first().waitFor({ timeout: 20_000 })
+  await back(page, cards.first())
   assert.equal(await cards.count(), 1)
   await page.waitForFunction(() => [...document.querySelectorAll('.project-card img')].every((i) => i.complete && i.naturalWidth > 0))
   await page.screenshot({ path: path.join(OUT, 'android-5-mes-collages.png') })
@@ -194,8 +210,7 @@ try {
   step('réouverture du collage, puis Retour')
   await tap(cards.first())
   await page.getByRole('button', { name: 'Exporter' }).waitFor()
-  back()
-  await cards.first().waitFor()
+  await back(page, cards.first())
 
   step('usine à dispositions')
   await tap(page.locator('.avatar-button'))
@@ -204,8 +219,7 @@ try {
   await tap(page.getByRole('button', { name: 'Masquer', exact: true }).first())
   await page.getByRole('button', { name: 'Réafficher', exact: true }).first().waitFor()
   assert.match(asApp('cat files/catalogue/collimo-catalogue.json'), /"hiddenBuiltins": \[\s*"p04-01"/)
-  back()
-  await cards.first().waitFor()
+  await back(page, cards.first())
 
   step('langue anglaise mémorisée')
   await tap(page.getByRole('button', { name: 'EN', exact: true }))

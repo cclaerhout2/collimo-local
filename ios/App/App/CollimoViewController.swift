@@ -5,5 +5,6 @@ import UIKit
 class CollimoViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(CollimoStoragePlugin())
+        NSLog("Collimo : module CollimoStorage enregistré")
     }
 }
