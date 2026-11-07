@@ -34,7 +34,9 @@ export const en: Record<MessageKey, string> = {
   'setup.loadingDrives': 'Loading shared drives…',
   'setup.step2': '2. Choose the folder that holds your photos',
   'setup.pickFolder': 'Choose a folder',
-  'setup.pickerTitle': 'Choose your photo folder',
+  'setup.pickHint':
+    'In the Google window, click your photo folder once to highlight it, then click “Select”. Opening a folder does not choose it: to choose the one you are in, go up one level. Only folders are shown there, not photos.',
+  'setup.pickerTitle': 'Click your photo folder once, then “Select”',
   'setup.selected': 'Selected folder: {name}',
   'setup.collimoNote': 'Collimo will create a “Collimo” subfolder in this folder to store your collages.',
   'setup.confirm': 'Continue',

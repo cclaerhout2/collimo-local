@@ -125,6 +125,7 @@ export function SetupScreen({ services, current, onDone, onCancel, onError }: Pr
 
         <section>
           <h2>{t('setup.step2')}</h2>
+          <p className="muted">{t('setup.pickHint')}</p>
           <button type="button" className="btn" onClick={pick} disabled={busy}>
             <FolderIcon />
             {t('setup.pickFolder')}

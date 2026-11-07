@@ -37,7 +37,9 @@ export const fr = {
   'setup.loadingDrives': 'Chargement des Drive partagés…',
   'setup.step2': '2. Choisissez le dossier qui contient vos photos',
   'setup.pickFolder': 'Choisir un dossier',
-  'setup.pickerTitle': 'Choisissez le dossier de vos photos',
+  'setup.pickHint':
+    'Dans la fenêtre Google, cliquez une fois sur le dossier de vos photos pour le surligner, puis sur « Sélectionner ». Ouvrir un dossier ne le choisit pas : pour choisir celui où vous êtes, remontez d’un niveau. Seuls les dossiers y sont affichés, pas les photos.',
+  'setup.pickerTitle': 'Cliquez une fois sur le dossier de vos photos, puis sur « Sélectionner »',
   'setup.selected': 'Dossier choisi : {name}',
   'setup.collimoNote': 'Collimo créera un sous-dossier « Collimo » dans ce dossier pour y ranger vos collages.',
   'setup.confirm': 'Continuer',
