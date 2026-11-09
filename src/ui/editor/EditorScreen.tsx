@@ -79,10 +79,28 @@ interface Props {
   initialDoc: CollageDoc
   /** Retour à l'écran précédent. */
   onBack: () => void
+  /** Série de collages en cours (répartition) : position, et navigation entre collages. */
+  queue?: EditorQueue
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
   /** Signale une erreur de chargement (photo ou sticker illisible…). */
   onError: (e: unknown) => void
+}
+
+/** Série de collages ouverte depuis la répartition. */
+export interface EditorQueue {
+  /** Position du collage affiché, à partir de 0. */
+  index: number
+  /** Nombre de collages de la série. */
+  total: number
+  /** Le collage affiché a-t-il déjà été enregistré dans Drive ? */
+  saved: boolean
+  /** État de chaque collage de la série (enregistré ou non), pour les repères. */
+  savedAll: boolean[]
+  /** Va directement au collage d'indice donné. */
+  onGo: (index: number, current: CollageDoc) => void
+  /** Le collage affiché vient d'être enregistré. */
+  onSaved: () => void
 }
 
 /**
@@ -118,8 +136,11 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
  * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
  * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
  */
-export function EditorScreen({ services, location, initialDoc, onBack, onReconnect, onError }: Props) {
+export function EditorScreen({ services, location, initialDoc, onBack, queue, onReconnect, onError }: Props) {
   const { t, lang } = useI18n()
+  /** Demande de passage au collage voisin alors que celui-ci n'est pas enregistré : confirmation affichée. */
+  const [pendingMove, setPendingMove] = useState<-1 | 1 | null>(null)
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [swapPick, setSwapPick] = useState(false)
   const [cropMode, setCropMode] = useState(false)
@@ -578,8 +599,102 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const settled = doc.photos.filter((p) => images.current.has(p.id) || failed.current.has(p.id)).length
   const allLoaded = settled === doc.photos.length
 
+  /**
+   * Passe au collage voisin de la série, après confirmation si celui-ci n'est pas enregistré.
+   * @param direction - -1 pour le précédent, 1 pour le suivant
+   * @param force - `true` pour passer même sans enregistrement
+   */
+  function moveInQueue(direction: -1 | 1, force = false) {
+    if (!queue) return
+    goInQueue(queue.index + direction, force, direction)
+  }
+
+  /**
+   * Va à un collage de la série, après confirmation si celui-ci n'est pas enregistré.
+   * @param index - collage visé
+   * @param force - `true` pour passer même sans enregistrement
+   * @param direction - sens, pour la confirmation
+   */
+  function goInQueue(index: number, force = false, direction: -1 | 1 = 1) {
+    if (!queue || index === queue.index || index < 0 || index >= queue.total) return
+    if (!queue.saved && !force) {
+      setPendingMove(direction)
+      setPendingIndex(index)
+      return
+    }
+    setPendingMove(null)
+    setPendingIndex(null)
+    queue.onGo(index, { ...doc, layoutId: layout.id, split: layout.split && doc.split ? doc.split : undefined })
+  }
+
   return (
     <main className="editor">
+      {queue && (
+        <div className="queue-bar" role="status">
+          <button type="button" className="btn btn-ghost btn-small" disabled={queue.index === 0} onClick={() => moveInQueue(-1)}>
+            ‹ {t('queue.prev')}
+          </button>
+          <span className="queue-position">
+            {t('queue.position', { index: queue.index + 1, total: queue.total })}
+            <span className="queue-dots" role="list">
+              {queue.savedAll.map((saved, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="listitem"
+                  className={`queue-dot${i === queue.index ? ' current' : ''}${saved ? ' saved' : ''}`}
+                  aria-label={t('queue.dot', { n: i + 1, state: saved ? t('queue.saved') : t('queue.unsaved') })}
+                  title={t('queue.dot', { n: i + 1, state: saved ? t('queue.saved') : t('queue.unsaved') })}
+                  aria-current={i === queue.index ? 'step' : undefined}
+                  onClick={() => goInQueue(i, false, i < queue.index ? -1 : 1)}
+                >
+                  {saved ? '✓' : ''}
+                </button>
+              ))}
+            </span>
+            <span className={`queue-state${queue.saved ? ' saved' : ''}`}>{queue.saved ? t('queue.saved') : t('queue.unsaved')}</span>
+          </span>
+          {pendingMove !== null ? (
+            <span className="queue-confirm">
+              {t('queue.confirm')}
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() => {
+                  setPendingMove(null)
+                  setPendingIndex(null)
+                }}
+              >
+                {t('queue.stay')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-small"
+                onClick={() =>
+                  pendingIndex === null && queue.index === queue.total - 1
+                    ? onBack()
+                    : goInQueue(pendingIndex ?? queue.index + pendingMove, true, pendingMove)
+                }
+              >
+                {t('queue.leave')}
+              </button>
+            </span>
+          ) : queue.index < queue.total - 1 ? (
+            <button type="button" className={`btn btn-small${queue.saved ? ' btn-primary' : ' btn-ghost'}`} onClick={() => moveInQueue(1)}>
+              {t('queue.next')} ›
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`btn btn-small${queue.savedAll.every(Boolean) ? ' btn-primary' : ' btn-ghost'}`}
+              onClick={() => (queue.saved ? onBack() : setPendingMove(1))}
+              title={queue.savedAll.every(Boolean) ? undefined : t('queue.finishHint')}
+            >
+              {t('queue.finish')}
+            </button>
+          )}
+        </div>
+      )}
       <div className="editor-bar">
         <button type="button" className="btn btn-ghost btn-small" onClick={onBack}>
           ‹ {t('editor.back')}
@@ -950,7 +1065,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           loadOverlay={assets.loadOverlay}
           prepareText={assets.prepareText}
           onClose={() => setExporting(false)}
-          onSaved={() => {}}
+          onSaved={() => queue?.onSaved()}
           onReconnect={onReconnect}
         />
       )}

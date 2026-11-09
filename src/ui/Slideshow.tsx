@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { sizedThumbnail } from '../google/drive'
 import type { Photo, Services } from '../google/types'
+import { MAX_PHOTOS } from '../config'
 import { useI18n } from '../i18n'
 import { Thumbnail } from './Thumbnail'
 
@@ -25,7 +26,7 @@ interface Props {
   startIndex: number
   /** Identifiants des photos sélectionnées, dans l'ordre de sélection. */
   selection: string[]
-  /** Nombre maximal de photos d'un collage. */
+  /** Nombre maximal de photos sélectionnées à la fois. */
   max: number
   /** La limite vient d'être atteinte : le compteur l'indique. */
   limitHint: boolean
@@ -179,7 +180,7 @@ export function Slideshow({ services, photos, startIndex, selection, max, limitH
               : `+ ${t('slideshow.select')}`}
         </button>
         <span className="selection-count">
-          {limitHint ? t('gallery.max', { max }) : t('gallery.selected', { count: selection.length, max })}
+          {limitHint ? t('gallery.maxSelection', { max }) : t('gallery.selectedCount', { count: selection.length })}
         </span>
         <button
           type="button"
@@ -188,7 +189,7 @@ export function Slideshow({ services, photos, startIndex, selection, max, limitH
           title={canCreate ? undefined : t('gallery.readOnly')}
           onClick={onCreate}
         >
-          {t('gallery.create')}
+          {selection.length > MAX_PHOTOS ? t('gallery.split') : t('gallery.create')}
         </button>
       </div>
 

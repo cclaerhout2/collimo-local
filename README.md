@@ -24,8 +24,13 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 - lien direct vers un dossier : `https://SITE.web.app/?folder=ID` (ou `?folder=` suivi d'un lien Google Drive de dossier ou de photo) ouvre ce dossier après la connexion ; bouton « Copier le lien Collimo » dans la galerie ; sans accès, Collimo le signale (Drive ne distingue pas « introuvable » de « sans accès ») et renvoie vers la page Drive du dossier pour « Demander l'accès », puis « Réessayer » ;
 - navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
 - raccourcis, dernier dossier ouvert et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
-- galerie de miniatures, sélection ordonnée de 1 à 20 photos ; diaporama plein écran (bouton de la galerie, ou loupe sur une miniature) pour regarder chaque photo en grand et la sélectionner (← →, Espace, Échap, glissement du doigt, bande de miniatures) ; photos HEIC des iPhone décodées dans le navigateur ;
+- galerie de miniatures, sélection ordonnée jusqu'à 100 photos (20 au plus par collage) ; diaporama plein écran (bouton de la galerie, ou loupe sur une miniature) pour regarder chaque photo en grand et la sélectionner (← →, Espace, Échap, glissement du doigt, bande de miniatures) ; photos HEIC des iPhone décodées dans le navigateur ;
 - interface en français et en anglais.
+
+**Plusieurs collages d'un coup**
+
+- « Plusieurs collages… » (dès 4 photos sélectionnées, obligatoire au-delà de 20) ouvre la répartition : les photos à placer en haut, une carte par collage ; glisser une photo vers une carte, ou la toucher puis toucher la carte ; répartition automatique par nombre de photos par collage (groupes équilibrés, ordre de sélection conservé), ajout et retrait de collages ; de 2 à 20 photos par collage, les problèmes sont signalés avant la création ;
+- les collages s'ouvrent ensuite l'un après l'autre dans l'éditeur : une barre en haut indique « Collage 2 / 4 », un point par collage (✓ enregistré, cerclé = en cours) et l'état du collage affiché (en cours ou enregistré) ; Précédent, Collage suivant, ou un point pour y aller directement ; quitter un collage non enregistré demande confirmation ; chaque collage garde ses modifications quand on passe à un autre ; « Terminer la série » sur le dernier.
 
 **Dispositions**
 

@@ -3,7 +3,7 @@
  * photos, à sélectionner pour créer un collage.
  */
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { MAX_PHOTOS } from '../config'
+import { MAX_PHOTOS, MAX_SELECTION, MIN_PHOTOS } from '../config'
 import type { FolderPath, FolderRef, OpenFolder, Photo, Services } from '../google/types'
 import { useI18n } from '../i18n'
 import { collimoFolderLink } from '../lib/folderLink'
@@ -33,6 +33,8 @@ interface Props {
   onSelectionChange: Dispatch<SetStateAction<string[]>>
   /** Crée un collage avec les photos sélectionnées, dans l'ordre. */
   onCreate: (photos: Photo[]) => void
+  /** Ouvre la répartition des photos sélectionnées en plusieurs collages. */
+  onSplit: (photos: Photo[]) => void
   /** Ouvre un projet enregistré. */
   onOpenProject: (entry: ProjectEntry) => void
   /** Signale une erreur à afficher. */
@@ -52,6 +54,7 @@ export function GalleryScreen({
   selection,
   onSelectionChange,
   onCreate,
+  onSplit,
   onOpenProject,
   onError,
 }: Props) {
@@ -107,7 +110,7 @@ export function GalleryScreen({
    */
   function toggle(photo: Photo) {
     if (!photo.supported) return
-    const r = toggleSelection(selection, photo.id, MAX_PHOTOS)
+    const r = toggleSelection(selection, photo.id, MAX_SELECTION)
     setLimitHint(r.limitReached)
     onSelectionChange(r.selection)
   }
@@ -115,10 +118,21 @@ export function GalleryScreen({
   const myDrive = t('setup.myDrive')
   const byId = new Map((photos ?? []).map((p) => [p.id, p]))
 
+  /**
+   * Photos sélectionnées, dans l'ordre de sélection.
+   * @returns les photos (celles qui ne sont plus dans le dossier sont ignorées)
+   */
+  const selectedPhotos = () => selection.map((id) => byId.get(id)).filter((p): p is Photo => !!p)
+
   /** Crée un collage avec les photos sélectionnées, dans l'ordre de sélection. */
   function create() {
-    onCreate(selection.map((id) => byId.get(id)).filter((p): p is Photo => !!p))
+    onCreate(selectedPhotos())
   }
+
+  /** Un seul collage possible : au plus MAX_PHOTOS photos. */
+  const canCreateOne = selection.length > 0 && selection.length <= MAX_PHOTOS
+  /** Répartition possible : de quoi faire au moins deux collages. */
+  const canSplit = selection.length >= MIN_PHOTOS * 2
 
   return (
     <main className="screen gallery-screen">
@@ -255,7 +269,11 @@ export function GalleryScreen({
 
       <div className={`selection-bar${selection.length ? ' visible' : ''}`}>
         <span className="selection-count">
-          {limitHint ? t('gallery.max', { max: MAX_PHOTOS }) : t('gallery.selected', { count: selection.length, max: MAX_PHOTOS })}
+          {limitHint
+            ? t('gallery.maxSelection', { max: MAX_SELECTION })
+            : selection.length > MAX_PHOTOS
+              ? t('gallery.tooManyForOne', { count: selection.length, max: MAX_PHOTOS })
+              : t('gallery.selected', { count: selection.length, max: MAX_PHOTOS })}
         </span>
         <div className="selection-actions">
           <button
@@ -269,15 +287,28 @@ export function GalleryScreen({
           >
             {t('gallery.clear')}
           </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!selection.length || !open.canAddChildren}
-            title={open.canAddChildren ? undefined : t('gallery.readOnly')}
-            onClick={create}
-          >
-            {t('gallery.create')}
-          </button>
+          {canSplit && (
+            <button
+              type="button"
+              className={`btn${canCreateOne ? ' btn-ghost' : ' btn-primary'}`}
+              disabled={!open.canAddChildren}
+              title={open.canAddChildren ? t('gallery.splitHint') : t('gallery.readOnly')}
+              onClick={() => onSplit(selectedPhotos())}
+            >
+              {t('gallery.split')}
+            </button>
+          )}
+          {canCreateOne && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!open.canAddChildren}
+              title={open.canAddChildren ? undefined : t('gallery.readOnly')}
+              onClick={create}
+            >
+              {t('gallery.create')}
+            </button>
+          )}
         </div>
       </div>
       {slideIndex !== null && photos && photos.length > 0 && (
@@ -286,13 +317,14 @@ export function GalleryScreen({
           photos={photos}
           startIndex={slideIndex}
           selection={selection}
-          max={MAX_PHOTOS}
+          max={MAX_SELECTION}
           limitHint={limitHint}
           canCreate={open.canAddChildren}
           onToggle={toggle}
           onCreate={() => {
             setSlideIndex(null)
-            create()
+            if (selection.length > MAX_PHOTOS) onSplit(selectedPhotos())
+            else create()
           }}
           onClose={() => setSlideIndex(null)}
         />

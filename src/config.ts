@@ -46,6 +46,10 @@ export const COLLIMO_FOLDER_NAME = 'Collimo'
 
 /** Nombre maximum de photos dans un collage. */
 export const MAX_PHOTOS = 20
+/** Nombre minimum de photos dans un collage. */
+export const MIN_PHOTOS = 2
+/** Nombre maximum de photos sélectionnées à la fois (à répartir en plusieurs collages au-delà de MAX_PHOTOS). */
+export const MAX_SELECTION = 100
 
 /** Formats que le navigateur sait décoder pour le rendu et l'export. */
 export const SUPPORTED_IMAGE_TYPES = [

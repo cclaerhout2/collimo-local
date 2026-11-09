@@ -28,6 +28,7 @@ import {
 } from './lib/locations'
 import { AddLocationDialog } from './ui/AddLocationDialog'
 import { EditorScreen } from './ui/editor/EditorScreen'
+import { SplitScreen } from './ui/SplitScreen'
 
 /** L'usine (admins seulement) n'est chargée qu'à l'ouverture. */
 const FactoryScreen = lazy(() => import('./ui/factory/FactoryScreen').then((m) => ({ default: m.FactoryScreen })))
@@ -41,7 +42,12 @@ import { SignInScreen } from './ui/SignInScreen'
 
 /** Phase de l'application, c'est-à-dire l'écran affiché ; l'éditeur porte le collage ouvert. */
 type Phase =
-  { name: 'signin' } | { name: 'loading' } | { name: 'gallery' } | { name: 'editor'; doc: CollageDoc; key: number } | { name: 'factory' }
+  | { name: 'signin' }
+  | { name: 'loading' }
+  | { name: 'gallery' }
+  | { name: 'editor'; doc: CollageDoc; key: number }
+  | { name: 'split'; photos: Photo[] }
+  | { name: 'factory' }
 
 /**
  * Lit le dossier demandé dans l'adresse (`?folder=…`).
@@ -107,6 +113,8 @@ export default function App() {
   const [opening, setOpening] = useState(false)
   const [adding, setAdding] = useState(false)
   const [link, setLink] = useState<LinkTarget | 'invalid' | null>(readFolderParam)
+  /** Série de collages issue d'une répartition : documents (mis à jour quand on en quitte un), position, enregistrés. */
+  const [queue, setQueue] = useState<{ docs: CollageDoc[]; index: number; saved: boolean[] } | null>(null)
   const [linkProblem, setLinkProblem] = useState(false)
   /** Réglages les plus récents, pour enchaîner les modifications sans attendre un nouveau rendu. */
   const settingsRef = useRef<UserSettings>(EMPTY_SETTINGS)
@@ -335,10 +343,41 @@ export default function App() {
     try {
       const collimoFolderId = open.collimoFolderId ?? (await services.drive.ensureCollimoFolder(currentFolder(open).id))
       setOpen({ ...open, collimoFolderId })
+      setQueue(null)
       setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })
     } catch (e) {
       handleError(e)
     }
+  }
+
+  /**
+   * Crée une série de collages à partir d'une répartition, et ouvre le premier dans l'éditeur.
+   * @param groups - photos de chaque collage, dans l'ordre
+   */
+  async function createSeries(groups: Photo[][]) {
+    if (!open?.canAddChildren || groups.length === 0) return
+    try {
+      const collimoFolderId = open.collimoFolderId ?? (await services.drive.ensureCollimoFolder(currentFolder(open).id))
+      setOpen({ ...open, collimoFolderId })
+      const docs = groups.map(newCollage)
+      setQueue({ docs, index: 0, saved: docs.map(() => false) })
+      setPhase({ name: 'editor', doc: docs[0], key: Date.now() })
+    } catch (e) {
+      handleError(e)
+    }
+  }
+
+  /**
+   * Va à un collage de la série, en gardant l'état du collage quitté.
+   * @param target - indice du collage visé
+   * @param current - collage affiché, dans son état actuel
+   */
+  function goInSeries(target: number, current: CollageDoc) {
+    if (!queue) return
+    const docs = queue.docs.map((d, i) => (i === queue.index ? current : d))
+    const index = Math.max(0, Math.min(docs.length - 1, target))
+    setQueue({ ...queue, docs, index })
+    setPhase({ name: 'editor', doc: docs[index], key: Date.now() })
   }
 
   /**
@@ -433,6 +472,7 @@ export default function App() {
               selection={selection}
               onSelectionChange={setSelection}
               onCreate={(photos) => void createCollage(photos)}
+              onSplit={(photos) => setPhase({ name: 'split', photos })}
               onOpenProject={(entry) => void openProject(entry)}
               onError={handleError}
             />
@@ -464,13 +504,37 @@ export default function App() {
         </Suspense>
       )}
 
+      {phase.name === 'split' && (
+        <SplitScreen
+          services={services}
+          photos={phase.photos}
+          onCancel={() => setPhase({ name: 'gallery' })}
+          onCreate={(groups) => void createSeries(groups)}
+        />
+      )}
+
       {phase.name === 'editor' && location && (
         <EditorScreen
           key={phase.key}
           services={services}
           location={location}
           initialDoc={phase.doc}
-          onBack={() => setPhase({ name: 'gallery' })}
+          queue={
+            queue
+              ? {
+                  index: queue.index,
+                  total: queue.docs.length,
+                  saved: queue.saved[queue.index],
+                  savedAll: queue.saved,
+                  onGo: goInSeries,
+                  onSaved: () => setQueue((q) => (q ? { ...q, saved: q.saved.map((v, i) => (i === q.index ? true : v)) } : q)),
+                }
+              : undefined
+          }
+          onBack={() => {
+            setQueue(null)
+            setPhase({ name: 'gallery' })
+          }}
           onReconnect={() => void reconnect()}
           onError={handleError}
         />
