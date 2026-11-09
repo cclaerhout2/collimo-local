@@ -33,6 +33,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 - format (1:1 par défaut, 4:5, 9:16, 16:9, A4…), bouton « mélanger » ;
 - bords : écart entre les photos, marge, arrondi, contour des formes (épaisseur et couleur), couleur de fond ;
 - dans une forme, la forme reste fixe et la photo se déplace, se zoome et tourne à l'intérieur.
+- le panneau d'outils du bas se replie (chevron à droite des onglets) pour voir le collage en plus grand ; un onglet le rouvre ; le choix est mémorisé sur l'appareil ;
 
 **Travail sur chaque photo**
 

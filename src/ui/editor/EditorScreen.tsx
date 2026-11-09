@@ -33,6 +33,9 @@ const PREVIEW_SIDE = 1600
 /** Onglet de réglages de l'éditeur. */
 type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'filters' | 'text' | 'stickers'
 /** Onglets, dans l'ordre d'affichage. */
+/** Clé de stockage local du repli du panneau d'outils. */
+const TOOLS_COLLAPSED_KEY = 'collimo.toolsCollapsed'
+
 const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'filters', 'text', 'stickers']
 
 /** Taille maximale des photos traitées (filtres, réglages) pour l'aperçu (plus grand côté, en pixels de l'image). */
@@ -135,6 +138,27 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const overlays = useMemo(() => doc.overlays ?? [], [doc.overlays])
   const assets = useOverlayAssets(services, overlays, onError)
   const [tab, setTab] = useState<Tab>('layout')
+  /** Panneau d'outils replié : seuls les onglets restent, le collage prend la place. Mémorisé sur l'appareil. */
+  const [toolsCollapsed, setToolsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLS_COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  /**
+   * Replie ou déplie le panneau d'outils.
+   * @param collapsed - `true` pour replier
+   */
+  function setCollapsed(collapsed: boolean) {
+    setToolsCollapsed(collapsed)
+    try {
+      localStorage.setItem(TOOLS_COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      // Stockage indisponible (navigation privée) : le choix vaut pour la session.
+    }
+  }
   const [exporting, setExporting] = useState(false)
   const [version, setVersion] = useState(0)
   const images = useRef(new Map<string, LoadedImage>())
@@ -644,7 +668,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         )}
       </div>
 
-      <div className="editor-tools">
+      <div className={`editor-tools${toolsCollapsed ? ' collapsed' : ''}`}>
         {selectedOverlay && overlays.some((o) => o.id === selectedOverlay) ? (
           <div className="panel panel-tall">
             <OverlayPanel
@@ -713,77 +737,103 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           )
         ) : (
           <>
-            <div className="tabs" role="tablist">
-              {TABS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === id}
-                  className={tab === id ? 'active' : ''}
-                  onClick={() => setTab(id)}
-                >
-                  {t(`editor.tab.${id}`)}
-                </button>
-              ))}
-            </div>
-            <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
-              {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
-              {tab === 'layout' && (
-                <LayoutPanel
-                  photoCount={doc.photos.length}
-                  value={layout.id}
-                  onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))}
-                />
-              )}
-              {tab === 'borders' && (
-                <BordersPanel
-                  value={doc.borders}
-                  onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
-                  shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
-                />
-              )}
-              {tab === 'background' && (
-                <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />
-              )}
-              {tab === 'filters' && (
-                <div className="filters-tab">
-                  <div className="segmented segmented-small">
-                    {(['filters', 'adjust'] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className={filterMode === m ? 'active' : ''}
-                        aria-pressed={filterMode === m}
-                        onClick={() => setFilterMode(m)}
-                      >
-                        {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
-                      </button>
-                    ))}
-                  </div>
-                  {filterMode === 'filters' ? (
-                    <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
-                  ) : (
-                    <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
-                  )}
-                </div>
-              )}
-              {tab === 'text' && (
-                <div className="text-tab">
-                  <button type="button" className="btn btn-primary" onClick={() => addText()}>
-                    {t('text.add')}
+            <div className="tabs-row">
+              <div className="tabs" role="tablist">
+                {TABS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === id && !toolsCollapsed}
+                    className={tab === id && !toolsCollapsed ? 'active' : ''}
+                    onClick={() => {
+                      setTab(id)
+                      if (toolsCollapsed) setCollapsed(false)
+                    }}
+                  >
+                    {t(`editor.tab.${id}`)}
                   </button>
-                  <p className="panel-note">{t('text.stylesHint')}</p>
-                  <PresetGrid onPick={(p) => addText(p)} />
-                </div>
-              )}
-              {tab === 'stickers' && (
-                <StickerBrowser
-                  onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
-                  onPickImage={() => void addImageSticker()}
-                />
-              )}
+                ))}
+              </div>
+              <button
+                type="button"
+                className="tools-toggle"
+                aria-expanded={!toolsCollapsed}
+                aria-label={toolsCollapsed ? t('editor.toolsExpand') : t('editor.toolsCollapse')}
+                title={toolsCollapsed ? t('editor.toolsExpand') : t('editor.toolsCollapse')}
+                onClick={() => setCollapsed(!toolsCollapsed)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d={toolsCollapsed ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
+            {!toolsCollapsed && (
+              <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
+                {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
+                {tab === 'layout' && (
+                  <LayoutPanel
+                    photoCount={doc.photos.length}
+                    value={layout.id}
+                    onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))}
+                  />
+                )}
+                {tab === 'borders' && (
+                  <BordersPanel
+                    value={doc.borders}
+                    onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
+                    shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
+                  />
+                )}
+                {tab === 'background' && (
+                  <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />
+                )}
+                {tab === 'filters' && (
+                  <div className="filters-tab">
+                    <div className="segmented segmented-small">
+                      {(['filters', 'adjust'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={filterMode === m ? 'active' : ''}
+                          aria-pressed={filterMode === m}
+                          onClick={() => setFilterMode(m)}
+                        >
+                          {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
+                        </button>
+                      ))}
+                    </div>
+                    {filterMode === 'filters' ? (
+                      <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
+                    ) : (
+                      <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
+                    )}
+                  </div>
+                )}
+                {tab === 'text' && (
+                  <div className="text-tab">
+                    <button type="button" className="btn btn-primary" onClick={() => addText()}>
+                      {t('text.add')}
+                    </button>
+                    <p className="panel-note">{t('text.stylesHint')}</p>
+                    <PresetGrid onPick={(p) => addText(p)} />
+                  </div>
+                )}
+                {tab === 'stickers' && (
+                  <StickerBrowser
+                    onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
+                    onPickImage={() => void addImageSticker()}
+                  />
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

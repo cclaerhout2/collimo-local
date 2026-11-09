@@ -98,6 +98,8 @@ export const fr = {
   'editor.back': 'Photos',
   'editor.export': 'Exporter',
   'editor.shuffle': 'Mélanger les photos',
+  'editor.toolsCollapse': 'Réduire le panneau pour agrandir le collage',
+  'editor.toolsExpand': 'Agrandir le panneau',
   'editor.tab.ratio': 'Format',
   'editor.tab.layout': 'Disposition',
   'editor.tab.borders': 'Bords',

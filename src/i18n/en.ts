@@ -92,6 +92,8 @@ export const en: Record<MessageKey, string> = {
   'editor.back': 'Photos',
   'editor.export': 'Export',
   'editor.shuffle': 'Shuffle photos',
+  'editor.toolsCollapse': 'Collapse the panel to enlarge the collage',
+  'editor.toolsExpand': 'Expand the panel',
   'editor.tab.ratio': 'Format',
   'editor.tab.layout': 'Layout',
   'editor.tab.borders': 'Borders',

@@ -1449,12 +1449,45 @@ button:focus-visible {
   padding: 0.6rem 0 max(0.75rem, env(safe-area-inset-bottom));
 }
 
+.tabs-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0 0.6rem;
+  padding: 0 3rem;
+}
+
+.editor-tools.collapsed .tabs-row {
+  margin-bottom: 0;
+}
+
+.tools-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tools-toggle:hover {
+  border-color: #55555f;
+}
+
 .tabs {
   display: flex;
   justify-content: center;
   gap: 4px;
   width: fit-content;
-  margin: 0 auto 0.6rem;
+  margin: 0 auto;
   padding: 4px;
   border-radius: 999px;
   background: var(--panel-2);
@@ -1963,8 +1996,15 @@ a.btn {
 }
 
 /* Étape 4 : texte et stickers */
+@media (max-width: 699px) {
+  .tabs-row {
+    justify-content: flex-start;
+    padding: 0 3rem 0 0.5rem;
+  }
+}
+
 .tabs {
-  max-width: calc(100% - 1rem);
+  max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
 }
