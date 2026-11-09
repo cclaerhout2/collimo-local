@@ -29,13 +29,29 @@ interface Props {
  */
 export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
   const { t } = useI18n()
-  const ids = photos.map((p) => p.id)
-  const byId = new Map(photos.map((p) => [p.id, p]))
+  /** Photos écartées de la sélection depuis cet écran : elles n'iront dans aucun collage. */
+  const [removed, setRemoved] = useState<Set<string>>(() => new Set())
+  const kept = photos.filter((p) => !removed.has(p.id))
+  const ids = kept.map((p) => p.id)
+  const byId = new Map(kept.map((p) => [p.id, p]))
   // Au départ : le nombre de collages imposé par le maximum, et au moins deux puisqu'on vient répartir.
   const [groups, setGroups] = useState<Groups>(() =>
     autoSplit(ids, Math.max(ids.length >= MIN_PHOTOS * 2 ? 2 : 1, groupsNeeded(ids.length, MAX_PHOTOS))),
   )
   const [perGroup, setPerGroup] = useState(() => Math.max(MIN_PHOTOS, Math.min(MAX_PHOTOS, Math.ceil(ids.length / groups.length))))
+
+  /**
+   * Écarte des photos de la sélection : elles quittent leur collage et la liste à placer.
+   * @param which - identifiants à écarter
+   */
+  function discard(which: string[]) {
+    if (!which.length) return
+    const set = new Set(which)
+    setRemoved((r) => new Set([...r, ...which]))
+    setGroups((g) => g.map((grp) => grp.filter((id) => !set.has(id))))
+    setPicked((cur) => (cur && set.has(cur) ? null : cur))
+    setViewing((cur) => (cur && set.has(cur) ? null : cur))
+  }
   /** Photo touchée, en attente d'une carte de destination (écran tactile ou clavier). */
   const [picked, setPicked] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
@@ -122,6 +138,15 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
         >
           <ZoomIcon />
         </button>
+        <button
+          type="button"
+          className="split-discard"
+          aria-label={t('split.discard', { name: p.name })}
+          title={t('split.discard', { name: p.name })}
+          onClick={() => discard([id])}
+        >
+          ×
+        </button>
       </li>
     )
   }
@@ -179,6 +204,11 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
               {t('split.placeHere')}
             </button>
           )}
+          {left.length > 0 && (
+            <button type="button" className="btn btn-small btn-ghost split-discard-all" onClick={() => discard(left)}>
+              {t('split.discardAll', { count: left.length })}
+            </button>
+          )}
         </h2>
         {left.length === 0 ? <p className="muted">{t('split.poolEmpty')}</p> : <ul className="split-grid">{left.map((id) => tile(id))}</ul>}
       </section>
@@ -233,11 +263,12 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
       {viewing && byId.has(viewing) && (
         <SplitLightbox
           services={services}
-          photos={photos}
+          photos={kept}
           id={viewing}
           groups={groups}
           onChange={setViewing}
           onPlace={(to) => place(viewing, to)}
+          onDiscard={() => discard([viewing])}
           onClose={() => setViewing(null)}
         />
       )}
@@ -287,6 +318,8 @@ interface LightboxProps {
   onChange: (id: string) => void
   /** Place la photo affichée dans un groupe (ou -1 : à placer). */
   onPlace: (to: number) => void
+  /** Écarte la photo affichée de la sélection. */
+  onDiscard: () => void
   /** Ferme la vue. */
   onClose: () => void
 }
@@ -296,7 +329,7 @@ interface LightboxProps {
  * passer aux photos voisines, Échap pour fermer, 1 à 9 pour placer dans le collage correspondant.
  * @returns l'overlay
  */
-function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onClose }: LightboxProps) {
+function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onDiscard, onClose }: LightboxProps) {
   const { t } = useI18n()
   const index = photos.findIndex((p) => p.id === id)
   const photo = photos[index]
@@ -318,7 +351,12 @@ function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onClos
       if (e.key === 'Escape') onClose()
       else if (e.key === 'ArrowLeft' && index > 0) onChange(photos[index - 1].id)
       else if (e.key === 'ArrowRight' && index < photos.length - 1) onChange(photos[index + 1].id)
-      else if (/^[0-9]$/.test(e.key)) {
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const next = photos[index + 1] ?? photos[index - 1]
+        onDiscard()
+        if (next) onChange(next.id)
+        else onClose()
+      } else if (/^[0-9]$/.test(e.key)) {
         const n = Number(e.key)
         if (n === 0) onPlace(-1)
         else if (n <= groups.length) onPlace(n - 1)
@@ -328,7 +366,7 @@ function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onClos
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [index, photos, groups.length, onChange, onPlace, onClose])
+  }, [index, photos, groups.length, onChange, onPlace, onDiscard, onClose])
 
   if (!photo) return null
   return (
@@ -376,6 +414,18 @@ function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onClos
       <div className="slideshow-bar split-lightbox-bar">
         <span className="split-where">{where === -1 ? t('split.whereUnplaced') : t('split.whereGroup', { n: where + 1 })}</span>
         <span className="split-targets" role="group" aria-label={t('split.moveTo')}>
+          <button
+            type="button"
+            className="btn btn-small btn-ghost split-discard-btn"
+            onClick={() => {
+              const next = photos[index + 1] ?? photos[index - 1]
+              onDiscard()
+              if (next) onChange(next.id)
+              else onClose()
+            }}
+          >
+            × {t('split.discardShort')}
+          </button>
           <button
             type="button"
             className={`btn btn-small${where === -1 ? ' active' : ''}`}
