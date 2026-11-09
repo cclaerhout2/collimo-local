@@ -89,7 +89,7 @@ Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans le
 
 **L'entreprise bloque le lancement.** Certaines entreprises interdisent les programmes non signés (AppLocker sous Windows, gestion des Mac). Il faut alors demander au service informatique d'autoriser Collimo, ou faire signer les fichiers (certificat de signature de code pour Windows, compte développeur Apple pour macOS).
 
-**Un problème ?** Le détail des erreurs inattendues est noté dans le fichier `collimo-erreurs.log` du dossier temporaire (`%TEMP%` sous Windows, `$TMPDIR` sous macOS, `/tmp` sous Linux) ; joindre ce fichier au signalement. `F12` (`⌘⌥I` sur Mac) ouvre les outils de développement.
+**Un problème ?** Les étapes du démarrage et le détail des erreurs inattendues sont notés dans le fichier `collimo-erreurs.log` du dossier temporaire (`%TEMP%` sous Windows, `$TMPDIR` sous macOS, `/tmp` sous Linux) ; joindre ce fichier au signalement. `F12` (`⌘⌥I` sur Mac) ouvre les outils de développement.
 
 ## Fonctionnalités
 

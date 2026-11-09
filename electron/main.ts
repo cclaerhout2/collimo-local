@@ -9,7 +9,7 @@
  * - `COLLIMO_TEST_PICK_FOLDER`, `COLLIMO_TEST_PICK_FILE` : réponses des sélecteurs, sans fenêtre.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, shell, type IpcMainInvokeEvent } from 'electron'
-import { appendFileSync, readFileSync, promises as fs } from 'node:fs'
+import { appendFileSync, readFileSync, rmSync, statSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { APP_SCHEME, CHANNELS, type LocalFile, type LocalFolder, type PickFilter } from '../src/desktop/bridge'
@@ -32,7 +32,7 @@ import {
   writeNewFile,
 } from './files'
 
-/** Journal des erreurs inattendues, pour le diagnostic sur un PC (dossier temporaire de l'utilisateur). */
+/** Journal du démarrage et des erreurs inattendues, pour le diagnostic sur un PC (dossier temporaire de l'utilisateur). */
 const ERROR_LOG = path.join(os.tmpdir(), 'collimo-erreurs.log')
 
 /**
@@ -47,6 +47,20 @@ function logError(where: string, e: unknown): void {
     /* journal impossible : rien d'autre à faire */
   }
 }
+/**
+ * Note une étape du démarrage dans le journal (utile quand l'app ne s'affiche pas, par exemple sur un PC d'entreprise).
+ * @param message - étape
+ */
+function logStep(message: string): void {
+  logError('démarrage', message)
+}
+// Le journal repart de zéro au-delà de 1 Mo.
+try {
+  if (statSync(ERROR_LOG).size > 1_000_000) rmSync(ERROR_LOG)
+} catch {
+  /* pas encore de journal */
+}
+logStep(`Collimo ${app.getVersion()} (${process.platform} ${os.release()}, ${process.arch}) : ${process.execPath}`)
 process.on('uncaughtException', (e) => {
   logError('exception', e)
   dialog.showErrorBox('Collimo', `Erreur inattendue : ${e.message}\n\nDétails dans ${ERROR_LOG}`)
@@ -508,11 +522,23 @@ function createWindow(): void {
     },
   })
   if (process.platform !== 'darwin') mainWindow.removeMenu()
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.once('ready-to-show', () => {
+    logStep('fenêtre affichée')
+    mainWindow?.show()
+  })
+  // Filet de sécurité : si la page tarde (logiciel de sécurité, carte graphique…), la fenêtre s'affiche quand même ;
+  // sans cela, l'app resterait invisible et bloquerait tout nouveau lancement (une seule instance).
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isVisible()) return
+    logStep('page pas prête après 10 s : affichage forcé de la fenêtre')
+    mainWindow.show()
+  }, 10_000)
   mainWindow.on('closed', () => (mainWindow = null))
 
   const wc = mainWindow.webContents
   wc.on('render-process-gone', (_e, d) => logError('page', `${d.reason} (code ${d.exitCode})`))
+  wc.on('did-fail-load', (_e, code, desc, url) => logError('chargement', `${desc} (${code}) ${url}`))
+  wc.on('unresponsive', () => logError('page', 'ne répond plus'))
   wc.on('preload-error', (_e, p, err) => logError(`préchargement ${p}`, err))
   wc.setWindowOpenHandler(({ url }) => {
     openLink(url)
@@ -544,10 +570,12 @@ function createWindow(): void {
 
 // Une seule instance : un second lancement remet la fenêtre existante au premier plan.
 if (!app.requestSingleInstanceLock()) {
+  logStep('Collimo est déjà ouvert : la fenêtre existante passe au premier plan')
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return
+    if (!mainWindow) return void (app.isReady() && createWindow())
+    if (!mainWindow.isVisible()) mainWindow.show()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
   })
@@ -556,17 +584,25 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit())
   app.on('activate', () => app.isReady() && !mainWindow && createWindow())
   app.on('child-process-gone', (_e, d) => d.reason !== 'clean-exit' && logError(d.type, `${d.reason} (code ${d.exitCode})`))
-  void app.whenReady().then(async () => {
-    await loadState()
-    registerProtocol()
-    registerIpc()
-    // « Enregistrer une copie sous… » : la boîte de dialogue s'ouvre dans le dossier Images.
-    session.defaultSession.on('will-download', (_e, item) => {
-      item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('pictures'), item.getFilename()) })
+  void app
+    .whenReady()
+    .then(async () => {
+      logStep('Electron prêt')
+      await loadState()
+      registerProtocol()
+      registerIpc()
+      // « Enregistrer une copie sous… » : la boîte de dialogue s'ouvre dans le dossier Images.
+      session.defaultSession.on('will-download', (_e, item) => {
+        item.setSaveDialogOptions({ defaultPath: path.join(app.getPath('pictures'), item.getFilename()) })
+      })
+      // Aucune autorisation du navigateur (caméra, notifications…) n'est utile à Collimo.
+      if (process.platform === 'darwin') setMacMenu()
+      session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'clipboard-sanitized-write'))
+      createWindow()
     })
-    // Aucune autorisation du navigateur (caméra, notifications…) n'est utile à Collimo.
-    if (process.platform === 'darwin') setMacMenu()
-    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'clipboard-sanitized-write'))
-    createWindow()
-  })
+    .catch((e: unknown) => {
+      logError('démarrage', e)
+      dialog.showErrorBox('Collimo', `Démarrage impossible : ${e instanceof Error ? e.message : String(e)}\n\nDétails dans ${ERROR_LOG}`)
+      app.quit()
+    })
 }
