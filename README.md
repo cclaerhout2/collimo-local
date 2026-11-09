@@ -91,6 +91,8 @@ Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans le
 
 **Un problème ?** Les étapes du démarrage et le détail des erreurs inattendues sont notés dans le fichier `collimo-erreurs.log` du dossier temporaire (`%TEMP%` sous Windows, `$TMPDIR` sous macOS, `/tmp` sous Linux) ; joindre ce fichier au signalement. `F12` (`⌘⌥I` sur Mac) ouvre les outils de développement.
 
+**Windows : Collimo se ferme aussitôt, sans message ?** Sur les PC équipés du « nView Desktop Manager » de NVIDIA (fréquent sur les postes d’entreprise), le module `nViewH64.dll` qui s’injecte dans chaque programme fait planter Collimo au démarrage (Observateur d’événements › Journaux Windows › Application : erreur d’application dans `nViewH64.dll`). Désactiver nView Desktop Manager (Panneau de configuration NVIDIA › Gestion du bureau) règle le problème.
+
 ## Fonctionnalités
 
 **Photos de l’appareil**
