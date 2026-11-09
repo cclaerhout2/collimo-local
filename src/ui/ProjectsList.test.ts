@@ -53,7 +53,10 @@ describe('renommage', () => {
 })
 
 describe('migrateCollages', () => {
-  /** Client Drive factice qui note les appels de mise à jour. */
+  /**
+   * Client Drive factice qui note les appels de mise à jour.
+   * @returns le client et la liste des appels
+   */
   function fakeDrive() {
     const updates: { id: string; change: unknown; move: unknown }[] = []
     const drive = {
