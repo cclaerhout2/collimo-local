@@ -18,6 +18,9 @@ interface CollimoStorage {
   fileInfo(o: { path: string }): Promise<LocalFile>
   listImages(o: { path: string }): Promise<{ files: LocalFile[] }>
   listFiles(o: { path: string; contains?: string }): Promise<{ files: LocalFile[] }>
+  listFolders(o: { path: string }): Promise<{ folders: LocalFolder[] }>
+  renameFile(o: { path: string; name: string }): Promise<LocalFile>
+  moveFile(o: { path: string; dir: string }): Promise<LocalFile>
   findChild(o: { dir: string; name: string }): Promise<{ path?: string }>
   ensureChildDir(o: { dir: string; name: string }): Promise<{ path: string }>
   thumbnail(o: { path: string; size: number; version: string }): Promise<{ path: string }>
@@ -28,6 +31,7 @@ interface CollimoStorage {
   catalogueDir(): Promise<LocalFolder>
   chooseCatalogueDir(o: { title: string }): Promise<{ folder?: LocalFolder }>
   share(o: { path: string; title: string }): Promise<void>
+  albumFolder(): Promise<LocalFolder>
   testMode(): Promise<{ folder?: string }>
 }
 
@@ -82,6 +86,9 @@ export function createNativeBridge(platform: 'android' | 'ios', plugin: CollimoS
     listImages: async (path) => (await plugin.listImages({ path })).files.sort((a, b) => collator.compare(a.name, b.name)),
     listFiles: async (path, contains) =>
       (await plugin.listFiles({ path, contains })).files.sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime)),
+    listFolders: async (path) => (await plugin.listFolders({ path })).folders.sort((a, b) => collator.compare(a.name, b.name)),
+    renameFile: (path, name) => plugin.renameFile({ path, name }),
+    moveFile: (path, dir) => plugin.moveFile({ path, dir }),
     async writeNewFile(dir, name, data) {
       return plugin.commitTemp({ id: await upload(data), dir, name })
     },
@@ -108,5 +115,6 @@ export function createNativeBridge(platform: 'android' | 'ios', plugin: CollimoS
     fileUrl: (path) => Capacitor.convertFileSrc(path),
     thumbnail: async (path, size, version) => Capacitor.convertFileSrc((await plugin.thumbnail({ path, size, version })).path),
     share: (path, title) => plugin.share({ path, title }),
+    ...(platform === 'ios' ? { albumFolder: () => plugin.albumFolder() } : {}),
   }
 }

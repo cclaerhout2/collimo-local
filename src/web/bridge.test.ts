@@ -12,7 +12,9 @@ function memoryStore(): AlbumStore {
   return {
     get: async (p) => files.get(p),
     put: async (f) => void files.set(f.path, f),
+    remove: async (p) => void files.delete(p),
     list: async (dir) => [...files.values()].filter((f) => f.dir === dir),
+    dirs: async () => [...new Set([...files.values()].map((f) => f.dir))],
     getThumb: async (k) => thumbs.get(k),
     putThumb: async (k, b) => void thumbs.set(k, b),
     getSetting: async (k) => settings.get(k),

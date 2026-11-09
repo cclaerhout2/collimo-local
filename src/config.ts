@@ -11,7 +11,7 @@ export interface AppConfig {
   apiKey: string
   /** Numéro du projet Google Cloud, pour le Picker (VITE_GOOGLE_APP_ID). */
   appId: string
-  /** Domaine Workspace autorisé, en minuscules ; vide = pas de contrôle côté app. */
+  /** Domaine(s) Workspace autorisé(s), séparés par des virgules, en minuscules ; vide = pas de contrôle côté app. */
   allowedDomain: string
   /** Mode démo : Drive simulé, aucun appel à Google. */
   mock: boolean
@@ -49,9 +49,15 @@ export const SCOPES = [
 
 /** Nom du sous-dossier créé à côté des photos. */
 export const COLLIMO_FOLDER_NAME = 'Collimo'
+/** Nom du sous-dossier de « Collimo » où sont rangés les fichiers projet (le dossier Collimo ne montre que les images). */
+export const PROJECTS_FOLDER_NAME = 'Projets'
 
 /** Nombre maximum de photos dans un collage. */
 export const MAX_PHOTOS = 20
+/** Nombre minimum de photos dans un collage. */
+export const MIN_PHOTOS = 2
+/** Nombre maximum de photos sélectionnées à la fois (à répartir en plusieurs collages au-delà de MAX_PHOTOS). */
+export const MAX_SELECTION = 100
 
 /** Formats que le navigateur sait décoder pour le rendu et l'export. */
 export const SUPPORTED_IMAGE_TYPES = [

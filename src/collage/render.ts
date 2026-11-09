@@ -184,6 +184,39 @@ export interface RenderOptions {
   placeholder?: string
   /** Comparaison avant/après : photos sans réglages ni filtre. */
   raw?: boolean
+  /** Aperçu : petit repère « œil barré » sur les cases dont la photo a des zones masquées. */
+  maskBadge?: boolean
+}
+
+/**
+ * Repère discret en haut à gauche d'une case dont la photo a des zones masquées (aperçu seulement).
+ * @param ctx - contexte de dessin
+ * @param cell - géométrie de la case
+ */
+function drawMaskBadge(ctx: Ctx, cell: CellGeom) {
+  const b = cell.box
+  const r = Math.max(9, Math.min(14, Math.min(b.w, b.h) * 0.07))
+  const cx = b.x + r + 6
+  const cy = b.y + r + 6
+  ctx.save()
+  clipCell(ctx, cell)
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+  ctx.fill()
+  ctx.strokeStyle = '#fff'
+  ctx.lineWidth = Math.max(1.2, r / 8)
+  ctx.lineCap = 'round'
+  const s = r * 0.55
+  ctx.beginPath()
+  // Œil : arc supérieur et pupille, barrés d'un trait.
+  ctx.moveTo(cx - s, cy)
+  ctx.quadraticCurveTo(cx, cy - s * 1.1, cx + s, cy)
+  ctx.quadraticCurveTo(cx, cy + s * 1.1, cx - s, cy)
+  ctx.moveTo(cx - s * 0.9, cy - s * 0.9)
+  ctx.lineTo(cx + s * 0.9, cy + s * 0.9)
+  ctx.stroke()
+  ctx.restore()
 }
 
 /**
@@ -223,6 +256,7 @@ export function renderCollage(
     if (photo && img) {
       drawPhotoInCell(ctx, img, cell, photo.crop)
       if (!options.raw) drawVignette(ctx, cell, vignetteFor(doc, i))
+      if (options.maskBadge && photo.masks?.length) drawMaskBadge(ctx, cell)
     } else if (options.placeholder) {
       ctx.save()
       clipCell(ctx, cell)

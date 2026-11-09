@@ -20,6 +20,9 @@ export const CHANNELS = {
   listImages: 'collimo:list-images',
   listFiles: 'collimo:list-files',
   fileInfo: 'collimo:file-info',
+  listFolders: 'collimo:list-folders',
+  renameFile: 'collimo:rename-file',
+  moveFile: 'collimo:move-file',
   writeNewFile: 'collimo:write-new-file',
   replaceFile: 'collimo:replace-file',
   ensureDir: 'collimo:ensure-dir',
@@ -88,6 +91,12 @@ export interface DesktopBridge {
   listImages(path: string): Promise<LocalFile[]>
   /** Fichiers directement dans un dossier, du plus récent au plus ancien ; `contains` filtre sur le nom. */
   listFiles(path: string, contains?: string): Promise<LocalFile[]>
+  /** Sous-dossiers directs d'un dossier, dans l'ordre naturel des noms (dossiers cachés exclus). */
+  listFolders(path: string): Promise<LocalFolder[]>
+  /** Renomme un fichier dans son dossier (nouveau nom simple) ; erreur si le nom est déjà pris. */
+  renameFile(path: string, name: string): Promise<LocalFile>
+  /** Déplace un fichier dans un autre dossier autorisé, sous le même nom ; erreur si le nom y est déjà pris. */
+  moveFile(path: string, dir: string): Promise<LocalFile>
   /** Un fichier. */
   fileInfo(path: string): Promise<LocalFile>
   /** Crée un nouveau fichier (image JPG ou PNG, ou JSON) ; erreur s'il existe déjà (jamais d'écrasement). */
@@ -121,6 +130,8 @@ export interface DesktopBridge {
   readFile?(path: string): Promise<Blob>
   /** Ouvre la feuille de partage du système sur un fichier (iPhone, Android) : Enregistrer dans Photos, Messages… */
   share?(path: string, title: string): Promise<void>
+  /** Album de l'app (iPhone, version web) : le dossier où sont copiées les photos choisies, créé au besoin. */
+  albumFolder?(): Promise<LocalFolder>
 }
 
 /**

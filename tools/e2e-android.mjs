@@ -151,16 +151,17 @@ adb('shell', 'setprop', 'debug.collimo.folder', PHOTOS)
 
 let { browser, page } = await launch()
 try {
-  step('premier lancement : écran de choix du dossier, sans compte')
-  await tap(page.getByRole('button', { name: 'FR', exact: true }))
-  await page.getByRole('heading', { name: 'Où sont vos photos ?' }).waitFor()
+  step('premier lancement : fenêtre d’ajout d’un emplacement, sans compte')
+  const fr = page.getByRole('button', { name: 'FR', exact: true })
+  await fr.waitFor({ timeout: 60_000 })
+  await fr.evaluate((el) => el.click())
+  await page.getByRole('heading', { name: 'Ajouter un emplacement' }).waitFor()
   assert.equal(await page.evaluate(() => window.collimoDesktop?.platform), 'android')
   await page.screenshot({ path: path.join(OUT, 'android-1-dossier.png') })
 
   step('choix du dossier, galerie : 8 images dans l’ordre naturel, miniatures affichées')
-  await tap(page.getByRole('button', { name: 'Choisir un dossier' }))
-  await page.getByText('Dossier choisi : Photos').waitFor()
-  await tap(page.getByRole('button', { name: 'Continuer' }))
+  await tap(page.getByRole('button', { name: 'Choisir un dossier…' }))
+  await page.getByRole('heading', { name: 'Ajouter un emplacement' }).waitFor({ state: 'detached' })
   const tiles = page.locator('ul.grid button.tile')
   await tiles.first().waitFor({ timeout: 30_000 })
   assert.equal(await tiles.count(), 8)
@@ -174,7 +175,7 @@ try {
     null,
     { timeout: 60_000 },
   )
-  assert.match(asApp(`ls ${PHOTOS}`), /Collimo/)
+  assert.doesNotMatch(asApp(`ls ${PHOTOS}`), /Collimo/, 'le dossier Collimo n’est créé qu’au premier collage')
   await page.screenshot({ path: path.join(OUT, 'android-2-galerie.png') })
 
   step('collage de 3 photos (dont la HEIC), enregistré dans le dossier')
@@ -186,18 +187,25 @@ try {
   await page.waitForTimeout(2000)
   await page.screenshot({ path: path.join(OUT, 'android-3-editeur.png') })
   await tap(page.getByRole('button', { name: 'Exporter' }))
+  await tap(page.getByRole('checkbox'))
   await tap(page.getByRole('button', { name: 'Enregistrer', exact: true }))
   await page.getByText(/Collage enregistré : Collimo_/).waitFor({ timeout: 120_000 })
   await page.screenshot({ path: path.join(OUT, 'android-4-enregistre.png') })
   const saved = asApp(`ls ${PHOTOS}/Collimo`).trim().split(/\s+/).sort()
-  assert.equal(saved.length, 2, `fichiers : ${saved.join(', ')}`)
-  assert.ok(saved.some((f) => f.endsWith('.jpg')) && saved.some((f) => f.endsWith('.collimo.json')))
-  const project = JSON.parse(asApp(`cat ${PHOTOS}/Collimo/${saved.find((f) => f.endsWith('.json'))}`))
+  assert.deepEqual(
+    saved.filter((f) => !f.endsWith('.jpg')),
+    ['Projets'],
+    `fichiers : ${saved.join(', ')}`,
+  )
+  const projects = asApp(`ls ${PHOTOS}/Collimo/Projets`).trim().split(/\s+/)
+  assert.ok(saved.some((f) => f.endsWith('.jpg')) && projects.some((f) => f.endsWith('.collimo.json')))
+  const project = JSON.parse(asApp(`cat ${PHOTOS}/Collimo/Projets/${projects.find((f) => f.endsWith('.json'))}`))
   assert.equal(project.doc.photos.length, 3)
   assert.equal(project.doc.photos[2].mimeType, 'image/heic')
   const size = Number(asApp(`wc -c < ${PHOTOS}/Collimo/${saved.find((f) => f.endsWith('.jpg'))}`).trim())
   assert.ok(size > 20_000, `image de ${size} octets`)
-  assert.equal(await page.getByRole('link', { name: 'Enregistrer une copie sous…' }).count(), 0, 'pas de téléchargement sur Android')
+  assert.equal(await page.getByRole('link', { name: /copie sous/ }).count(), 0, 'pas de téléchargement sur Android')
+  await page.getByRole('button', { name: 'Partager…' }).waitFor()
   await tap(page.getByRole('button', { name: 'Fermer' }))
 
   step('bouton Retour d’Android : de l’éditeur à la galerie, « Mes collages » à jour')

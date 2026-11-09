@@ -27,6 +27,9 @@ public class CollimoStoragePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewCont
         CAPPluginMethod(name: "listImages", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "listFiles", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "findChild", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listFolders", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "renameFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "moveFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "ensureChildDir", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "thumbnail", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "appendTemp", returnType: CAPPluginReturnPromise),
@@ -37,6 +40,7 @@ public class CollimoStoragePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewCont
         CAPPluginMethod(name: "chooseCatalogueDir", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "share", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "testMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "albumFolder", returnType: CAPPluginReturnPromise),
     ]
 
     private let fm = FileManager.default
@@ -285,6 +289,48 @@ public class CollimoStoragePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewCont
         }
     }
 
+    @objc func listFolders(_ call: CAPPluginCall) {
+        run(call) {
+            let dir = URL(fileURLWithPath: try self.required(call, "path"))
+            let names = try self.fm.contentsOfDirectory(atPath: dir.path).filter { !$0.hasPrefix(".") }
+            let folders: [JSObject] = names.compactMap { name in
+                var isDir: ObjCBool = false
+                let url = dir.appendingPathComponent(name, isDirectory: true)
+                guard self.fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { return nil }
+                return try? self.folderObject(url)
+            }
+            call.resolve(["folders": folders])
+        }
+    }
+
+    /// Renomme un fichier dans son dossier, sans écraser ; images et JSON seulement.
+    @objc func renameFile(_ call: CAPPluginCall) {
+        run(call) {
+            let url = URL(fileURLWithPath: try self.required(call, "path"))
+            let name = try self.required(call, "name")
+            try self.checkWritableName(name)
+            let target = url.deletingLastPathComponent().appendingPathComponent(name)
+            if target.path == url.path { call.resolve(try self.fileObject(url, dimensions: false)); return }
+            if self.fm.fileExists(atPath: target.path) { throw Failure(message: "Ce fichier existe déjà : \(name)") }
+            try self.fm.moveItem(at: url, to: target)
+            call.resolve(try self.fileObject(target, dimensions: false))
+        }
+    }
+
+    /// Déplace un fichier dans un autre dossier, sous le même nom, sans écraser.
+    @objc func moveFile(_ call: CAPPluginCall) {
+        run(call) {
+            let url = URL(fileURLWithPath: try self.required(call, "path"))
+            let dir = URL(fileURLWithPath: try self.required(call, "dir"), isDirectory: true)
+            let target = dir.appendingPathComponent(url.lastPathComponent)
+            if target.path == url.path { call.resolve(try self.fileObject(url, dimensions: false)); return }
+            if self.fm.fileExists(atPath: target.path) { throw Failure(message: "Ce fichier existe déjà : \(url.lastPathComponent)") }
+            try self.ensure(dir)
+            try self.fm.moveItem(at: url, to: target)
+            call.resolve(try self.fileObject(target, dimensions: false))
+        }
+    }
+
     @objc func findChild(_ call: CAPPluginCall) {
         run(call) {
             let url = URL(fileURLWithPath: try self.required(call, "dir")).appendingPathComponent(try self.required(call, "name"))
@@ -416,6 +462,14 @@ public class CollimoStoragePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewCont
             sheet.popoverPresentationController?.sourceRect = CGRect(x: vc.view.bounds.midX, y: vc.view.bounds.midY, width: 1, height: 1)
             sheet.popoverPresentationController?.permittedArrowDirections = []
             vc.present(sheet, animated: true) { call.resolve() }
+        }
+    }
+
+    /// L'album de l'app, créé au besoin : les photos choisies y sont copiées.
+    @objc func albumFolder(_ call: CAPPluginCall) {
+        run(call) {
+            try self.ensure(self.album)
+            call.resolve(try self.folderObject(self.album))
         }
     }
 

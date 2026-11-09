@@ -25,6 +25,13 @@ export interface FolderInfo {
   canAddChildren: boolean
 }
 
+/** Élément Drive (dossier ou fichier) désigné par un lien. */
+export interface DriveItem extends FolderInfo {
+  mimeType: string
+  /** Dossier parent, s'il est visible. */
+  parentId: string | null
+}
+
 /** Photo d'un dossier Drive. */
 export interface Photo {
   id: string
@@ -49,12 +56,53 @@ export interface Location {
   collimoFolderId: string
 }
 
+/** Dossier Drive, réduit à ce qu'il faut pour l'afficher et y revenir. */
+export interface FolderRef {
+  id: string
+  name: string
+}
+
+/**
+ * Raccourci vers un emplacement : un Drive entier ou un dossier précis, sous lequel l'utilisateur
+ * navigue jusqu'au dossier de photos. La racine de Mon Drive a l'identifiant `root`, celle d'un
+ * Drive partagé l'identifiant du Drive.
+ */
+export interface Shortcut {
+  /** Drive qui contient le dossier. */
+  drive: DriveRef
+  /** Dossier de départ (racine du Drive ou dossier précis). */
+  folder: FolderRef
+  /** Nom choisi par l'utilisateur ; absent = nom du dossier. */
+  label?: string
+}
+
+/** Chemin d'un dossier ouvert : du dossier de départ (raccourci) jusqu'au dossier affiché, inclus. */
+export interface FolderPath {
+  drive: DriveRef
+  /** Dossiers traversés ; le premier est le départ, le dernier le dossier affiché. Jamais vide. */
+  path: FolderRef[]
+}
+
+/** Dossier ouvert dans la galerie : son chemin, les droits de l'utilisateur et son dossier Collimo. */
+export interface OpenFolder extends FolderPath {
+  /** L'utilisateur peut-il ajouter des fichiers dans ce dossier (et donc y enregistrer des collages) ? */
+  canAddChildren: boolean
+  /** Sous-dossier « Collimo », s'il existe déjà ; créé au premier collage. */
+  collimoFolderId: string | null
+}
+
 /** Réglages propres à chaque utilisateur, stockés dans son espace caché Drive (appDataFolder). */
 export interface UserSettings {
   /** Version du format, pour ignorer un fichier d'un format futur. */
   version: 1
-  /** Dernier emplacement de travail. */
+  /** Ancien format : un seul emplacement. Repris en raccourci au chargement, puis abandonné. */
   location?: Location
+  /** Raccourcis vers les emplacements, dans l'ordre d'ajout. */
+  shortcuts?: Shortcut[]
+  /** Dernier dossier ouvert, rouvert à la connexion. */
+  current?: FolderPath
+  /** Derniers dossiers ouverts, du plus récent au plus ancien. */
+  recents?: FolderPath[]
   /** Langue choisie. */
   lang?: Lang
 }
@@ -94,10 +142,20 @@ export interface AuthService {
   signOut(): void
 }
 
+/** Propriétés réservées à Collimo sur ses fichiers Drive (invisibles dans Drive), pour relier image et projet quel que soit leur nom. */
+export interface CollimoFileProps {
+  /** Rôle du fichier : image exportée ou fichier projet. */
+  collimo?: 'image' | 'project'
+  /** Pour une image : identifiant de son fichier projet ; pour un projet : identifiant de son image. */
+  pair?: string
+}
+
 /** Fichier Drive (collage enregistré, fichier envoyé). */
 export interface DriveFileInfo {
   id: string
   name: string
+  /** Propriétés Collimo, si le fichier en a. */
+  appProperties?: CollimoFileProps
   /** Date de dernière modification (ISO 8601). */
   modifiedTime?: string
   /** Lien d'ouverture dans Drive. */
@@ -133,10 +191,16 @@ export interface DriveService {
   listSharedDrives(): Promise<DriveRef[]>
   /** Un dossier par son identifiant, avec les droits de l'utilisateur. */
   getFolder(id: string): Promise<FolderInfo>
+  /** Un élément quelconque (dossier ou fichier), avec son type et son dossier parent ; erreur 404 si l'utilisateur n'y a pas accès. */
+  getItem(id: string): Promise<DriveItem>
   /** Images directement dans un dossier, dans l'ordre naturel des noms. */
   listPhotos(folder: { id: string }, driveId: string | null): Promise<Photo[]>
   /** Une photo par son identifiant (après un choix dans le sélecteur). */
   getPhoto(id: string): Promise<Photo>
+  /** Sous-dossiers directs d'un dossier, dans l'ordre naturel des noms, sans le dossier « Collimo ». */
+  listSubfolders(folderId: string, driveId: string | null): Promise<FolderRef[]>
+  /** Sous-dossier « Collimo » d'un dossier, sans le créer ; null s'il n'existe pas. */
+  findCollimoFolder(folderId: string): Promise<string | null>
   /** Retrouve ou crée le sous-dossier « Collimo » ; renvoie son identifiant. */
   ensureCollimoFolder(folderId: string): Promise<string>
   /** Réglages de l'utilisateur ; null s'il n'en a pas encore, ou dans un format inconnu. */
@@ -144,7 +208,7 @@ export interface DriveService {
   /** Enregistre les réglages de l'utilisateur. */
   saveSettings(settings: UserSettings): Promise<void>
   /** Miniature calculée à la demande, quand la photo n'a pas d'adresse de miniature (Android) ; `undefined` en cas d'échec. */
-  loadThumbnail?(photo: Photo): Promise<string | undefined>
+  loadThumbnail?(photo: Photo, size?: number): Promise<string | undefined>
   /** Contenu d'un fichier (photos originales, repli des miniatures). */
   fetchFileBlob(id: string): Promise<Blob>
   /** Lien qui ouvre un dossier (dans Drive, ou dans l'Explorateur sur ordinateur) ; vide s'il n'y en a pas (Android). */
@@ -153,8 +217,18 @@ export interface DriveService {
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   /** Contenu JSON d'un fichier, non vérifié. */
   readJson(id: string): Promise<unknown>
-  /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo). */
-  uploadFile(folderId: string, name: string, data: Blob, mimeType: string): Promise<DriveFileInfo>
+  /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo), avec ses propriétés Collimo éventuelles. */
+  uploadFile(folderId: string, name: string, data: Blob, mimeType: string, props?: CollimoFileProps): Promise<DriveFileInfo>
+  /** Renomme un fichier, change ses propriétés Collimo et/ou le déplace (`addParents` / `removeParents`). */
+  updateFileMeta(
+    id: string,
+    change: { name?: string; appProperties?: CollimoFileProps },
+    move?: { addParents: string; removeParents: string },
+  ): Promise<DriveFileInfo>
+  /** Sous-dossier d'un dossier par son nom, sans le créer ; null s'il n'existe pas. */
+  findFolder(parentId: string, name: string): Promise<string | null>
+  /** Retrouve ou crée un sous-dossier ; renvoie son identifiant. */
+  ensureFolder(parentId: string, name: string): Promise<string>
   /** Drive partagé par son identifiant, ou par son nom exact ; null s'il n'existe pas ou n'est pas visible. */
   findSharedDrive(ref: { id?: string; name?: string }): Promise<SharedDriveInfo | null>
   /** Fichier par son nom, à la racine d'un Drive partagé. */

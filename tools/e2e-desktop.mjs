@@ -65,19 +65,22 @@ const env = {
 }
 let { app, page } = await launch(env)
 try {
-  step('premier lancement : écran de choix du dossier, sans connexion Google')
+  step('premier lancement : fenêtre d’ajout d’un emplacement, sans connexion Google')
   // La langue suit celle du système (sur macOS, `--lang` est ignoré) : le test se fait en français.
-  await page.getByRole('button', { name: 'FR', exact: true }).click({ timeout: 30_000 })
-  await page.getByRole('heading', { name: 'Où sont vos photos ?' }).waitFor({ timeout: 30_000 })
-  assert.equal(await page.getByText('Choisissez un Drive').count(), 0, 'pas de choix de Drive dans l’app de bureau')
+  // Le bouton est derrière la fenêtre d'ajout, ouverte d'office : clic direct dans la page.
+  const fr = page.getByRole('button', { name: 'FR', exact: true })
+  await fr.waitFor({ timeout: 30_000 })
+  await fr.evaluate((el) => el.click())
+  await page.getByRole('heading', { name: 'Ajouter un emplacement' }).waitFor({ timeout: 30_000 })
+  assert.equal(await page.getByText('Drive partagés').count(), 0, 'pas de choix de Drive dans l’app de bureau')
   assert.equal(await page.evaluate(() => typeof window.collimoDesktop?.listImages), 'function')
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined', 'pas de Node dans la page')
   await page.screenshot({ path: path.join(OUT, '1-dossier.png') })
 
-  step('choix du dossier de photos')
-  await page.getByRole('button', { name: 'Choisir un dossier' }).click()
-  await page.getByText('Dossier choisi : Mes photos').waitFor()
-  await page.getByRole('button', { name: 'Continuer' }).click()
+  step('choix du dossier de photos : il devient un emplacement, ouvert dans la galerie')
+  await page.getByRole('button', { name: 'Choisir un dossier…' }).click()
+  await page.getByRole('heading', { name: 'Ajouter un emplacement' }).waitFor({ state: 'detached' })
+  await page.locator('nav.locations').getByText('Mes photos').first().waitFor()
 
   step('galerie : 8 images dans l’ordre naturel (HEIC compris), miniatures affichées')
   const tiles = page.locator('ul.grid button.tile')
@@ -95,8 +98,9 @@ try {
       timeout: 20_000,
     },
   )
-  await stat(path.join(photos, 'Collimo'))
-  await page.getByText(photos).waitFor()
+  // Le dossier Collimo n'est créé qu'au premier collage.
+  assert.equal(await stat(path.join(photos, 'Collimo')).catch(() => null), null)
+  await page.locator('.crumbs').getByText('Mes photos').waitFor()
   await page.screenshot({ path: path.join(OUT, '2-galerie.png') })
 
   step('cloisonnement : rien hors des dossiers choisis')
@@ -159,18 +163,30 @@ try {
 
   step('enregistrement : image et projet écrits dans le dossier Collimo')
   await page.getByRole('button', { name: 'Exporter' }).click()
+  // Rappel de confidentialité : la case doit être cochée avant d'enregistrer.
+  assert.ok(
+    await page.getByRole('button', { name: 'Enregistrer', exact: true }).isDisabled(),
+    'enregistrement bloqué tant que la case n’est pas cochée',
+  )
+  await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
   await page.getByText(/Collage enregistré : Collimo_/).waitFor({ timeout: 60_000 })
   await page.screenshot({ path: path.join(OUT, '4-enregistre.png') })
   const saved = (await readdir(path.join(photos, 'Collimo'))).sort()
-  assert.equal(saved.length, 2, `fichiers : ${saved.join(', ')}`)
+  assert.deepEqual(
+    saved.filter((f) => !f.endsWith('.jpg')),
+    ['Projets'],
+    `fichiers : ${saved.join(', ')}`,
+  )
   const jpg = saved.find((f) => f.endsWith('.jpg'))
-  const json = saved.find((f) => f.endsWith('.collimo.json'))
-  assert.ok(jpg && json, 'une image JPG et un fichier projet')
+  const projects = await readdir(path.join(photos, 'Collimo', 'Projets'))
+  const json = projects.find((f) => f.endsWith('.collimo.json'))
+  assert.ok(jpg && json, 'une image JPG et un fichier projet dans Projets')
+  assert.equal(jpg.replace(/\.jpg$/, ''), json.replace(/\.collimo\.json$/, ''), 'même nom')
   const jpgBytes = await readFile(path.join(photos, 'Collimo', jpg))
   assert.equal(jpgBytes.readUInt16BE(0), 0xffd8, 'vrai fichier JPEG')
   assert.ok(jpgBytes.length > 20_000, `image de ${jpgBytes.length} octets`)
-  const project = JSON.parse(await readFile(path.join(photos, 'Collimo', json), 'utf8'))
+  const project = JSON.parse(await readFile(path.join(photos, 'Collimo', 'Projets', json), 'utf8'))
   assert.equal(project.app, 'collimo')
   assert.equal(project.doc.photos.length, 3)
   assert.equal(project.doc.photos[0].id, path.join(photos, 'IMG_1.png'))
@@ -180,21 +196,68 @@ try {
   step('un second enregistrement crée un nouveau collage, sans rien écraser')
   await page.getByRole('button', { name: 'Fermer' }).click()
   await page.getByRole('button', { name: 'Exporter' }).click()
+  await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Enregistrer', exact: true }).click()
   await page.getByText(/Collage enregistré : Collimo_/).waitFor({ timeout: 60_000 })
-  assert.equal((await readdir(path.join(photos, 'Collimo'))).length, 4)
+  assert.equal((await readdir(path.join(photos, 'Collimo'))).filter((f) => f.endsWith('.jpg')).length, 2)
+  assert.equal((await readdir(path.join(photos, 'Collimo', 'Projets'))).length, 2)
   await page.getByRole('button', { name: 'Fermer' }).click()
 
-  step('« Mes collages » puis réouverture d’un collage')
+  step('« Mes collages » : renommage (image et projet ensemble), puis réouverture d’un collage')
   await page.getByRole('button', { name: 'Photos' }).first().click()
   const cards = page.locator('.project-card')
   await cards.first().waitFor()
   assert.equal(await cards.count(), 2)
   await page.waitForFunction(() => [...document.querySelectorAll('.project-card img')].every((i) => i.complete && i.naturalWidth > 0))
+  await page.getByRole('button', { name: 'Renommer le collage' }).first().click()
+  await page.getByLabel('Nouveau nom du collage').fill('Vacances été')
+  await page.keyboard.press('Enter')
+  await page.locator('.project-name', { hasText: 'Vacances été' }).waitFor()
+  assert.ok((await readdir(path.join(photos, 'Collimo'))).includes('Vacances été.jpg'))
+  assert.ok((await readdir(path.join(photos, 'Collimo', 'Projets'))).includes('Vacances été.collimo.json'))
   await page.screenshot({ path: path.join(OUT, '5-mes-collages.png') })
   await cards.first().click()
   await page.getByRole('button', { name: 'Exporter' }).waitFor()
   await page.getByRole('button', { name: 'Photos' }).first().click()
+
+  step('diaporama : chaque photo en grand, sélection depuis le diaporama')
+  await page.getByRole('button', { name: 'Diaporama' }).click()
+  const slideshow = page.getByRole('dialog')
+  await slideshow.waitFor()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press(' ')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape')
+  await slideshow.waitFor({ state: 'detached' })
+  assert.ok((await page.locator('ul.grid .badge').count()) >= 1, 'une photo sélectionnée depuis le diaporama')
+  await page.getByRole('button', { name: 'Tout désélectionner' }).click()
+
+  step('plusieurs collages : répartition de 4 photos en 2 collages, série dans l’éditeur')
+  for (const i of [0, 1, 2, 3]) await tiles.nth(i).click()
+  await page.getByRole('button', { name: 'Plusieurs collages…' }).click()
+  await page.getByRole('heading', { name: /Répartir 4 photos/ }).waitFor()
+  await page.screenshot({ path: path.join(OUT, '5b-repartition.png') })
+  await page.getByRole('button', { name: /Créer les 2 collages|Créer le collage/ }).click()
+  await page.getByRole('button', { name: 'Exporter' }).waitFor()
+  await page.getByText('Collage 1 / 2').waitFor()
+  await page.getByRole('button', { name: 'Collage suivant' }).click()
+  // Le premier collage n'est pas enregistré : confirmation avant de passer au suivant.
+  await page
+    .getByRole('button', { name: 'Passer quand même' })
+    .click({ timeout: 5000 })
+    .catch(() => {})
+  await page.getByText('Collage 2 / 2').waitFor()
+  await page.screenshot({ path: path.join(OUT, '5c-serie.png') })
+  await page.getByRole('button', { name: 'Photos' }).first().click()
+  await page
+    .getByRole('button', { name: 'Passer quand même' })
+    .click({ timeout: 5000 })
+    .catch(() => {})
+  await tiles.first().waitFor()
+  await page
+    .getByRole('button', { name: 'Tout désélectionner' })
+    .click({ timeout: 10_000 })
+    .catch(() => {})
 
   step('usine à dispositions disponible, catalogue local')
   await page.locator('.avatar-button').click()
@@ -237,21 +300,25 @@ try {
   await app.close()
 }
 
-step('dossier déplacé : nouveau choix, puis collage rouvert avec ses photos retrouvées par leur nom')
+step('dossier déplacé : nouvel emplacement, puis collage rouvert avec ses photos retrouvées par leur nom')
 const movedDir = path.join(root, 'Photos déplacées')
 await rename(photos, movedDir)
 ;({ app, page } = await launch({ COLLIMO_USER_DATA: userData, COLLIMO_TEST_PICK_FOLDER: movedDir }))
 try {
-  await page.getByRole('button', { name: 'Choose a folder' }).click({ timeout: 30_000 })
-  await page.getByRole('button', { name: 'Continue' }).click()
-  await page.locator('.project-card').first().click()
+  await page
+    .getByRole('button', { name: /Add a location/ })
+    .first()
+    .click({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Choose a folder…' }).click()
+  await page.locator('.project-card').first().click({ timeout: 30_000 })
   await page.getByRole('button', { name: 'Export' }).waitFor()
   await page.waitForTimeout(1500)
   assert.equal(await page.locator('.banner-error, [role="alert"]').count(), 0, 'aucune erreur')
   await page.getByRole('button', { name: 'Export' }).click()
+  await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await page.getByText(/Collage saved: Collimo_/).waitFor({ timeout: 60_000 })
-  assert.equal((await readdir(path.join(movedDir, 'Collimo'))).length, 6)
+  assert.equal((await readdir(path.join(movedDir, 'Collimo'))).filter((f) => f.endsWith('.jpg')).length, 3)
   await page.screenshot({ path: path.join(OUT, '8-dossier-deplace.png') })
 } finally {
   await app.close()

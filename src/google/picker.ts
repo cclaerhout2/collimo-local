@@ -14,9 +14,18 @@ let pickerReady: Promise<void> | null = null
  * @returns une promesse résolue quand le Picker est prêt
  */
 function loadPicker(): Promise<void> {
-  pickerReady ??= loadScript(GAPI_SRC).then(
-    () => new Promise<void>((resolve, reject) => gapi.load('picker', { callback: resolve, onerror: reject })),
-  )
+  pickerReady ??= loadScript(GAPI_SRC)
+    .then(() => new Promise<void>((resolve, reject) => gapi.load('picker', { callback: resolve, onerror: reject })))
+    .then(() => {
+      if (typeof google === 'undefined' || !google.picker?.DocsView) {
+        throw new Error('Le module Google Picker ne s’est pas chargé (réseau ou filtrage de apis.google.com ?)')
+      }
+    })
+    .catch((e: unknown) => {
+      // Échec : on pourra réessayer au prochain clic.
+      pickerReady = null
+      throw e instanceof Error ? e : new Error('Le module Google Picker ne s’est pas chargé')
+    })
   return pickerReady
 }
 
@@ -32,11 +41,12 @@ export function createGooglePicker(config: AppConfig, getToken: () => string): F
    * @param drive - Drive où ouvrir le sélecteur (Mon Drive si pas d'identifiant)
    * @param lang - langue de l'interface du Picker
    * @param title - titre de la fenêtre
-   * @param view - vue Picker (dossiers, documents, images)
+   * @param makeView - crée la vue Picker (dossiers, documents, images), une fois le module chargé
    * @returns l'élément choisi, ou `null` si l'utilisateur annule
    */
-  async function open(drive: DriveRef, lang: Lang, title: string, view: google.picker.DocsView) {
+  async function open(drive: DriveRef, lang: Lang, title: string, makeView: () => google.picker.DocsView) {
     await loadPicker()
+    const view = makeView()
     const token = getToken()
     if (drive.id) view.setEnableDrives(true).setParent(drive.id)
     else view.setParent('root')
@@ -63,18 +73,15 @@ export function createGooglePicker(config: AppConfig, getToken: () => string): F
 
   return {
     pickFolder: (drive, lang, title) =>
-      open(
-        drive,
-        lang,
-        title,
+      open(drive, lang, title, () =>
         new google.picker.DocsView(google.picker.ViewId.FOLDERS)
           .setIncludeFolders(true)
           .setSelectFolderEnabled(true)
           .setMimeTypes(FOLDER_MIME),
       ),
     pickFile: (drive, lang, title, mimeType) =>
-      open(drive, lang, title, new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(false).setMimeTypes(mimeType)),
+      open(drive, lang, title, () => new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(false).setMimeTypes(mimeType)),
     pickImage: (drive, lang, title) =>
-      open(drive, lang, title, new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true)),
+      open(drive, lang, title, () => new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true)),
   }
 }

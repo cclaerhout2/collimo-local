@@ -56,6 +56,25 @@ function fakeBridge() {
       return describe(p)
     },
     ensureDir: async (p) => void dirs.add(p),
+    listFolders: async (p) =>
+      [...dirs]
+        .filter((d) => d.startsWith(`${p}\\`) && !d.slice(p.length + 1).includes('\\'))
+        .map((d) => ({ path: d, name: d.split('\\').pop()!, writable: true })),
+    renameFile: async (p, name) => {
+      const f = files.get(p)!
+      const target = `${p.slice(0, p.lastIndexOf('\\'))}\\${name}`
+      if (files.has(target)) throw new Error(`Ce fichier existe déjà : ${name}`)
+      files.delete(p)
+      files.set(target, f)
+      return describe(target)
+    },
+    moveFile: async (p, dir) => {
+      const f = files.get(p)!
+      const target = `${dir}\\${p.split('\\').pop()}`
+      files.delete(p)
+      files.set(target, f)
+      return describe(target)
+    },
     loadSettings: async () => settings,
     saveSettings: async (s) => void (settings = s),
     catalogueDir: async () => ({ path: 'C:\\AppData\\catalogue', name: 'catalogue', writable: true }),
@@ -179,11 +198,21 @@ describe('services de l’application Windows', () => {
     const second = await saveCollage(args)
     expect(first.baseName).toBe('Collimo_2026-11-07_10-00-00')
     expect(second.baseName).not.toBe(first.baseName)
-    const names = (await s.drive.listFolderFiles(folder)).map((f) => f.name).sort()
-    expect(names).toHaveLength(4)
+    // L'image à la racine du dossier Collimo, le projet dans son sous-dossier Projets, reliés par leur nom.
+    const images = await s.drive.listFolderFiles(folder)
+    expect(images.map((f) => f.name).sort()).toEqual(['Collimo_2026-11-07_10-00-00_2.jpg', 'Collimo_2026-11-07_10-00-00.jpg'].sort())
+    const projects = await s.drive.listFolderFiles(`${folder}\\Projets`)
+    expect(projects).toHaveLength(2)
+    expect(images.find((f) => f.id === first.image.id)?.appProperties).toEqual({ collimo: 'image', pair: first.project.id })
+    expect(projects.find((f) => f.id === first.project.id)?.appProperties).toEqual({ collimo: 'project', pair: first.image.id })
     const project = (await s.drive.readJson(first.project.id)) as { app: string }
     expect(project.app).toBe('collimo')
     expect(await (await s.drive.fetchFileBlob(first.image.id)).arrayBuffer()).toEqual(new Uint8Array([0xff, 0xd8, 1]).buffer)
+    // Renommage : l'image puis le projet, qui restent appariés.
+    await s.drive.updateFileMeta(first.image.id, { name: 'Vacances.jpg' })
+    await s.drive.updateFileMeta(first.project.id, { name: 'Vacances.collimo.json' })
+    const renamed = await s.drive.listFolderFiles(folder)
+    expect(renamed.find((f) => f.name === 'Vacances.jpg')?.appProperties?.pair).toBe(`${folder}\\Projets\\Vacances.collimo.json`)
   })
 
   it('tient le catalogue de l’usine dans un dossier local, admin d’office', async () => {

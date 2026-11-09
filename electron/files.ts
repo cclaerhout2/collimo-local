@@ -214,6 +214,80 @@ export async function listFiles(dir: string, contains?: string): Promise<LocalFi
 }
 
 /**
+ * Sous-dossiers directs d'un dossier, dans l'ordre naturel des noms (dossiers cachés et systèmes exclus).
+ * @param dir - chemin du dossier
+ * @returns les sous-dossiers, avec les droits annoncés par le système
+ */
+export async function listFolders(dir: string): Promise<LocalFolder[]> {
+  const entries = await guarded(dir, () => fs.readdir(dir, { withFileTypes: true }))
+  const names = entries
+    .filter(
+      (e) =>
+        (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.') && !/^(\$RECYCLE\.BIN|System Volume Information)$/i.test(e.name),
+    )
+    .map((e) => e.name)
+    .sort(naturalCompare)
+  const out = await mapLimit(names, 16, async (name) => {
+    const path_ = path.join(dir, name)
+    try {
+      const stat = await fs.stat(path_)
+      if (!stat.isDirectory()) return null
+      const writable = await fs.access(path_, constants.W_OK).then(
+        () => true,
+        () => false,
+      )
+      return { path: path_, name, writable } as LocalFolder
+    } catch {
+      return null
+    }
+  })
+  return out.filter((f): f is LocalFolder => f !== null)
+}
+
+/**
+ * Renomme un fichier dans son dossier, sans jamais écraser un fichier existant.
+ * @param file - chemin du fichier
+ * @param name - nouveau nom, simple (voir {@link assertPlainName})
+ * @returns le fichier renommé
+ */
+export async function renameFile(file: string, name: string): Promise<LocalFile> {
+  assertPlainName(name)
+  assertWritableType(name)
+  assertWritableType(file)
+  const target = path.join(path.dirname(file), name)
+  if (target === file) return fileInfo(file)
+  await guarded(target, async () => {
+    // Windows ne distingue pas les majuscules : un simple changement de casse passe par un nom intermédiaire.
+    if (target.toLowerCase() === file.toLowerCase()) {
+      const tmp = `${file}.${randomBytes(4).toString('hex')}.tmp`
+      await fs.rename(file, tmp)
+      await fs.rename(tmp, target)
+      return
+    }
+    await fs.copyFile(file, target, constants.COPYFILE_EXCL)
+    await fs.rm(file, { force: true })
+  })
+  return fileInfo(target)
+}
+
+/**
+ * Déplace un fichier dans un autre dossier, sous le même nom, sans jamais écraser.
+ * @param file - chemin du fichier
+ * @param dir - dossier de destination
+ * @returns le fichier déplacé
+ */
+export async function moveFile(file: string, dir: string): Promise<LocalFile> {
+  assertWritableType(file)
+  const target = path.join(dir, path.basename(file))
+  if (target === file) return fileInfo(file)
+  await guarded(target, async () => {
+    await fs.copyFile(file, target, constants.COPYFILE_EXCL)
+    await fs.rm(file, { force: true })
+  })
+  return fileInfo(target)
+}
+
+/**
  * Un fichier.
  * @param file - chemin complet
  * @returns sa description, avec ses dimensions si c'est une image

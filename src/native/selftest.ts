@@ -11,7 +11,7 @@ import { layoutById } from '../collage/catalog'
 import { loadImage } from '../collage/images'
 import { parseProject } from '../collage/project'
 import { saveCollage } from '../collage/save'
-import { config } from '../config'
+import { config, PROJECTS_FOLDER_NAME } from '../config'
 import { createServices } from '../google/services'
 
 /**
@@ -81,8 +81,16 @@ export async function runSelfTest(folder: string): Promise<void> {
       loadForCell: async (i, maxSide) => loadImage(await drive.fetchFileBlob(doc.photos[i].id), doc.photos[i].mimeType, maxSide),
     })
     check(saved.blob.size > 20_000, `image exportée (${saved.blob.size} octets)`)
-    const files = await drive.listFolderFiles(collimo)
-    check(files.length >= 2, `image et projet enregistrés (${files.map((f) => f.name).join(', ')})`)
+    const images = await drive.listFolderFiles(collimo)
+    const projectsDir = await drive.findFolder(collimo, PROJECTS_FOLDER_NAME)
+    const projects = projectsDir ? await drive.listFolderFiles(projectsDir) : []
+    check(
+      images.length >= 1 && projects.length >= 1,
+      `image et projet enregistrés (${[...images, ...projects].map((f) => f.name).join(', ')})`,
+    )
+    check(images[0].appProperties?.pair === projects[0].id, 'image et projet appariés par leur nom')
+    const folders = await drive.listSubfolders(folder, null)
+    check(Array.isArray(folders), 'sous-dossiers listés')
     const project = parseProject(await drive.readJson(saved.project.id))
     check(project.photos.length === 3, 'projet relu')
     log(`collage enregistré : ${saved.baseName}`)

@@ -1,6 +1,7 @@
 /**
  * Enregistrement d'un collage sur Google Drive : image exportée et fichier projet, sous un nom daté unique.
  */
+import { PROJECTS_FOLDER_NAME } from '../config'
 import type { DriveFileInfo, DriveService } from '../google/types'
 import { collageStamp, uniqueCollageBaseName } from '../lib/naming'
 import { exportCollage, type ExportFormat, type ExportImage } from './export'
@@ -68,13 +69,22 @@ export async function saveCollage(args: {
   args.onPhase?.('uploading')
   const ext = args.format === 'png' ? 'png' : 'jpg'
   const mime = args.format === 'png' ? 'image/png' : 'image/jpeg'
-  const image = await args.drive.uploadFile(args.collimoFolderId, `${baseName}.${ext}`, blob, mime)
+  // Image puis projet, chacun marqué et relié à l'autre par ses propriétés Collimo : on peut ensuite
+  // renommer l'un ou l'autre dans Drive sans casser le lien.
+  const image = await args.drive.uploadFile(args.collimoFolderId, `${baseName}.${ext}`, blob, mime, { collimo: 'image' })
   const projectJson = serializeProject(args.doc, now)
+  const projectsFolderId = await args.drive.ensureFolder(args.collimoFolderId, PROJECTS_FOLDER_NAME)
   const project = await args.drive.uploadFile(
-    args.collimoFolderId,
+    projectsFolderId,
     `${baseName}${PROJECT_SUFFIX}`,
     new Blob([projectJson], { type: 'application/json' }),
     'application/json',
+    { collimo: 'project', pair: image.id },
   )
+  try {
+    await args.drive.updateFileMeta(image.id, { appProperties: { collimo: 'image', pair: project.id } })
+  } catch {
+    // Lien retour non écrit : le projet connaît déjà son image, l'appariement reste possible.
+  }
   return { baseName, image, project, blob }
 }

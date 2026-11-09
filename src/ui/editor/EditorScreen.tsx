@@ -7,6 +7,9 @@ import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../c
 import type { ExportImage } from '../../collage/export'
 import { autoAdjust, isIdentity, paramsForPhoto, paramsKey } from '../../collage/color'
 import { processPhoto, type Processed } from '../../collage/colorProcessor'
+import { applyMasks, masksKey, type Mask } from '../../collage/masks'
+import { loadNextDefaults, MaskEditor, MaskPanel, saveNextDefaults } from './MaskEditor'
+import type { Drawable } from '../../collage/render'
 import { normalizeAngle, rotateTo, zoomAt } from '../../collage/gestures'
 import { createLimiter, fitWithin, loadImage, type LoadedImage } from '../../collage/images'
 import { ratioValue } from '../../collage/ratios'
@@ -33,6 +36,9 @@ const PREVIEW_SIDE = 1600
 /** Onglet de réglages de l'éditeur. */
 type Tab = 'ratio' | 'layout' | 'borders' | 'background' | 'filters' | 'text' | 'stickers'
 /** Onglets, dans l'ordre d'affichage. */
+/** Clé de stockage local du repli du panneau d'outils. */
+const TOOLS_COLLAPSED_KEY = 'collimo.toolsCollapsed'
+
 const TABS: Tab[] = ['ratio', 'layout', 'borders', 'background', 'filters', 'text', 'stickers']
 
 /** Taille maximale des photos traitées (filtres, réglages) pour l'aperçu (plus grand côté, en pixels de l'image). */
@@ -73,10 +79,32 @@ interface Props {
   initialDoc: CollageDoc
   /** Retour à l'écran précédent. */
   onBack: () => void
+  /** Série de collages en cours (répartition) : position, et navigation entre collages. */
+  queue?: EditorQueue
+  /** Appelé à chaque modification du collage (brouillon automatique). */
+  onDocChange?: (doc: CollageDoc) => void
+  /** Appelé quand le collage vient d'être enregistré dans Drive. */
+  onSaved?: () => void
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
   /** Signale une erreur de chargement (photo ou sticker illisible…). */
   onError: (e: unknown) => void
+}
+
+/** Série de collages ouverte depuis la répartition. */
+export interface EditorQueue {
+  /** Position du collage affiché, à partir de 0. */
+  index: number
+  /** Nombre de collages de la série. */
+  total: number
+  /** Le collage affiché a-t-il déjà été enregistré dans Drive ? */
+  saved: boolean
+  /** État de chaque collage de la série (enregistré ou non), pour les repères. */
+  savedAll: boolean[]
+  /** Va directement au collage d'indice donné. */
+  onGo: (index: number, current: CollageDoc) => void
+  /** Le collage affiché vient d'être enregistré. */
+  onSaved: () => void
 }
 
 /**
@@ -112,17 +140,31 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
  * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
  * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
  */
-export function EditorScreen({ services, location, initialDoc, onBack, onReconnect, onError }: Props) {
+export function EditorScreen({ services, location, initialDoc, onBack, queue, onDocChange, onSaved, onReconnect, onError }: Props) {
   const { t, lang } = useI18n()
+  /** Demande de passage au collage voisin alors que celui-ci n'est pas enregistré : confirmation affichée. */
+  const [pendingMove, setPendingMove] = useState<-1 | 1 | null>(null)
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [swapPick, setSwapPick] = useState(false)
   const [cropMode, setCropMode] = useState(false)
+  /** Édition des zones masquées de la photo sélectionnée. */
+  const [maskMode, setMaskMode] = useState(false)
+  const [maskSelected, setMaskSelected] = useState<string | null>(null)
+  const [maskNext, setMaskNext] = useState(loadNextDefaults)
+  const maskWrap = useRef<HTMLDivElement>(null)
+  const [maskBox, setMaskBox] = useState({ width: 0, height: 0 })
   const [notice, setNotice] = useState<UiError | null>(null)
   const history = useHistory<CollageDoc>(() =>
     layoutById(initialDoc.layoutId) ? initialDoc : { ...initialDoc, layoutId: defaultLayoutFor(initialDoc.photos.length).id },
   )
   const doc = history.value
   const setDoc = history.set
+
+  // Brouillon : chaque état du collage est remonté à l'app, qui l'enregistre un peu plus tard.
+  useEffect(() => {
+    onDocChange?.({ ...doc, layoutId: layoutById(doc.layoutId) ? doc.layoutId : defaultLayoutFor(doc.photos.length).id })
+  }, [doc, onDocChange])
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
   const [eyedropper, setEyedropper] = useState<((color: string) => void) | null>(null)
   const [focusText, setFocusText] = useState(0)
@@ -131,10 +173,35 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const [adjustScope, setAdjustScope] = useState<'collage' | 'photo'>('photo')
   const [compare, setCompare] = useState(false)
   const processed = useRef(new Map<string, { key: string; out: Processed }>())
+  /** Photos masquées pour l'aperçu, par identifiant, avec la clé des réglages et des zones qui les ont produites. */
+  const masked = useRef(
+    new Map<string, { key: string; out: { close(): void; source: CanvasImageSource; width: number; height: number } }>(),
+  )
   const canvasEl = useRef<HTMLCanvasElement | null>(null)
   const overlays = useMemo(() => doc.overlays ?? [], [doc.overlays])
   const assets = useOverlayAssets(services, overlays, onError)
   const [tab, setTab] = useState<Tab>('layout')
+  /** Panneau d'outils replié : seuls les onglets restent, le collage prend la place. Mémorisé sur l'appareil. */
+  const [toolsCollapsed, setToolsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLS_COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  /**
+   * Replie ou déplie le panneau d'outils.
+   * @param collapsed - `true` pour replier
+   */
+  function setCollapsed(collapsed: boolean) {
+    setToolsCollapsed(collapsed)
+    try {
+      localStorage.setItem(TOOLS_COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      // Stockage indisponible (navigation privée) : le choix vaut pour la session.
+    }
+  }
   const [exporting, setExporting] = useState(false)
   const [version, setVersion] = useState(0)
   const images = useRef(new Map<string, LoadedImage>())
@@ -189,21 +256,34 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     }
   }, [])
 
-  /** Photo de la case i pour l'aperçu : réglages et filtre appliqués, résultat gardé en cache. */
+  /** Photo de la case i pour l'aperçu : réglages, filtre puis zones masquées appliqués, résultat gardé en cache. */
   const imageFor = useCallback(
     (i: number) => {
       const p = doc.photos[i]
       const base = p ? images.current.get(p.id) : undefined
       if (!p || !base || compare) return base
       const params = paramsForPhoto(doc, i)
-      if (isIdentity(params)) return base
-      const key = paramsKey(params)
-      const hit = processed.current.get(p.id)
+      let colored: Drawable = base
+      if (!isIdentity(params)) {
+        const key = paramsKey(params)
+        const hit = processed.current.get(p.id)
+        if (hit?.key === key) colored = hit.out
+        else {
+          hit?.out.close()
+          const size = fitWithin(base.width, base.height, PROCESSED_SIDE)
+          const out = processPhoto(base.source, size.width, size.height, params)
+          processed.current.set(p.id, { key, out })
+          colored = out
+        }
+      }
+      const mk = masksKey(p.masks)
+      if (!mk) return colored
+      const key = `${paramsKey(params)}#${mk}`
+      const hit = masked.current.get(p.id)
       if (hit?.key === key) return hit.out
       hit?.out.close()
-      const size = fitWithin(base.width, base.height, PROCESSED_SIDE)
-      const out = processPhoto(base.source, size.width, size.height, params)
-      processed.current.set(p.id, { key, out })
+      const out = applyMasks(colored, p.masks!)
+      masked.current.set(p.id, { key, out })
       return out
     },
     [doc, compare],
@@ -211,9 +291,12 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
 
   useEffect(() => {
     const map = processed.current
+    const maskedMap = masked.current
     return () => {
       map.forEach((v) => v.out.close())
       map.clear()
+      maskedMap.forEach((v) => v.out.close())
+      maskedMap.clear()
     }
   }, [])
 
@@ -295,9 +378,44 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setSelectedOverlay(null)
     setSwapPick(false)
     setCropMode(false)
+    setMaskMode(false)
+    setMaskSelected(null)
     setPhotoAdjust(false)
     setEyedropper(null)
   }, [])
+
+  // Taille disponible pour l'éditeur de zones (mesurée tant qu'il est affiché).
+  useEffect(() => {
+    const el = maskWrap.current
+    if (!maskMode || !el) return
+    const observer = new ResizeObserver(([entry]) => setMaskBox({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [maskMode])
+
+  /**
+   * Remplace les zones masquées d'une photo.
+   * @param i - indice de la photo
+   * @param masks - nouvelles zones (vide = aucune)
+   */
+  function setMasks(i: number, masks: Mask[]) {
+    setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, masks: masks.length ? masks : undefined } : p)) }))
+  }
+
+  /**
+   * Change le mode ou l'intensité de la zone choisie, sinon des prochaines zones (mémorisé sur l'appareil).
+   * @param change - mode et/ou intensité
+   */
+  function setMaskSetting(change: Partial<Pick<Mask, 'mode' | 'strength'>>) {
+    const next = { ...maskNext, ...change }
+    setMaskNext(next)
+    saveNextDefaults(next)
+    if (selected === null || !maskSelected) return
+    setMasks(
+      selected,
+      (doc.photos[selected].masks ?? []).map((m) => (m.id === maskSelected ? { ...m, ...change } : m)),
+    )
+  }
 
   /** Sélectionne un texte ou un sticker (ou rien) ; désélectionne la photo. */
   const selectOverlay = useCallback((id: string | null) => {
@@ -453,7 +571,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     else if (action === 'rotate' && s)
       setCrop(selected, rotateTo(photo.crop, s.img, s.box, normalizeAngle(Math.round(photo.crop.angle / 90) * 90 + 90)))
     else if (action === 'crop') setCropMode(true)
-    else if (action === 'adjust') {
+    else if (action === 'mask') {
+      setMaskSelected(null)
+      setMaskMode(true)
+    } else if (action === 'adjust') {
       setAdjustScope('photo')
       setPhotoAdjust(true)
     } else if (action === 'delete' && doc.photos.length > 1) {
@@ -487,8 +608,102 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const settled = doc.photos.filter((p) => images.current.has(p.id) || failed.current.has(p.id)).length
   const allLoaded = settled === doc.photos.length
 
+  /**
+   * Passe au collage voisin de la série, après confirmation si celui-ci n'est pas enregistré.
+   * @param direction - -1 pour le précédent, 1 pour le suivant
+   * @param force - `true` pour passer même sans enregistrement
+   */
+  function moveInQueue(direction: -1 | 1, force = false) {
+    if (!queue) return
+    goInQueue(queue.index + direction, force, direction)
+  }
+
+  /**
+   * Va à un collage de la série, après confirmation si celui-ci n'est pas enregistré.
+   * @param index - collage visé
+   * @param force - `true` pour passer même sans enregistrement
+   * @param direction - sens, pour la confirmation
+   */
+  function goInQueue(index: number, force = false, direction: -1 | 1 = 1) {
+    if (!queue || index === queue.index || index < 0 || index >= queue.total) return
+    if (!queue.saved && !force) {
+      setPendingMove(direction)
+      setPendingIndex(index)
+      return
+    }
+    setPendingMove(null)
+    setPendingIndex(null)
+    queue.onGo(index, { ...doc, layoutId: layout.id, split: layout.split && doc.split ? doc.split : undefined })
+  }
+
   return (
     <main className="editor">
+      {queue && (
+        <div className="queue-bar" role="status">
+          <button type="button" className="btn btn-ghost btn-small" disabled={queue.index === 0} onClick={() => moveInQueue(-1)}>
+            ‹ {t('queue.prev')}
+          </button>
+          <span className="queue-position">
+            {t('queue.position', { index: queue.index + 1, total: queue.total })}
+            <span className="queue-dots" role="list">
+              {queue.savedAll.map((saved, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  role="listitem"
+                  className={`queue-dot${i === queue.index ? ' current' : ''}${saved ? ' saved' : ''}`}
+                  aria-label={t('queue.dot', { n: i + 1, state: saved ? t('queue.saved') : t('queue.unsaved') })}
+                  title={t('queue.dot', { n: i + 1, state: saved ? t('queue.saved') : t('queue.unsaved') })}
+                  aria-current={i === queue.index ? 'step' : undefined}
+                  onClick={() => goInQueue(i, false, i < queue.index ? -1 : 1)}
+                >
+                  {saved ? '✓' : ''}
+                </button>
+              ))}
+            </span>
+            <span className={`queue-state${queue.saved ? ' saved' : ''}`}>{queue.saved ? t('queue.saved') : t('queue.unsaved')}</span>
+          </span>
+          {pendingMove !== null ? (
+            <span className="queue-confirm">
+              {t('queue.confirm')}
+              <button
+                type="button"
+                className="btn btn-small btn-ghost"
+                onClick={() => {
+                  setPendingMove(null)
+                  setPendingIndex(null)
+                }}
+              >
+                {t('queue.stay')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-small"
+                onClick={() =>
+                  pendingIndex === null && queue.index === queue.total - 1
+                    ? onBack()
+                    : goInQueue(pendingIndex ?? queue.index + pendingMove, true, pendingMove)
+                }
+              >
+                {t('queue.leave')}
+              </button>
+            </span>
+          ) : queue.index < queue.total - 1 ? (
+            <button type="button" className={`btn btn-small${queue.saved ? ' btn-primary' : ' btn-ghost'}`} onClick={() => moveInQueue(1)}>
+              {t('queue.next')} ›
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`btn btn-small${queue.savedAll.every(Boolean) ? ' btn-primary' : ' btn-ghost'}`}
+              onClick={() => (queue.saved ? onBack() : setPendingMove(1))}
+              title={queue.savedAll.every(Boolean) ? undefined : t('queue.finishHint')}
+            >
+              {t('queue.finish')}
+            </button>
+          )}
+        </div>
+      )}
       <div className="editor-bar">
         <button type="button" className="btn btn-ghost btn-small" onClick={onBack}>
           ‹ {t('editor.back')}
@@ -561,42 +776,59 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         className="editor-stage"
         onPointerDown={(e) => {
           // Toucher à côté du collage : désélection.
-          if (!(e.target as Element).closest('.canvas-frame, .shuffle, .compare')) select(null)
+          if (!(e.target as Element).closest('.canvas-frame, .shuffle, .compare, .mask-wrap')) select(null)
         }}
       >
-        <CollageCanvas
-          doc={doc}
-          layout={layout}
-          ratio={ratio}
-          imageFor={imageFor}
-          overlayFor={assets.overlayFor}
-          canvasRef={canvasEl}
-          version={version + assets.version * 1000}
-          raw={compare}
-          overlay={(size) => (
-            <InteractionLayer
-              width={size.width}
-              height={size.height}
-              doc={doc}
-              layout={layout}
-              selected={selected}
-              swapPick={swapPick}
-              imageSize={imageSize}
-              onSelect={select}
-              onCrop={setCrop}
-              onSwap={swap}
-              onSplit={(split) => setDoc((d) => ({ ...d, split }))}
-              selectedOverlay={selectedOverlay}
-              onSelectOverlay={selectOverlay}
-              onOverlay={updateOverlay}
-              onEditText={(id) => {
-                selectOverlay(id)
-                setFocusText((n) => n + 1)
-              }}
-              onEyedropper={eyedropper ? pickColorAt : undefined}
-            />
-          )}
-        />
+        {maskMode && selected !== null && doc.photos[selected] && images.current.get(doc.photos[selected].id) ? (
+          <div ref={maskWrap} className="mask-wrap">
+            {maskBox.width > 0 && (
+              <MaskEditor
+                image={images.current.get(doc.photos[selected].id)!}
+                masks={doc.photos[selected].masks ?? []}
+                onChange={(m) => setMasks(selected, m)}
+                width={maskBox.width}
+                height={maskBox.height}
+                selected={maskSelected}
+                onSelect={setMaskSelected}
+                next={maskNext}
+              />
+            )}
+          </div>
+        ) : (
+          <CollageCanvas
+            doc={doc}
+            layout={layout}
+            ratio={ratio}
+            imageFor={imageFor}
+            overlayFor={assets.overlayFor}
+            canvasRef={canvasEl}
+            version={version + assets.version * 1000}
+            raw={compare}
+            overlay={(size) => (
+              <InteractionLayer
+                width={size.width}
+                height={size.height}
+                doc={doc}
+                layout={layout}
+                selected={selected}
+                swapPick={swapPick}
+                imageSize={imageSize}
+                onSelect={select}
+                onCrop={setCrop}
+                onSwap={swap}
+                onSplit={(split) => setDoc((d) => ({ ...d, split }))}
+                selectedOverlay={selectedOverlay}
+                onSelectOverlay={selectOverlay}
+                onOverlay={updateOverlay}
+                onEditText={(id) => {
+                  selectOverlay(id)
+                  setFocusText((n) => n + 1)
+                }}
+                onEyedropper={eyedropper ? pickColorAt : undefined}
+              />
+            )}
+          />
+        )}
         {hasColor && (
           <button
             type="button"
@@ -644,7 +876,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         )}
       </div>
 
-      <div className="editor-tools">
+      <div className={`editor-tools${toolsCollapsed ? ' collapsed' : ''}`}>
         {selectedOverlay && overlays.some((o) => o.id === selectedOverlay) ? (
           <div className="panel panel-tall">
             <OverlayPanel
@@ -684,6 +916,30 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
               </button>
             </div>
           </div>
+        ) : selected !== null && doc.photos[selected] && maskMode ? (
+          <div className="panel panel-tall">
+            <MaskPanel
+              masks={doc.photos[selected].masks ?? []}
+              selected={(doc.photos[selected].masks ?? []).find((m) => m.id === maskSelected) ?? null}
+              next={maskNext}
+              onSetting={setMaskSetting}
+              onAngle={(angle) =>
+                maskSelected &&
+                setMasks(
+                  selected,
+                  (doc.photos[selected].masks ?? []).map((m) => (m.id === maskSelected ? { ...m, angle: angle || undefined } : m)),
+                )
+              }
+              onClear={() => {
+                setMasks(selected, [])
+                setMaskSelected(null)
+              }}
+              onDone={() => {
+                setMaskMode(false)
+                setMaskSelected(null)
+              }}
+            />
+          </div>
         ) : selected !== null && doc.photos[selected] ? (
           cropMode ? (
             <div className="panel">
@@ -713,77 +969,103 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           )
         ) : (
           <>
-            <div className="tabs" role="tablist">
-              {TABS.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === id}
-                  className={tab === id ? 'active' : ''}
-                  onClick={() => setTab(id)}
-                >
-                  {t(`editor.tab.${id}`)}
-                </button>
-              ))}
-            </div>
-            <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
-              {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
-              {tab === 'layout' && (
-                <LayoutPanel
-                  photoCount={doc.photos.length}
-                  value={layout.id}
-                  onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))}
-                />
-              )}
-              {tab === 'borders' && (
-                <BordersPanel
-                  value={doc.borders}
-                  onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
-                  shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
-                />
-              )}
-              {tab === 'background' && (
-                <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />
-              )}
-              {tab === 'filters' && (
-                <div className="filters-tab">
-                  <div className="segmented segmented-small">
-                    {(['filters', 'adjust'] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className={filterMode === m ? 'active' : ''}
-                        aria-pressed={filterMode === m}
-                        onClick={() => setFilterMode(m)}
-                      >
-                        {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
-                      </button>
-                    ))}
-                  </div>
-                  {filterMode === 'filters' ? (
-                    <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
-                  ) : (
-                    <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
-                  )}
-                </div>
-              )}
-              {tab === 'text' && (
-                <div className="text-tab">
-                  <button type="button" className="btn btn-primary" onClick={() => addText()}>
-                    {t('text.add')}
+            <div className="tabs-row">
+              <div className="tabs" role="tablist">
+                {TABS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === id && !toolsCollapsed}
+                    className={tab === id && !toolsCollapsed ? 'active' : ''}
+                    onClick={() => {
+                      setTab(id)
+                      if (toolsCollapsed) setCollapsed(false)
+                    }}
+                  >
+                    {t(`editor.tab.${id}`)}
                   </button>
-                  <p className="panel-note">{t('text.stylesHint')}</p>
-                  <PresetGrid onPick={(p) => addText(p)} />
-                </div>
-              )}
-              {tab === 'stickers' && (
-                <StickerBrowser
-                  onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
-                  onPickImage={() => void addImageSticker()}
-                />
-              )}
+                ))}
+              </div>
+              <button
+                type="button"
+                className="tools-toggle"
+                aria-expanded={!toolsCollapsed}
+                aria-label={toolsCollapsed ? t('editor.toolsExpand') : t('editor.toolsCollapse')}
+                title={toolsCollapsed ? t('editor.toolsExpand') : t('editor.toolsCollapse')}
+                onClick={() => setCollapsed(!toolsCollapsed)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d={toolsCollapsed ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
+            {!toolsCollapsed && (
+              <div className={`panel${tab === 'stickers' || tab === 'filters' ? ' panel-tall' : ''}`} role="tabpanel">
+                {tab === 'ratio' && <RatioPanel value={doc.ratio} onChange={(ratioId) => setDoc((d) => ({ ...d, ratio: ratioId }))} />}
+                {tab === 'layout' && (
+                  <LayoutPanel
+                    photoCount={doc.photos.length}
+                    value={layout.id}
+                    onChange={(id) => setDoc((d) => ({ ...d, layoutId: id, split: undefined }))}
+                  />
+                )}
+                {tab === 'borders' && (
+                  <BordersPanel
+                    value={doc.borders}
+                    onChange={(b) => setDoc((d) => ({ ...d, borders: b }))}
+                    shapes={!layout.geo ? 'none' : layout.geo.every((c) => c.kind !== 'rect') ? 'all' : 'some'}
+                  />
+                )}
+                {tab === 'background' && (
+                  <BackgroundPanel value={doc.background} onChange={(c) => setDoc((d) => ({ ...d, background: c }))} />
+                )}
+                {tab === 'filters' && (
+                  <div className="filters-tab">
+                    <div className="segmented segmented-small">
+                      {(['filters', 'adjust'] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className={filterMode === m ? 'active' : ''}
+                          aria-pressed={filterMode === m}
+                          onClick={() => setFilterMode(m)}
+                        >
+                          {t(m === 'filters' ? 'filters.filters' : 'filters.adjust')}
+                        </button>
+                      ))}
+                    </div>
+                    {filterMode === 'filters' ? (
+                      <FilterList value={doc.filter} onChange={(filter) => setDoc((d) => ({ ...d, filter }))} sample={sample} />
+                    ) : (
+                      <AdjustPanel value={doc.adjust} onChange={setCollageAdjust} onAuto={() => setCollageAdjust(autoFor('collage'))} />
+                    )}
+                  </div>
+                )}
+                {tab === 'text' && (
+                  <div className="text-tab">
+                    <button type="button" className="btn btn-primary" onClick={() => addText()}>
+                      {t('text.add')}
+                    </button>
+                    <p className="panel-note">{t('text.stylesHint')}</p>
+                    <PresetGrid onPick={(p) => addText(p)} />
+                  </div>
+                )}
+                {tab === 'stickers' && (
+                  <StickerBrowser
+                    onPickIcon={(set, name, svg) => addOverlay(newIcon(set, name, svg, set === 'ph' ? '#111111' : undefined))}
+                    onPickImage={() => void addImageSticker()}
+                  />
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -799,7 +1081,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
           loadOverlay={assets.loadOverlay}
           prepareText={assets.prepareText}
           onClose={() => setExporting(false)}
-          onSaved={() => {}}
+          onSaved={() => {
+            queue?.onSaved()
+            onSaved?.()
+          }}
           onReconnect={onReconnect}
         />
       )}

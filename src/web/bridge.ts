@@ -40,7 +40,10 @@ type DbFile = Omit<StoredFile, 'blob'> & { bytes: ArrayBuffer }
 export interface AlbumStore {
   get(path: string): Promise<StoredFile | undefined>
   put(file: StoredFile): Promise<void>
+  remove(path: string): Promise<void>
   list(dir: string): Promise<StoredFile[]>
+  /** Dossiers qui contiennent au moins un fichier. */
+  dirs(): Promise<string[]>
   getThumb(key: string): Promise<Blob | undefined>
   putThumb(key: string, blob: Blob): Promise<void>
   getSetting(key: string): Promise<unknown>
@@ -91,7 +94,9 @@ export function indexedDbStore(name = 'collimo'): AlbumStore {
       const rec = await toDb(file)
       await done((await store('files', 'readwrite')).put(rec))
     },
+    remove: async (path) => void (await done((await store('files', 'readwrite')).delete(path))),
     list: async (dir) => ((await done((await store('files')).index('dir').getAll(dir))) as DbFile[]).map((f) => fromDb(f)!),
+    dirs: async () => [...new Set(((await done((await store('files')).index('dir').getAllKeys())) as IDBValidKey[]).map(String))],
     getThumb: async (key) => {
       const bytes = (await done((await store('thumbs')).get(key))) as ArrayBuffer | undefined
       return bytes ? new Blob([bytes], { type: 'image/jpeg' }) : undefined
@@ -304,6 +309,36 @@ export function createWebBridge(store: AlbumStore = indexedDbStore(), pick = cho
         .sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime))
         .map((f) => ({ ...describe(f), url: f.mimeType.startsWith('image/') ? urlFor(`file:${f.path}`, f.blob) : undefined }))
     },
+    async listFolders(path) {
+      // L'album n'a qu'un sous-dossier possible, celui des collages ; les autres sont déduits des fichiers rangés.
+      const prefix = `${path}/`
+      const names = new Set<string>()
+      for (const dir of await store.dirs()) if (dir.startsWith(prefix)) names.add(dir.slice(prefix.length).split('/')[0])
+      return [...names].sort().map((name) => folder(`${path}/${name}`))
+    },
+    async renameFile(path, name) {
+      const rec = await store.get(path)
+      if (!rec) throw new Error(`Introuvable : ${path}`)
+      if (!/\.(jpe?g|png|json)$/i.test(name) || name.includes('/')) throw new Error(`Nom de fichier refusé : ${name}`)
+      const target = `${rec.dir}/${name}`
+      if (target === path) return describe(rec)
+      if (await store.get(target)) throw new Error(`Ce fichier existe déjà : ${name}`)
+      const moved = { ...rec, path: target, name }
+      await store.put(moved)
+      await store.remove(path)
+      return describe(moved)
+    },
+    async moveFile(path, dir) {
+      const rec = await store.get(path)
+      if (!rec) throw new Error(`Introuvable : ${path}`)
+      const target = `${dir}/${rec.name}`
+      if (target === path) return describe(rec)
+      if (await store.get(target)) throw new Error(`Ce fichier existe déjà : ${rec.name}`)
+      const moved = { ...rec, path: target, dir }
+      await store.put(moved)
+      await store.remove(path)
+      return describe(moved)
+    },
     async writeNewFile(dir, name, data) {
       if (await store.get(`${dir}/${name}`)) throw new Error(`Ce fichier existe déjà : ${name}`)
       if (!/\.(jpe?g|png|json)$/i.test(name)) throw new Error(`Type de fichier refusé : ${name}`)
@@ -320,6 +355,7 @@ export function createWebBridge(store: AlbumStore = indexedDbStore(), pick = cho
     saveSettings: (data) => store.putSetting('settings', data),
     catalogueDir: async () => folder(CATALOGUE),
     chooseCatalogueDir: async () => null,
+    albumFolder: async () => folder(ALBUM),
     async readFile(path) {
       const rec = await store.get(path)
       if (!rec) throw new Error(`Introuvable : ${path}`)

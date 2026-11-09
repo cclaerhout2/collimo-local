@@ -1,5 +1,6 @@
 /** Service de connexion Google réel (Google Identity Services), qui fournit le jeton d'accès aux API. */
 import { SCOPES, type AppConfig } from '../config'
+import { allowedDomains } from '../lib/errors'
 import { loadScript } from './loadScript'
 import { AuthError, SessionExpiredError, type AuthService } from './types'
 
@@ -26,7 +27,8 @@ export function createGoogleAuth(config: AppConfig): AuthService {
         const client = google.accounts.oauth2.initTokenClient({
           client_id: config.clientId,
           scope: SCOPES.join(' '),
-          hd: config.allowedDomain || undefined,
+          // `hd` n'accepte qu'un domaine : avec plusieurs domaines, seul le contrôle après connexion s'applique.
+          hd: allowedDomains(config.allowedDomain).length === 1 ? allowedDomains(config.allowedDomain)[0] : undefined,
           include_granted_scopes: true,
           callback: (r) => (r.error ? reject(new AuthError('other', r.error_description ?? r.error)) : resolve(r)),
           error_callback: (e) => reject(new AuthError(e.type === 'unknown' ? 'other' : 'popup', e.message)),

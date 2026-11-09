@@ -53,7 +53,7 @@ interface Props {
   /** Services Google (Drive et sélecteur Picker). */
   services: Services
   /** Emplacement de travail, dont les photos servent aux aperçus. */
-  location: Location
+  location: Pick<Location, 'drive' | 'folder'>
   /** Catalogue chargé à la connexion, avec le Drive partagé qui le contient. */
   catalogue: CatalogueState
   /** Adresse de l'admin connecté, inscrite comme auteur des modifications. */

@@ -3,7 +3,7 @@
  * Aucune donnée réelle : les « photos » sont des images générées.
  */
 import { COLLIMO_FOLDER_NAME } from '../config'
-import { DriveApiError } from './drive'
+import { DriveApiError, FOLDER_MIME } from './drive'
 import type { DriveFileInfo, DriveJsonFile, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
 /** Couleurs des dégradés des fausses photos. */
@@ -37,13 +37,20 @@ function fakePhoto(i: number, portrait: boolean): Photo {
   }
 }
 
-/** Dossiers simulés, par identifiant : un dans Mon Drive, deux dans un Drive partagé (dont un en lecture seule). */
-const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
+/**
+ * Dossiers simulés, par identifiant, avec leur parent : les racines des Drive, un dossier dans Mon Drive,
+ * deux dans un Drive partagé (dont un en lecture seule), et un sous-dossier.
+ */
+const folders: Record<string, FolderInfo & { parent: string | null; photos: Photo[] }> = {
+  root: { id: 'root', name: 'Mon Drive', driveId: null, canAddChildren: true, parent: null, photos: [] },
+  'shared-com': { id: 'shared-com', name: 'Communication', driveId: 'shared-com', canAddChildren: true, parent: null, photos: [] },
+  'shared-rh': { id: 'shared-rh', name: 'Ressources humaines', driveId: 'shared-rh', canAddChildren: false, parent: null, photos: [] },
   seminaire: {
     id: 'seminaire',
     name: 'Séminaire 2026',
     driveId: null,
     canAddChildren: true,
+    parent: 'root',
     photos: [
       ...Array.from({ length: 23 }, (_, i) => fakePhoto(i, i % 3 === 0)),
       { id: 'tiff-1', name: 'SCAN_0001.TIF', mimeType: 'image/tiff', supported: false },
@@ -54,13 +61,23 @@ const folders: Record<string, FolderInfo & { photos: Photo[] }> = {
     name: 'Photos équipe',
     driveId: 'shared-com',
     canAddChildren: true,
+    parent: 'shared-com',
     photos: Array.from({ length: 8 }, (_, i) => fakePhoto(i + 40, i % 2 === 0)),
+  },
+  'equipe-2025': {
+    id: 'equipe-2025',
+    name: 'Soirée 2025',
+    driveId: 'shared-com',
+    canAddChildren: true,
+    parent: 'equipe',
+    photos: Array.from({ length: 5 }, (_, i) => fakePhoto(i + 80, i % 2 === 1)),
   },
   archives: {
     id: 'archives',
     name: 'Archives (lecture seule)',
     driveId: 'shared-com',
     canAddChildren: false,
+    parent: 'shared-com',
     photos: Array.from({ length: 4 }, (_, i) => fakePhoto(i + 60, false)),
   },
 }
@@ -152,6 +169,10 @@ export function createMockServices(): Services {
   let signedIn = false
   let settings: UserSettings | null = null
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
+  /** Dossiers de photos dont le sous-dossier « Collimo » a déjà été créé. */
+  const collimoFolders = new Set<string>()
+  /** Sous-dossiers créés par l'app (clé : `parent/nom`). */
+  const subfolders = new Set<string>()
 
   return {
     kind: 'mock',
@@ -173,8 +194,24 @@ export function createMockServices(): Services {
       listSharedDrives: () => delay(sharedDrives),
       async getFolder(id) {
         const f = folders[id]
-        if (!f) throw new Error('folder not found')
+        if (!f) throw new DriveApiError(404, 'File not found')
         return delay({ id: f.id, name: f.name, driveId: f.driveId, canAddChildren: f.canAddChildren })
+      },
+      async getItem(id) {
+        const f = folders[id]
+        if (f)
+          return delay({
+            id: f.id,
+            name: f.name,
+            driveId: f.driveId,
+            canAddChildren: f.canAddChildren,
+            mimeType: FOLDER_MIME,
+            parentId: f.parent,
+          })
+        const owner = Object.values(folders).find((x) => x.photos.some((p) => p.id === id))
+        const p = owner?.photos.find((x) => x.id === id)
+        if (!owner || !p) throw new DriveApiError(404, 'File not found')
+        return delay({ id: p.id, name: p.name, driveId: owner.driveId, canAddChildren: false, mimeType: p.mimeType, parentId: owner.id })
       },
       listPhotos: (folder) => delay(folders[folder.id]?.photos ?? [], 600),
       async getPhoto(id) {
@@ -184,7 +221,23 @@ export function createMockServices(): Services {
         if (!p) throw new Error('photo not found')
         return delay(p, 150)
       },
-      ensureCollimoFolder: (folderId) => delay(`${folderId}/${COLLIMO_FOLDER_NAME}`),
+      listSubfolders: (folderId) =>
+        delay(
+          Object.values(folders)
+            .filter((f) => f.parent === folderId)
+            .map(({ id, name }) => ({ id, name })),
+          250,
+        ),
+      findCollimoFolder: (folderId) => delay(collimoFolders.has(folderId) ? `${folderId}/${COLLIMO_FOLDER_NAME}` : null, 150),
+      async ensureCollimoFolder(folderId) {
+        collimoFolders.add(folderId)
+        return delay(`${folderId}/${COLLIMO_FOLDER_NAME}`)
+      },
+      findFolder: (parentId, name) => delay(subfolders.has(`${parentId}/${name}`) ? `${parentId}/${name}` : null, 100),
+      async ensureFolder(parentId, name) {
+        subfolders.add(`${parentId}/${name}`)
+        return delay(`${parentId}/${name}`, 100)
+      },
       loadSettings: () => delay(settings),
       async saveSettings(s) {
         settings = s
@@ -200,7 +253,14 @@ export function createMockServices(): Services {
           [...files.values()]
             .filter((f) => f.parent === folderId && (!namePrefix || f.name.includes(namePrefix)))
             .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
-            .map(({ id, name, modifiedTime, webViewLink, thumbnailLink }) => ({ id, name, modifiedTime, webViewLink, thumbnailLink })),
+            .map(({ id, name, modifiedTime, webViewLink, thumbnailLink, appProperties }) => ({
+              id,
+              name,
+              modifiedTime,
+              webViewLink,
+              thumbnailLink,
+              appProperties,
+            })),
         ),
       async findSharedDrive(ref) {
         const match = ref.id ? ref.id === CATALOGUE_DRIVE.id : ref.name === CATALOGUE_DRIVE.name
@@ -240,12 +300,29 @@ export function createMockServices(): Services {
         if (!f) throw new Error('file not found')
         return JSON.parse(await f.data.text())
       },
-      async uploadFile(folderId, name, data) {
+      async uploadFile(folderId, name, data, _mimeType, props) {
         const id = `file-${files.size + 1}`
         const thumbnailLink = data.type.startsWith('image/') ? URL.createObjectURL(data) : undefined
-        const info = { id, name, modifiedTime: new Date().toISOString(), webViewLink: '#demo', thumbnailLink }
+        const info = {
+          id,
+          name,
+          modifiedTime: new Date().toISOString(),
+          webViewLink: '#demo',
+          thumbnailLink,
+          ...(props ? { appProperties: props } : {}),
+        }
         files.set(id, { ...info, parent: folderId, data })
         return delay(info, 500)
+      },
+      async updateFileMeta(id, change, move) {
+        const f = files.get(id)
+        if (!f) throw new DriveApiError(404, 'file not found')
+        if (move) f.parent = move.addParents
+        if (change.name) f.name = change.name
+        if (change.appProperties) f.appProperties = { ...f.appProperties, ...change.appProperties }
+        f.modifiedTime = new Date().toISOString()
+        const { parent: _p, data: _d, ...info } = f
+        return delay(info, 200)
       },
     },
     picker: {
@@ -257,13 +334,13 @@ export function createMockServices(): Services {
       },
       async pickImage(drive) {
         // Démo : la dernière photo du premier dossier de ce Drive.
-        const f = Object.values(folders).find((x) => x.driveId === drive.id)
+        const f = Object.values(folders).find((x) => x.driveId === drive.id && x.photos.length > 0)
         const p = f?.photos.filter((x) => x.supported).at(-1)
         return delay(p ? { id: p.id } : null, 300)
       },
       async pickFolder(drive) {
         // Le vrai sélecteur Google est une fenêtre ; ici on choisit le premier dossier du Drive.
-        const match = Object.values(folders).find((f) => f.driveId === drive.id)
+        const match = Object.values(folders).find((f) => f.driveId === drive.id && f.parent !== null)
         return delay(match ? { id: match.id, name: match.name } : null, 300)
       },
     },

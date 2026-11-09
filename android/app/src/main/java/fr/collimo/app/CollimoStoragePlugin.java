@@ -418,6 +418,74 @@ public class CollimoStoragePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void listFolders(PluginCall call) {
+        async(call, c -> c.resolve(new JSObject().put("folders", children(required(c, "path"), false, null, true))));
+    }
+
+    /** Renomme un fichier dans son dossier ; jamais d'écrasement, et seulement des images ou des JSON. */
+    @PluginMethod
+    public void renameFile(PluginCall call) {
+        async(call, c -> {
+            String path = required(c, "path");
+            String name = required(c, "name");
+            checkWritableName(name);
+            if (!isContent(path)) {
+                File f = new File(path);
+                File target = new File(f.getParentFile(), name);
+                if (target.equals(f)) { c.resolve(describeFile(path, false)); return; }
+                if (target.exists()) throw new IOException("Ce fichier existe déjà : " + name);
+                if (!f.renameTo(target)) throw new IOException("Renommage impossible : " + name);
+                c.resolve(describeFile(target.getAbsolutePath(), false));
+                return;
+            }
+            Uri uri = Uri.parse(path);
+            String current = nameOf(path);
+            if (name.equals(current)) { c.resolve(describeFile(path, false)); return; }
+            String parent = parentOf(path);
+            if (parent != null && childPath(parent, name, false) != null) throw new IOException("Ce fichier existe déjà : " + name);
+            Uri renamed = DocumentsContract.renameDocument(resolver(), uri, name);
+            if (renamed == null) throw new IOException("Renommage impossible : " + name);
+            c.resolve(describeFile(renamed.toString(), false));
+        });
+    }
+
+    /** Déplace un fichier dans un autre dossier (même arbre de documents), sous le même nom. */
+    @PluginMethod
+    public void moveFile(PluginCall call) {
+        async(call, c -> {
+            String path = required(c, "path");
+            String dir = required(c, "dir");
+            String name = nameOf(path);
+            if (childPath(dir, name, false) != null) throw new IOException("Ce fichier existe déjà : " + name);
+            if (!isContent(path)) {
+                File f = new File(path);
+                File target = new File(dir, name);
+                if (!f.renameTo(target)) throw new IOException("Déplacement impossible : " + name);
+                c.resolve(describeFile(target.getAbsolutePath(), false));
+                return;
+            }
+            String parent = parentOf(path);
+            if (parent == null) throw new IOException("Déplacement impossible : " + name);
+            Uri moved = DocumentsContract.moveDocument(resolver(), Uri.parse(path), Uri.parse(parent), Uri.parse(dir));
+            if (moved == null) throw new IOException("Déplacement impossible : " + name);
+            c.resolve(describeFile(moved.toString(), false));
+        });
+    }
+
+    /** Dossier qui contient un document d'un arbre : son identifiant raccourci d'un segment ; null à la racine de l'arbre. */
+    private static String parentOf(String path) {
+        if (!isContent(path)) {
+            File p = new File(path).getParentFile();
+            return p != null ? p.getAbsolutePath() : null;
+        }
+        Uri uri = Uri.parse(path);
+        String docId = DocumentsContract.getDocumentId(uri);
+        int cut = docId.lastIndexOf('/');
+        if (cut < 0 || cut < docId.indexOf(':')) return null;
+        return docInTree(uri, docId.substring(0, cut)).toString();
+    }
+
+    @PluginMethod
     public void findChild(PluginCall call) {
         async(call, c -> c.resolve(new JSObject().put("path", childPath(required(c, "dir"), required(c, "name"), false))));
     }

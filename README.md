@@ -67,7 +67,7 @@ Au lancement suivant, Collimo rouvre le même dossier, dans la même langue. Pou
 
 ## Questions fréquentes
 
-**Quels dossiers peut-on utiliser ?** Tout dossier de l'ordinateur : Images, Documents, Bureau, clé USB, disque externe, dossier réseau, OneDrive, iCloud Drive, ou un dossier Google Drive grâce à [Google Drive pour ordinateur](https://www.google.com/drive/download/) (lecteur `G:` sous Windows), ce qui garde les collages dans Drive. Collimo lit les photos placées directement dans le dossier choisi (pas celles des sous-dossiers) ; il faut pouvoir écrire dans ce dossier pour y créer `Collimo`.
+**Quels dossiers peut-on utiliser ?** Tout dossier de l'ordinateur : Images, Documents, Bureau, clé USB, disque externe, dossier réseau, OneDrive, iCloud Drive, ou un dossier Google Drive grâce à [Google Drive pour ordinateur](https://www.google.com/drive/download/) (lecteur `G:` sous Windows), ce qui garde les collages dans Drive. Les sous-dossiers se parcourent depuis Collimo (fil d'Ariane) ; il faut pouvoir écrire dans le dossier ouvert pour y enregistrer des collages.
 
 **Quels formats de photos ?** JPG, PNG, WebP, GIF, AVIF et HEIC/HEIF (photos d'iPhone). Les autres fichiers du dossier sont ignorés ; un format non pris en charge (TIFF, par exemple) apparaît grisé.
 
@@ -83,7 +83,7 @@ Au lancement suivant, Collimo rouvre le même dossier, dans la même langue. Pou
 
 Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans les dossiers de photos.
 
-**J'ai déplacé ou renommé mon dossier de photos.** Collimo redemande le dossier au lancement. Les collages déjà enregistrés retrouvent leurs photos par leur nom dans le nouveau dossier. Cela marche aussi pour un collage ouvert sur un autre ordinateur, même d'un autre système.
+**J'ai déplacé ou renommé mon dossier de photos.** Collimo ne retrouve plus l'emplacement : en ajouter un nouveau (et retirer l'ancien de la liste). Les collages déjà enregistrés retrouvent leurs photos par leur nom dans le nouveau dossier. Cela marche aussi pour un collage ouvert sur un autre ordinateur, même d'un autre système.
 
 **Peut-on partager les dispositions créées dans l'usine ?** Oui : menu du compte › **Dossier du catalogue…**, puis choisir un dossier partagé par l'équipe (réseau, OneDrive, Drive). Toute personne qui pointe vers ce dossier voit les mêmes dispositions ; celles qui peuvent y écrire peuvent les modifier.
 
@@ -93,26 +93,36 @@ Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans le
 
 ## Fonctionnalités
 
-**Photos de l’ordinateur**
+**Photos de l’appareil**
 
 - aucun compte : l'application s'ouvre directement ;
-- choix du dossier de photos avec le sélecteur du système : Images, dossier réseau, OneDrive, iCloud Drive, ou dossier Google Drive via Google Drive pour ordinateur ; un sous-dossier `Collimo` y est créé pour les collages ;
-- dossier et langue retrouvés au lancement suivant ;
-- galerie de miniatures calculées par le système (Windows, macOS) ou par Collimo (Linux), sélection ordonnée de 1 à 20 photos ; photos HEIC des iPhone décodées par Collimo ;
+- panneau « Mes emplacements » (ordinateur, Android) : des dossiers de l'appareil ajoutés par le sélecteur du système (Images, dossier réseau, OneDrive, Google Drive pour ordinateur…), retirés d'un clic (rien n'est déplacé ni modifié), renommés (crayon, double-clic ou F2) et réordonnés par glisser-déposer ; « Épingler ce dossier » ajoute le dossier ouvert ; les 5 derniers dossiers ouverts sont proposés en « Récents » ;
+- navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
+- iPhone et version web : un album à la place des dossiers, alimenté depuis la photothèque (« Ajouter des photos ») ;
+- emplacements, dernier dossier ouvert et langue retrouvés au lancement suivant ;
+- galerie de miniatures calculées par le système (Windows, macOS, Android) ou par Collimo, sélection ordonnée jusqu'à 100 photos (20 au plus par collage) ; diaporama plein écran (bouton de la galerie, ou loupe sur une miniature) pour regarder chaque photo en grand et la sélectionner (← →, Espace, Échap, glissement du doigt, bande de miniatures) ; photos HEIC des iPhone décodées par Collimo ;
 - interface en français et en anglais.
+
+**Plusieurs collages d'un coup**
+
+- « Plusieurs collages… » (dès 4 photos sélectionnées, obligatoire au-delà de 20) ouvre la répartition : les photos à placer en haut, une carte par collage ; glisser une photo vers une carte, ou la toucher puis toucher la carte ; répartition automatique par nombre de photos par collage, ajout et retrait de collages ; loupe (ou double-clic) sur une vignette : la photo en grand, avec un bouton par collage pour l'y placer ; une croix sur chaque vignette écarte une photo de la sélection ; de 2 à 20 photos par collage ;
+- les collages s'ouvrent ensuite l'un après l'autre dans l'éditeur : une barre indique « Collage 2 / 4 », un point par collage (✓ enregistré) ; Précédent, Collage suivant, ou un point pour y aller directement ; quitter un collage non enregistré demande confirmation ; chaque collage garde ses modifications quand on passe à un autre ;
+- brouillon automatique : le collage en cours (ou la série) est gardé sur l'appareil à chaque modification ; après une coupure ou une fermeture, le lancement propose de le reprendre ou de l'ignorer ; il est effacé une fois tout enregistré ou au retour volontaire à la galerie.
 
 **Dispositions**
 
 - 541 dispositions de 1 à 20 photos, transcrites depuis l'app de référence et comparées une à une aux captures : 333 en rectangles, 208 en forme (cœurs, ronds, fleurs, étoiles, hexagones, losanges, puzzle, découpes courbes, en zigzag ou déchirées, feuilles, illustrations) ;
 - format (1:1 par défaut, 4:5, 9:16, 16:9, A4…), bouton « mélanger » ;
 - bords : écart entre les photos, marge, arrondi, contour des formes (épaisseur et couleur), couleur de fond ;
-- dans une forme, la forme reste fixe et la photo se déplace, se zoome et tourne à l'intérieur.
+- dans une forme, la forme reste fixe et la photo se déplace, se zoome et tourne à l'intérieur ;
+- le panneau d'outils du bas se replie (chevron à droite des onglets) pour voir le collage en plus grand ; le choix est mémorisé sur l'appareil.
 
 **Travail sur chaque photo**
 
 - toucher une photo pour la sélectionner ; glisser pour recadrer ; molette, pincement ou double-clic pour zoomer ; poignée ronde ou deux doigts pour tourner, avec aimantation ;
 - poignées sur les séparations des dispositions en découpe, pour agrandir une case aux dépens de sa voisine ;
-- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Remplacer, Supprimer, Réglages ;
+- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Réglages, Masquer, Remplacer, Supprimer ;
+- Masquer : la photo entière en grand, où l'on trace des rectangles sur ce qu'il faut cacher (écran, document, badge, visage) ; trois modes (Flou, Pixels, Plein), une intensité et une rotation par zone, zones déplaçables et redimensionnables ; zoom et déplacement de la vue ; les zones suivent la photo quels que soient le cadrage, le zoom ou la rotation ; le masque est cuit dans l'image exportée, la photo d'origine n'est pas touchée ;
 - clavier : flèches, + et −, Échap.
 
 **Texte et stickers**
@@ -129,9 +139,11 @@ Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans le
 
 **Export et collages enregistrés**
 
+- rappel de confidentialité pendant le choix des photos (rien de confidentiel, arrière-plan vérifié, photos recadrées sur les personnes), et case à cocher obligatoire avant chaque enregistrement ;
 - JPG ou PNG en Standard (2048 px), HD (5000 px) ou Maximum ; qualité JPG réglable (90 par défaut) ;
-- chaque enregistrement crée un nouveau collage dans le dossier `Collimo` : l'image et son fichier projet `.collimo.json`, sous un nom daté (`Collimo_AAAA-MM-JJ_HH-MM-SS`) jamais écrasé ;
-- « Mes collages » : rouvrir un collage enregistré pour le retravailler ;
+- chaque enregistrement crée un nouveau collage : l'image dans le dossier `Collimo`, et son fichier projet `.collimo.json` dans le sous-dossier `Collimo/Projets` (le dossier Collimo ne montre ainsi que les images), sous un nom daté (`Collimo_AAAA-MM-JJ_HH-MM-SS`) jamais écrasé ; à l'ouverture d'un dossier, les projets anciens restés à la racine sont déplacés dans `Projets` (une fois) ;
+- « Mes collages » : vignettes des collages du dossier, avec leur nom et leur date, à reprendre d'un clic ; bouton qui ouvre l'image dans l'application par défaut (ordinateur) ; crayon pour renommer le collage (l'image et son projet ensemble, qui restent reliés par leur nom commun) ;
+- sur téléphone : bouton Partager (Enregistrer dans Photos, Messages, mail…) ; sur ordinateur : « Enregistrer une copie sous… » ;
 - annuler / rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z) pour toutes les actions.
 
 **Usine à dispositions**

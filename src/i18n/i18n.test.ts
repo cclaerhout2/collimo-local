@@ -62,7 +62,7 @@ describe('libellés de l’application Windows', () => {
     try {
       expect(translate('fr', 'export.save')).toBe('Enregistrer')
       expect(translate('en', 'signin.button')).toBe('Get started')
-      expect(translate('fr', 'gallery.location', { drive: 'X', folder: 'C:\\Photos' })).toBe('C:\\Photos')
+      expect(translate('fr', 'setup.myDrive')).toBe('Cet appareil')
     } finally {
       enableDesktopTexts(false)
     }

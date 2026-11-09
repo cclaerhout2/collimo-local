@@ -20,7 +20,10 @@ import {
   FileAccessError,
   folderInfo,
   listFiles,
+  listFolders,
   listImages,
+  moveFile,
+  renameFile,
   mimeFromName,
   PathGuard,
   readJsonFile,
@@ -228,6 +231,9 @@ function registerIpc(): void {
   handle(CHANNELS.listImages, async (_e, p: string) => listImages(guard.check(p)))
   handle(CHANNELS.listFiles, async (_e, p: string, contains?: string) => listFiles(guard.check(p), contains))
   handle(CHANNELS.fileInfo, async (_e, p: string) => fileInfo(guard.check(p)))
+  handle(CHANNELS.listFolders, async (_e, p: string) => listFolders(guard.check(p)))
+  handle(CHANNELS.renameFile, async (_e, p: string, name: string) => renameFile(guard.check(p), name))
+  handle(CHANNELS.moveFile, async (_e, p: string, dir: string) => moveFile(guard.check(p), guard.check(dir)))
   handle(CHANNELS.writeNewFile, async (_e, dir: string, name: string, data: Uint8Array) => writeNewFile(guard.check(dir), name, data))
   handle(CHANNELS.replaceFile, async (_e, p: string, data: Uint8Array) => {
     assertWritableType(p)

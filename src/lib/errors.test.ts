@@ -12,6 +12,13 @@ describe('isAllowedEmail', () => {
     expect(isAllowedEmail('jean@fausse-entreprise.com', 'entreprise.com')).toBe(false)
     expect(isAllowedEmail('jean@entreprise.com.pirate.io', 'entreprise.com')).toBe(false)
   })
+
+  it('accepte une liste de domaines séparés par des virgules', () => {
+    expect(isAllowedEmail('a@carrefour.com', 'carrefour.com, Carrefour.FR')).toBe(true)
+    expect(isAllowedEmail('a@carrefour.fr', 'carrefour.com,carrefour.fr')).toBe(true)
+    expect(isAllowedEmail('a@autre.fr', 'carrefour.com,carrefour.fr')).toBe(false)
+    expect(isAllowedEmail('a@b.com', ' , ')).toBe(true)
+  })
 })
 
 describe('toUiError', () => {
