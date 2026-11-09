@@ -43,6 +43,8 @@ export const SCOPES = [
 
 /** Nom du sous-dossier créé à côté des photos. */
 export const COLLIMO_FOLDER_NAME = 'Collimo'
+/** Nom du sous-dossier de « Collimo » où sont rangés les fichiers projet (le dossier Collimo ne montre que les images). */
+export const PROJECTS_FOLDER_NAME = 'Projets'
 
 /** Nombre maximum de photos dans un collage. */
 export const MAX_PHOTOS = 20

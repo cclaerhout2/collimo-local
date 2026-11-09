@@ -48,7 +48,17 @@ export function photosQuery(folderId: string): string {
  * @returns la requête `q`
  */
 export function collimoFolderQuery(parentId: string): string {
-  return `name = ${quote(COLLIMO_FOLDER_NAME)} and mimeType = '${FOLDER_MIME}' and ${quote(parentId)} in parents and trashed = false`
+  return folderQuery(parentId, COLLIMO_FOLDER_NAME)
+}
+
+/**
+ * Requête Drive d'un sous-dossier par son nom (hors corbeille).
+ * @param parentId - dossier parent
+ * @param name - nom exact du sous-dossier
+ * @returns la requête `q`
+ */
+export function folderQuery(parentId: string, name: string): string {
+  return `name = ${quote(name)} and mimeType = '${FOLDER_MIME}' and ${quote(parentId)} in parents and trashed = false`
 }
 
 /**
@@ -294,13 +304,40 @@ export function createDriveClient(
    * @returns l'identifiant du sous-dossier, ou null s'il n'existe pas
    */
   async function findCollimoFolder(folderId: string): Promise<string | null> {
+    return findFolder(folderId, COLLIMO_FOLDER_NAME)
+  }
+
+  /**
+   * Sous-dossier d'un dossier par son nom, sans le créer.
+   * @param parentId - dossier parent
+   * @param name - nom exact
+   * @returns l'identifiant du sous-dossier, ou null
+   */
+  async function findFolder(parentId: string, name: string): Promise<string | null> {
     const existing = await listAll<{ id: string }>('/files', 'files', {
       supportsAllDrives: 'true',
       includeItemsFromAllDrives: 'true',
-      q: collimoFolderQuery(folderId),
+      q: folderQuery(parentId, name),
       fields: 'nextPageToken, files(id)',
     })
     return existing[0]?.id ?? null
+  }
+
+  /**
+   * Retrouve ou crée un sous-dossier.
+   * @param parentId - dossier parent
+   * @param name - nom exact
+   * @returns l'identifiant du sous-dossier
+   */
+  async function ensureFolder(parentId: string, name: string): Promise<string> {
+    const existing = await findFolder(parentId, name)
+    if (existing) return existing
+    const created = await call<{ id: string }>(url('/files', { supportsAllDrives: 'true', fields: 'id' }), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
+    })
+    return created.id
   }
 
   return {
@@ -450,16 +487,9 @@ export function createDriveClient(
 
     findCollimoFolder,
 
-    async ensureCollimoFolder(folderId) {
-      const existing = await findCollimoFolder(folderId)
-      if (existing) return existing
-      const created = await call<{ id: string }>(url('/files', { supportsAllDrives: 'true', fields: 'id' }), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: COLLIMO_FOLDER_NAME, mimeType: FOLDER_MIME, parents: [folderId] }),
-      })
-      return created.id
-    },
+    ensureCollimoFolder: (folderId) => ensureFolder(folderId, COLLIMO_FOLDER_NAME),
+    findFolder,
+    ensureFolder,
 
     async loadSettings() {
       const id = await findSettingsFileId()
@@ -512,11 +542,12 @@ export function createDriveClient(
       return call<unknown>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }))
     },
 
-    async updateFileMeta(id, change) {
+    async updateFileMeta(id, change, move) {
       return call<DriveFileInfo>(
         url(`/files/${encodeURIComponent(id)}`, {
           supportsAllDrives: 'true',
           fields: 'id,name,modifiedTime,webViewLink,thumbnailLink,appProperties',
+          ...(move ?? {}),
         }),
         { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) },
       )

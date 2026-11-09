@@ -1,6 +1,7 @@
 /**
  * Enregistrement d'un collage sur Google Drive : image exportée et fichier projet, sous un nom daté unique.
  */
+import { PROJECTS_FOLDER_NAME } from '../config'
 import type { DriveFileInfo, DriveService } from '../google/types'
 import { collageStamp, uniqueCollageBaseName } from '../lib/naming'
 import { exportCollage, type ExportFormat, type ExportImage } from './export'
@@ -72,8 +73,9 @@ export async function saveCollage(args: {
   // renommer l'un ou l'autre dans Drive sans casser le lien.
   const image = await args.drive.uploadFile(args.collimoFolderId, `${baseName}.${ext}`, blob, mime, { collimo: 'image' })
   const projectJson = serializeProject(args.doc, now)
+  const projectsFolderId = await args.drive.ensureFolder(args.collimoFolderId, PROJECTS_FOLDER_NAME)
   const project = await args.drive.uploadFile(
-    args.collimoFolderId,
+    projectsFolderId,
     `${baseName}${PROJECT_SUFFIX}`,
     new Blob([projectJson], { type: 'application/json' }),
     'application/json',

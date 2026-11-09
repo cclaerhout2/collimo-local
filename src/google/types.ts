@@ -215,8 +215,16 @@ export interface DriveService {
   readJson(id: string): Promise<unknown>
   /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo), avec ses propriétés Collimo éventuelles. */
   uploadFile(folderId: string, name: string, data: Blob, mimeType: string, props?: CollimoFileProps): Promise<DriveFileInfo>
-  /** Renomme un fichier et/ou change ses propriétés Collimo. */
-  updateFileMeta(id: string, change: { name?: string; appProperties?: CollimoFileProps }): Promise<DriveFileInfo>
+  /** Renomme un fichier, change ses propriétés Collimo et/ou le déplace (`addParents` / `removeParents`). */
+  updateFileMeta(
+    id: string,
+    change: { name?: string; appProperties?: CollimoFileProps },
+    move?: { addParents: string; removeParents: string },
+  ): Promise<DriveFileInfo>
+  /** Sous-dossier d'un dossier par son nom, sans le créer ; null s'il n'existe pas. */
+  findFolder(parentId: string, name: string): Promise<string | null>
+  /** Retrouve ou crée un sous-dossier ; renvoie son identifiant. */
+  ensureFolder(parentId: string, name: string): Promise<string>
   /** Drive partagé par son identifiant, ou par son nom exact ; null s'il n'existe pas ou n'est pas visible. */
   findSharedDrive(ref: { id?: string; name?: string }): Promise<SharedDriveInfo | null>
   /** Fichier par son nom, à la racine d'un Drive partagé. */

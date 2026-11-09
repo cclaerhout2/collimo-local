@@ -4,8 +4,9 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { PROJECT_SUFFIX, projectBaseName } from '../collage/project'
+import { PROJECTS_FOLDER_NAME } from '../config'
 import { sizedThumbnail } from '../google/drive'
-import type { DriveFileInfo, Services } from '../google/types'
+import type { DriveFileInfo, DriveService, Services } from '../google/types'
 import { useI18n } from '../i18n'
 
 /** Projet enregistré, avec l'image exportée qui lui correspond s'il y en a une. */
@@ -68,6 +69,57 @@ export function renamedFileNames(entry: ProjectEntry, newName: string): { image?
   return { image: ext ? `${base}${ext}` : undefined, project: `${base}${PROJECT_SUFFIX}` }
 }
 
+/**
+ * Fichiers du dossier Collimo et de son sous-dossier « Projets » (s'il existe), pour l'appariement.
+ * @param drive - client Drive
+ * @param collimoFolderId - dossier Collimo
+ * @returns les fichiers de la racine, ceux du sous-dossier Projets, et les deux réunis
+ */
+export async function listCollageFiles(
+  drive: DriveService,
+  collimoFolderId: string,
+): Promise<{ root: DriveFileInfo[]; files: DriveFileInfo[] }> {
+  const [root, projectsFolderId] = await Promise.all([
+    drive.listFolderFiles(collimoFolderId),
+    drive.findFolder(collimoFolderId, PROJECTS_FOLDER_NAME),
+  ])
+  const inProjects = projectsFolderId ? await drive.listFolderFiles(projectsFolderId) : []
+  return { root, files: [...root, ...inProjects] }
+}
+
+/**
+ * Conversion des collages anciens : les fichiers projet restés à la racine du dossier Collimo sont
+ * déplacés dans « Projets », et les couples image + projet sans propriétés Collimo en reçoivent.
+ * Une seule fois par fichier ; sans effet sur les collages déjà au nouveau format.
+ * @param drive - client Drive
+ * @param collimoFolderId - dossier Collimo
+ * @param rootFiles - fichiers à la racine du dossier Collimo
+ * @param entries - collages appariés
+ * @returns `true` si quelque chose a été modifié (la liste est alors à recharger)
+ */
+export async function migrateCollages(
+  drive: DriveService,
+  collimoFolderId: string,
+  rootFiles: DriveFileInfo[],
+  entries: ProjectEntry[],
+): Promise<boolean> {
+  const rootIds = new Set(rootFiles.map((f) => f.id))
+  const toMove = entries.filter((e) => rootIds.has(e.project.id))
+  const toLink = entries.filter(
+    (e) => e.image && (e.project.appProperties?.pair !== e.image.id || e.image.appProperties?.pair !== e.project.id),
+  )
+  if (!toMove.length && !toLink.length) return false
+  const projectsFolderId = toMove.length ? await drive.ensureFolder(collimoFolderId, PROJECTS_FOLDER_NAME) : null
+  for (const e of entries) {
+    const move = toMove.includes(e) && projectsFolderId ? { addParents: projectsFolderId, removeParents: collimoFolderId } : undefined
+    const link = toLink.includes(e)
+    if (!move && !link) continue
+    await drive.updateFileMeta(e.project.id, link && e.image ? { appProperties: { collimo: 'project', pair: e.image.id } } : {}, move)
+    if (link && e.image) await drive.updateFileMeta(e.image.id, { appProperties: { collimo: 'image', pair: e.project.id } })
+  }
+  return true
+}
+
 /** Propriétés de la liste des projets. */
 interface Props {
   /** Services Google (Drive). */
@@ -90,14 +142,26 @@ export function ProjectsList({ services, collimoFolderId, onOpen, onError }: Pro
 
   useEffect(() => {
     let alive = true
-    services.drive
-      .listFolderFiles(collimoFolderId)
-      .then((files) => alive && setEntries(groupProjects(files)))
-      .catch((e: unknown) => {
-        if (!alive) return
-        setEntries([])
-        onError(e)
-      })
+    /** Charge la liste ; convertit les anciens collages une fois, puis recharge si quelque chose a bougé. */
+    async function load() {
+      const { root, files } = await listCollageFiles(services.drive, collimoFolderId)
+      const grouped = groupProjects(files)
+      if (!alive) return
+      setEntries(grouped)
+      try {
+        if (await migrateCollages(services.drive, collimoFolderId, root, grouped)) {
+          const again = await listCollageFiles(services.drive, collimoFolderId)
+          if (alive) setEntries(groupProjects(again.files))
+        }
+      } catch {
+        // Conversion impossible (droits, réseau) : la liste reste utilisable telle quelle.
+      }
+    }
+    load().catch((e: unknown) => {
+      if (!alive) return
+      setEntries([])
+      onError(e)
+    })
     return () => {
       alive = false
     }

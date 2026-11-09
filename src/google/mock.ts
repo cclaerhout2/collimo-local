@@ -171,6 +171,8 @@ export function createMockServices(): Services {
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
   /** Dossiers de photos dont le sous-dossier « Collimo » a déjà été créé. */
   const collimoFolders = new Set<string>()
+  /** Sous-dossiers créés par l'app (clé : `parent/nom`). */
+  const subfolders = new Set<string>()
 
   return {
     auth: {
@@ -229,6 +231,11 @@ export function createMockServices(): Services {
       async ensureCollimoFolder(folderId) {
         collimoFolders.add(folderId)
         return delay(`${folderId}/${COLLIMO_FOLDER_NAME}`)
+      },
+      findFolder: (parentId, name) => delay(subfolders.has(`${parentId}/${name}`) ? `${parentId}/${name}` : null, 100),
+      async ensureFolder(parentId, name) {
+        subfolders.add(`${parentId}/${name}`)
+        return delay(`${parentId}/${name}`, 100)
       },
       loadSettings: () => delay(settings),
       async saveSettings(s) {
@@ -305,9 +312,10 @@ export function createMockServices(): Services {
         files.set(id, { ...info, parent: folderId, data })
         return delay(info, 500)
       },
-      async updateFileMeta(id, change) {
+      async updateFileMeta(id, change, move) {
         const f = files.get(id)
         if (!f) throw new DriveApiError(404, 'file not found')
+        if (move) f.parent = move.addParents
         if (change.name) f.name = change.name
         if (change.appProperties) f.appProperties = { ...f.appProperties, ...change.appProperties }
         f.modifiedTime = new Date().toISOString()

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { groupProjects, renamedFileNames, stripExtension } from './ProjectsList'
+import type { DriveFileInfo, DriveService } from '../google/types'
+import { groupProjects, migrateCollages, renamedFileNames, stripExtension } from './ProjectsList'
 
 describe('groupProjects', () => {
   it('associe chaque projet à son image par le nom (anciens collages), et ignore les autres fichiers', () => {
@@ -48,5 +49,48 @@ describe('renommage', () => {
       project: 'Soirée équipe 2026.collimo.json',
     })
     expect(renamedFileNames({ ...entry, image: undefined }, 'a')).toEqual({ image: undefined, project: 'a.collimo.json' })
+  })
+})
+
+describe('migrateCollages', () => {
+  /** Client Drive factice qui note les appels de mise à jour. */
+  function fakeDrive() {
+    const updates: { id: string; change: unknown; move: unknown }[] = []
+    const drive = {
+      ensureFolder: async () => 'projets',
+      updateFileMeta: async (id: string, change: unknown, move?: unknown) => {
+        updates.push({ id, change, move })
+        return { id, name: 'x' }
+      },
+    } as unknown as DriveService
+    return { drive, updates }
+  }
+
+  it('déplace les anciens projets dans Projets et relie image et projet par propriétés', async () => {
+    const img: DriveFileInfo = { id: 'i', name: 'a.jpg' }
+    const prj: DriveFileInfo = { id: 'p', name: 'a.collimo.json' }
+    const { drive, updates } = fakeDrive()
+    const changed = await migrateCollages(drive, 'collimo', [img, prj], [{ project: prj, image: img, baseName: 'a' }])
+    expect(changed).toBe(true)
+    expect(updates).toEqual([
+      { id: 'p', change: { appProperties: { collimo: 'project', pair: 'i' } }, move: { addParents: 'projets', removeParents: 'collimo' } },
+      { id: 'i', change: { appProperties: { collimo: 'image', pair: 'p' } }, move: undefined },
+    ])
+  })
+
+  it('ne touche pas aux collages déjà au nouveau format', async () => {
+    const img: DriveFileInfo = { id: 'i', name: 'a.jpg', appProperties: { collimo: 'image', pair: 'p' } }
+    const prj: DriveFileInfo = { id: 'p', name: 'a.collimo.json', appProperties: { collimo: 'project', pair: 'i' } }
+    const { drive, updates } = fakeDrive()
+    // Le projet n'est pas à la racine (il est déjà dans Projets) : rien à faire.
+    expect(await migrateCollages(drive, 'collimo', [img], [{ project: prj, image: img, baseName: 'a' }])).toBe(false)
+    expect(updates).toEqual([])
+  })
+
+  it('déplace un projet sans image, sans lui inventer de lien', async () => {
+    const prj: DriveFileInfo = { id: 'p', name: 'seul.collimo.json' }
+    const { drive, updates } = fakeDrive()
+    expect(await migrateCollages(drive, 'collimo', [prj], [{ project: prj, baseName: 'seul' }])).toBe(true)
+    expect(updates).toEqual([{ id: 'p', change: {}, move: { addParents: 'projets', removeParents: 'collimo' } }])
   })
 })
