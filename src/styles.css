@@ -706,6 +706,279 @@ p {
   }
 }
 
+/* Loupe des miniatures */
+.tile-cell {
+  position: relative;
+}
+
+.tile-zoom {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: zoom-in;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.tile-cell:hover .tile-zoom,
+.tile-zoom:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tile-zoom {
+    opacity: 0.85;
+  }
+}
+
+/* Diaporama */
+body.no-scroll {
+  overflow: hidden;
+}
+
+.slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 8, 10, 0.97);
+  color: var(--text);
+}
+
+.slideshow-top {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem max(1rem, env(safe-area-inset-left));
+}
+
+.slideshow-position {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.slideshow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.slideshow-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.slideshow-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.slideshow-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4.5rem;
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.slideshow-figure {
+  position: relative;
+  margin: 0;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+}
+
+.slideshow-img {
+  display: block;
+  height: calc(100dvh - 15rem);
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+span.slideshow-img {
+  width: min(60vw, 600px);
+  aspect-ratio: 4 / 3;
+}
+
+.slideshow-badge {
+  top: 10px;
+  right: 10px;
+  min-width: 36px;
+  height: 36px;
+  font-size: 1.05rem;
+}
+
+.slideshow-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(35, 35, 41, 0.85);
+  color: var(--text);
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.slideshow-nav.prev {
+  left: 0.75rem;
+}
+
+.slideshow-nav.next {
+  right: 0.75rem;
+}
+
+.slideshow-nav:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.slideshow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem 0.5rem;
+}
+
+.slideshow-select {
+  min-width: 15rem;
+}
+
+.slideshow-select.selected {
+  border-color: var(--accent);
+  background: #1d2f2a;
+  color: var(--accent);
+}
+
+.slideshow-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.slideshow-thumb {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-2);
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.slideshow-thumb .thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.slideshow-thumb.selected {
+  opacity: 0.9;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.slideshow-thumb.current {
+  opacity: 1;
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.slideshow-thumb.unsupported {
+  opacity: 0.3;
+}
+
+.slideshow-thumb .badge {
+  top: 3px;
+  right: 3px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 699px) {
+  .slideshow-hint {
+    display: none;
+  }
+
+  .slideshow-position {
+    margin-right: auto;
+  }
+
+  .slideshow-stage {
+    padding: 0 0.5rem;
+  }
+
+  .slideshow-nav {
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
+  }
+
+  .slideshow-img {
+    height: calc(100dvh - 17rem);
+  }
+
+  .slideshow-select {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .slideshow-thumb {
+    width: 52px;
+    height: 52px;
+  }
+}
+
 /* Lien Collimo vers un dossier */
 .link-problem h1 {
   font-size: 1.3rem;

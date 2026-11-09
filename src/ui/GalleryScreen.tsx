@@ -11,6 +11,7 @@ import { currentFolder, folderLabel } from '../lib/locations'
 import { pruneSelection, toggleSelection } from '../lib/selection'
 import { FolderIcon } from './icons'
 import { PrivacyNote } from './PrivacyNote'
+import { Slideshow } from './Slideshow'
 import { ProjectsList, type ProjectEntry } from './ProjectsList'
 import { Thumbnail } from './Thumbnail'
 
@@ -59,6 +60,7 @@ export function GalleryScreen({
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [subfolders, setSubfolders] = useState<FolderRef[] | null>(null)
   const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle')
+  const [slideIndex, setSlideIndex] = useState<number | null>(null)
   const shareLink = collimoFolderLink(`${window.location.origin}${window.location.pathname}`, folder.id)
 
   /** Copie le lien Collimo du dossier ouvert ; si le navigateur refuse, le lien s'affiche pour une copie à la main. */
@@ -113,6 +115,11 @@ export function GalleryScreen({
   const myDrive = t('setup.myDrive')
   const byId = new Map((photos ?? []).map((p) => [p.id, p]))
 
+  /** Crée un collage avec les photos sélectionnées, dans l'ordre de sélection. */
+  function create() {
+    onCreate(selection.map((id) => byId.get(id)).filter((p): p is Photo => !!p))
+  }
+
   return (
     <main className="screen gallery-screen">
       {open.collimoFolderId && (
@@ -143,6 +150,9 @@ export function GalleryScreen({
           {photos && <p className="muted">{t('gallery.count', { count: photos.length })}</p>}
         </div>
         <div className="gallery-tools">
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => setSlideIndex(0)} disabled={!photos?.length}>
+            <PlayIcon /> {t('gallery.slideshow')}
+          </button>
           <button type="button" className="btn btn-ghost btn-small" onClick={() => void copyLink()}>
             <LinkIcon /> {copied === 'done' ? t('gallery.linkCopied') : t('gallery.copyLink')}
           </button>
@@ -215,7 +225,7 @@ export function GalleryScreen({
             const order = selection.indexOf(p.id)
             const selected = order !== -1
             return (
-              <li key={p.id}>
+              <li key={p.id} className="tile-cell">
                 <button
                   type="button"
                   className={`tile${selected ? ' selected' : ''}${p.supported ? '' : ' unsupported'}`}
@@ -227,6 +237,15 @@ export function GalleryScreen({
                   <Thumbnail key={p.id} photo={p} services={services} />
                   {selected && <span className="badge">{order + 1}</span>}
                   {!p.supported && <span className="tile-note">{p.mimeType.replace('image/', '').toUpperCase()}</span>}
+                </button>
+                <button
+                  type="button"
+                  className="tile-zoom"
+                  aria-label={t('gallery.zoom', { name: p.name })}
+                  title={t('gallery.zoom', { name: p.name })}
+                  onClick={() => setSlideIndex(photos.indexOf(p))}
+                >
+                  <ZoomIcon />
                 </button>
               </li>
             )
@@ -255,12 +274,29 @@ export function GalleryScreen({
             className="btn btn-primary"
             disabled={!selection.length || !open.canAddChildren}
             title={open.canAddChildren ? undefined : t('gallery.readOnly')}
-            onClick={() => onCreate(selection.map((id) => byId.get(id)).filter((p): p is Photo => !!p))}
+            onClick={create}
           >
             {t('gallery.create')}
           </button>
         </div>
       </div>
+      {slideIndex !== null && photos && photos.length > 0 && (
+        <Slideshow
+          services={services}
+          photos={photos}
+          startIndex={slideIndex}
+          selection={selection}
+          max={MAX_PHOTOS}
+          limitHint={limitHint}
+          canCreate={open.canAddChildren}
+          onToggle={toggle}
+          onCreate={() => {
+            setSlideIndex(null)
+            create()
+          }}
+          onClose={() => setSlideIndex(null)}
+        />
+      )}
     </main>
   )
 }
@@ -279,6 +315,32 @@ function LinkIcon() {
         strokeWidth="1.8"
         strokeLinecap="round"
       />
+    </svg>
+  )
+}
+
+/**
+ * Icône « lecture » du bouton Diaporama.
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function PlayIcon() {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M10 9v6l5-3z" fill="currentColor" />
+    </svg>
+  )
+}
+
+/**
+ * Icône de loupe, pour voir une photo en grand.
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function ZoomIcon() {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 16l4.5 4.5M11 8v6M8 11h6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }

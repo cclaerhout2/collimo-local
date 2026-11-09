@@ -24,7 +24,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 - lien direct vers un dossier : `https://SITE.web.app/?folder=ID` (ou `?folder=` suivi d'un lien Google Drive de dossier ou de photo) ouvre ce dossier après la connexion ; bouton « Copier le lien Collimo » dans la galerie ; sans accès, Collimo le signale (Drive ne distingue pas « introuvable » de « sans accès ») et renvoie vers la page Drive du dossier pour « Demander l'accès », puis « Réessayer » ;
 - navigation dans les dossiers depuis Collimo (fil d'Ariane, sous-dossiers, photos du dossier ouvert) ; le sous-dossier `Collimo` des collages n'est créé qu'au premier collage, et un dossier en lecture seule se parcourt sans pouvoir y enregistrer ;
 - raccourcis, dernier dossier ouvert et langue mémorisés par utilisateur (espace caché `appDataFolder` de son Drive) ;
-- galerie de miniatures, sélection ordonnée de 1 à 20 photos ; photos HEIC des iPhone décodées dans le navigateur ;
+- galerie de miniatures, sélection ordonnée de 1 à 20 photos ; diaporama plein écran (bouton de la galerie, ou loupe sur une miniature) pour regarder chaque photo en grand et la sélectionner (← →, Espace, Échap, glissement du doigt, bande de miniatures) ; photos HEIC des iPhone décodées dans le navigateur ;
 - interface en français et en anglais.
 
 **Dispositions**
