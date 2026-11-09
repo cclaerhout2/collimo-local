@@ -180,11 +180,7 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
             </button>
           )}
         </h2>
-        {left.length === 0 ? (
-          <p className="muted">{t('split.poolEmpty')}</p>
-        ) : (
-          <ul className="split-grid">{left.map((id) => tile(id))}</ul>
-        )}
+        {left.length === 0 ? <p className="muted">{t('split.poolEmpty')}</p> : <ul className="split-grid">{left.map((id) => tile(id))}</ul>}
       </section>
 
       <div className="split-groups">
