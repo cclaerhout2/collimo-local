@@ -99,11 +99,13 @@ async function tap(locator) {
   let reachable = false
   for (let i = 0; i < 20 && !reachable; i++) {
     if (i) await new Promise((r) => setTimeout(r, 150))
-    reachable = await locator.evaluate((el) => {
+    reachable = await locator.evaluate((el, retry) => {
+      // Une barre fixe (sélection, actions) peut masquer l’élément : on le recentre.
+      if (retry) el.scrollIntoView({ block: 'center' })
       const r = el.getBoundingClientRect()
       const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
       return hit === el || el.contains(hit)
-    })
+    }, i > 0)
   }
   assert.ok(reachable, 'élément recouvert ou hors de l’écran')
   await locator.evaluate((el) => el.click())
@@ -167,6 +169,8 @@ try {
   assert.equal(await tiles.count(), 8)
   const names = await tiles.evaluateAll((els) => els.map((e) => e.getAttribute('title')))
   assert.deepEqual(names, ['IMG_1.png', 'IMG_2.png', 'IMG_3.png', 'IMG_4.png', 'IMG_5.png', 'IMG_6.png', 'IMG_7.HEIC', 'IMG_10.png'])
+  // Les miniatures se chargent à l’approche de l’écran : on fait défiler toute la grille.
+  for (let i = 0; i < 8; i++) await tiles.nth(i).scrollIntoViewIfNeeded()
   await page.waitForFunction(
     () => {
       const imgs = [...document.querySelectorAll('ul.grid img.thumb')]

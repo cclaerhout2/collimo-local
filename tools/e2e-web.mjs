@@ -116,6 +116,8 @@ try {
   const tiles = page.locator('ul.grid button.tile')
   await tiles.first().waitFor()
   assert.equal(await tiles.count(), 8)
+  // Les miniatures se chargent à l’approche de l’écran : on fait défiler toute la grille.
+  for (let i = 0; i < 8; i++) await tiles.nth(i).scrollIntoViewIfNeeded()
   await page.waitForFunction(
     () => {
       const imgs = [...document.querySelectorAll('ul.grid img.thumb')]
