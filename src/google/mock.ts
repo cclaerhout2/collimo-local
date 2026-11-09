@@ -244,7 +244,14 @@ export function createMockServices(): Services {
           [...files.values()]
             .filter((f) => f.parent === folderId && (!namePrefix || f.name.includes(namePrefix)))
             .sort((a, b) => (b.modifiedTime ?? '').localeCompare(a.modifiedTime ?? ''))
-            .map(({ id, name, modifiedTime, webViewLink, thumbnailLink }) => ({ id, name, modifiedTime, webViewLink, thumbnailLink })),
+            .map(({ id, name, modifiedTime, webViewLink, thumbnailLink, appProperties }) => ({
+              id,
+              name,
+              modifiedTime,
+              webViewLink,
+              thumbnailLink,
+              appProperties,
+            })),
         ),
       async findSharedDrive(ref) {
         const match = ref.id ? ref.id === CATALOGUE_DRIVE.id : ref.name === CATALOGUE_DRIVE.name
@@ -284,12 +291,28 @@ export function createMockServices(): Services {
         if (!f) throw new Error('file not found')
         return JSON.parse(await f.data.text())
       },
-      async uploadFile(folderId, name, data) {
+      async uploadFile(folderId, name, data, _mimeType, props) {
         const id = `file-${files.size + 1}`
         const thumbnailLink = data.type.startsWith('image/') ? URL.createObjectURL(data) : undefined
-        const info = { id, name, modifiedTime: new Date().toISOString(), webViewLink: '#demo', thumbnailLink }
+        const info = {
+          id,
+          name,
+          modifiedTime: new Date().toISOString(),
+          webViewLink: '#demo',
+          thumbnailLink,
+          ...(props ? { appProperties: props } : {}),
+        }
         files.set(id, { ...info, parent: folderId, data })
         return delay(info, 500)
+      },
+      async updateFileMeta(id, change) {
+        const f = files.get(id)
+        if (!f) throw new DriveApiError(404, 'file not found')
+        if (change.name) f.name = change.name
+        if (change.appProperties) f.appProperties = { ...f.appProperties, ...change.appProperties }
+        f.modifiedTime = new Date().toISOString()
+        const { parent: _p, data: _d, ...info } = f
+        return delay(info, 200)
       },
     },
     picker: {

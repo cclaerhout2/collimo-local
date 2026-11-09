@@ -328,6 +328,9 @@ export const fr = {
   'projects.copyLink': 'Copier le lien Drive du collage',
   'projects.copyLinkHint': 'Clic : copier le lien Drive du collage · Ctrl + clic : ouvrir dans Drive',
   'projects.linkCopied': 'Lien copié',
+  'projects.rename': 'Renommer le collage',
+  'projects.renameHint': 'Renommer le collage (l’image et son fichier projet, dans Drive)',
+  'projects.renameLabel': 'Nouveau nom du collage',
   'projects.loading': 'Chargement des collages…',
   'projects.invalid': 'Ce fichier projet est illisible ({name}).',
 

@@ -68,13 +68,21 @@ export async function saveCollage(args: {
   args.onPhase?.('uploading')
   const ext = args.format === 'png' ? 'png' : 'jpg'
   const mime = args.format === 'png' ? 'image/png' : 'image/jpeg'
-  const image = await args.drive.uploadFile(args.collimoFolderId, `${baseName}.${ext}`, blob, mime)
+  // Image puis projet, chacun marqué et relié à l'autre par ses propriétés Collimo : on peut ensuite
+  // renommer l'un ou l'autre dans Drive sans casser le lien.
+  const image = await args.drive.uploadFile(args.collimoFolderId, `${baseName}.${ext}`, blob, mime, { collimo: 'image' })
   const projectJson = serializeProject(args.doc, now)
   const project = await args.drive.uploadFile(
     args.collimoFolderId,
     `${baseName}${PROJECT_SUFFIX}`,
     new Blob([projectJson], { type: 'application/json' }),
     'application/json',
+    { collimo: 'project', pair: image.id },
   )
+  try {
+    await args.drive.updateFileMeta(image.id, { appProperties: { collimo: 'image', pair: project.id } })
+  } catch {
+    // Lien retour non écrit : le projet connaît déjà son image, l'appariement reste possible.
+  }
   return { baseName, image, project, blob }
 }

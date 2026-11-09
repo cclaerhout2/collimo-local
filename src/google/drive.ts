@@ -504,7 +504,7 @@ export function createDriveClient(
         q: `${quote(folderId)} in parents and mimeType != '${FOLDER_MIME}' and trashed = false${prefix}`,
         orderBy: 'modifiedTime desc',
         pageSize: '1000',
-        fields: 'nextPageToken, files(id,name,modifiedTime,webViewLink,thumbnailLink)',
+        fields: 'nextPageToken, files(id,name,modifiedTime,webViewLink,thumbnailLink,appProperties)',
       })
     },
 
@@ -512,10 +512,20 @@ export function createDriveClient(
       return call<unknown>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }))
     },
 
-    async uploadFile(folderId, name, data, mimeType) {
+    async updateFileMeta(id, change) {
+      return call<DriveFileInfo>(
+        url(`/files/${encodeURIComponent(id)}`, {
+          supportsAllDrives: 'true',
+          fields: 'id,name,modifiedTime,webViewLink,thumbnailLink,appProperties',
+        }),
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) },
+      )
+    },
+
+    async uploadFile(folderId, name, data, mimeType, props) {
       // 1. Ouverture d'une session d'envoi : Drive renvoie l'adresse où déposer le contenu.
       const start = await request(
-        `${UPLOAD}/files?${new URLSearchParams({ uploadType: 'resumable', supportsAllDrives: 'true', fields: 'id,name,modifiedTime,webViewLink' })}`,
+        `${UPLOAD}/files?${new URLSearchParams({ uploadType: 'resumable', supportsAllDrives: 'true', fields: 'id,name,modifiedTime,webViewLink,appProperties' })}`,
         {
           method: 'POST',
           headers: {
@@ -523,7 +533,7 @@ export function createDriveClient(
             'X-Upload-Content-Type': mimeType,
             'X-Upload-Content-Length': String(data.size),
           },
-          body: JSON.stringify({ name, mimeType, parents: [folderId] }),
+          body: JSON.stringify({ name, mimeType, parents: [folderId], ...(props ? { appProperties: props } : {}) }),
         },
       )
       const session = start.headers.get('Location')

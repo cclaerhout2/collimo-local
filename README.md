@@ -65,7 +65,7 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 
 - rappel de confidentialité permanent pendant le choix des photos (rien de confidentiel, arrière-plan vérifié, photos recadrées sur les personnes), et case à cocher obligatoire avant chaque enregistrement ;
 - JPG ou PNG en Standard (2048 px), HD (5000 px, 4000 px sur iPhone et iPad) ou Maximum ; qualité JPG réglable (90 par défaut) ;
-- « Mes collages » : vignettes des collages du dossier, à reprendre d'un clic ; bouton « lien » sur chaque vignette qui copie le lien Drive de l'image (Ctrl + clic : ouvrir dans Drive) ;
+- « Mes collages » : vignettes des collages du dossier, avec le nom de l'image dans Drive et la date, à reprendre d'un clic ; bouton « lien » qui copie le lien Drive de l'image (Ctrl + clic : ouvrir dans Drive) ; crayon pour renommer le collage (l'image et son projet, dans Drive) ; l'image et le projet sont reliés par des propriétés Drive réservées à Collimo (`appProperties`), donc renommer l'un ou l'autre dans Drive ne casse rien (les collages plus anciens restent appariés par leur nom commun) ;
 - chaque enregistrement crée un nouveau collage dans le dossier `Collimo` : l'image et son fichier projet `.collimo.json`, sous un nom daté (`Collimo_AAAA-MM-JJ_HH-MM-SS`) jamais écrasé ;
 - « Mes collages » : rouvrir un collage enregistré pour le retravailler ;
 - annuler / rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z) pour toutes les actions.

@@ -1949,8 +1949,8 @@ button:focus-visible {
 .project-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 132px;
+  gap: 4px;
+  width: 148px;
   padding: 6px;
   border-radius: 12px;
   border: 1px solid var(--line);
@@ -2013,6 +2013,68 @@ button:focus-visible {
   .project-link {
     opacity: 0.85;
   }
+}
+
+.project-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.project-tool {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.project-rename-btn {
+  top: 12px;
+  left: 12px;
+}
+
+.project-cell:hover .project-tool,
+.project-tool:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .project-tool {
+    opacity: 0.85;
+  }
+}
+
+.project-rename {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+
+.project-rename input {
+  width: 100%;
+  min-height: 32px;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
 }
 
 .project-date {

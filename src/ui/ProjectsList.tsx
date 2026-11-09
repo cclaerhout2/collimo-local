@@ -1,5 +1,6 @@
 /**
- * Liste des projets de collage déjà enregistrés dans le dossier Collimo, avec leur aperçu.
+ * Liste des projets de collage déjà enregistrés dans le dossier Collimo, avec leur aperçu, leur nom
+ * (celui de l'image dans Drive), un bouton qui copie le lien Drive et un renommage sur place.
  */
 import { useEffect, useRef, useState } from 'react'
 import { PROJECT_SUFFIX, projectBaseName } from '../collage/project'
@@ -11,29 +12,60 @@ import { useI18n } from '../i18n'
 export interface ProjectEntry {
   /** Fichier projet (JSON) sur Drive. */
   project: DriveFileInfo
-  /** Nom commun au projet et à son image, sans extension. */
+  /** Nom du collage : celui de l'image dans Drive (sans extension), sinon celui du projet. */
   baseName: string
-  /** Image exportée du même nom, qui sert d'aperçu. */
+  /** Image exportée, qui sert d'aperçu. */
   image?: DriveFileInfo
 }
 
 /**
- * Associe chaque fichier projet à l'image exportée du même nom.
+ * Nom d'un fichier sans son extension (`.jpg`, `.png`, `.collimo.json`…).
+ * @param name - nom du fichier
+ * @returns le nom sans extension
+ */
+export function stripExtension(name: string): string {
+  if (name.endsWith(PROJECT_SUFFIX)) return projectBaseName(name)
+  return name.replace(/\.[a-z0-9]{2,5}$/i, '')
+}
+
+/**
+ * Associe chaque fichier projet à son image exportée : d'abord par les propriétés Collimo (lien par
+ * identifiant, qui survit aux renommages), sinon par le nom commun (collages plus anciens). Un
+ * projet est reconnu à sa propriété Collimo ou à son suffixe `.collimo.json`.
  * @param files - fichiers du dossier Collimo
  * @returns un élément par fichier projet, dans l'ordre de `files`
  */
 export function groupProjects(files: DriveFileInfo[]): ProjectEntry[] {
-  const images = new Map<string, DriveFileInfo>()
+  const byId = new Map(files.map((f) => [f.id, f]))
+  const imagesByName = new Map<string, DriveFileInfo>()
   for (const f of files) {
-    const m = /^(.*)\.(jpg|png)$/i.exec(f.name)
-    if (m) images.set(m[1], f)
+    const m = /^(.*)\.(jpg|jpeg|png)$/i.exec(f.name)
+    if (m && f.appProperties?.collimo !== 'project') imagesByName.set(m[1], f)
   }
-  return files
-    .filter((f) => f.name.endsWith(PROJECT_SUFFIX))
-    .map((project) => {
-      const baseName = projectBaseName(project.name)
-      return { project, baseName, image: images.get(baseName) }
-    })
+  const isProject = (f: DriveFileInfo) => f.appProperties?.collimo === 'project' || f.name.endsWith(PROJECT_SUFFIX)
+  // Images qui désignent leur projet (lien retour), au cas où seul ce sens a été écrit.
+  const imageByProjectId = new Map<string, DriveFileInfo>()
+  for (const f of files) if (f.appProperties?.collimo === 'image' && f.appProperties.pair) imageByProjectId.set(f.appProperties.pair, f)
+  return files.filter(isProject).map((project) => {
+    const linked = project.appProperties?.pair ? byId.get(project.appProperties.pair) : undefined
+    const image = linked ?? imageByProjectId.get(project.id) ?? imagesByName.get(stripExtension(project.name))
+    return { project, baseName: stripExtension((image ?? project).name), image }
+  })
+}
+
+/**
+ * Noms à donner à l'image et au projet d'un collage renommé.
+ * @param entry - collage
+ * @param newName - nom choisi (sans extension)
+ * @returns les nouveaux noms de fichiers
+ */
+export function renamedFileNames(entry: ProjectEntry, newName: string): { image?: string; project: string } {
+  const base = newName
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+  const ext = entry.image ? (/\.(jpe?g|png)$/i.exec(entry.image.name)?.[0] ?? '.jpg') : undefined
+  return { image: ext ? `${base}${ext}` : undefined, project: `${base}${PROJECT_SUFFIX}` }
 }
 
 /** Propriétés de la liste des projets. */
@@ -72,6 +104,36 @@ export function ProjectsList({ services, collimoFolderId, onOpen, onError }: Pro
   }, [services, collimoFolderId, onError])
 
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  /**
+   * Renomme l'image et le projet d'un collage dans Drive, puis met la liste à jour.
+   * @param e - collage
+   * @param newName - nouveau nom, sans extension
+   */
+  async function rename(e: ProjectEntry, newName: string) {
+    const clean = newName.trim()
+    setRenaming(null)
+    if (!clean || clean === e.baseName) return
+    const names = renamedFileNames(e, clean)
+    setBusyId(e.project.id)
+    try {
+      const project = await services.drive.updateFileMeta(e.project.id, { name: names.project })
+      const image = e.image && names.image ? await services.drive.updateFileMeta(e.image.id, { name: names.image }) : e.image
+      setEntries((list) =>
+        (list ?? []).map((x) =>
+          x.project.id === e.project.id
+            ? { project: { ...x.project, ...project }, image: image ? { ...x.image, ...image } : x.image, baseName: clean }
+            : x,
+        ),
+      )
+    } catch (err) {
+      onError(err)
+    } finally {
+      setBusyId(null)
+    }
+  }
   const copiedTimer = useRef<number | undefined>(undefined)
 
   /**
@@ -109,14 +171,59 @@ export function ProjectsList({ services, collimoFolderId, onOpen, onError }: Pro
         <ul className="project-strip">
           {entries.map((e) => (
             <li key={e.project.id} className="project-cell">
-              <button type="button" className="project-card" onClick={() => onOpen(e)} title={t('projects.open')}>
+              <button
+                type="button"
+                className="project-card"
+                onClick={() => onOpen(e)}
+                title={t('projects.open')}
+                disabled={busyId === e.project.id}
+              >
                 {e.image?.thumbnailLink ? (
                   <img src={sizedThumbnail(e.image.thumbnailLink, 320)} alt="" referrerPolicy="no-referrer" loading="lazy" />
                 ) : (
                   <span className="project-noimg" aria-hidden="true" />
                 )}
-                <span className="project-date">{e.project.modifiedTime ? date.format(new Date(e.project.modifiedTime)) : e.baseName}</span>
+                <span className="project-name" title={e.baseName}>
+                  {e.baseName}
+                </span>
+                <span className="project-date">{e.project.modifiedTime ? date.format(new Date(e.project.modifiedTime)) : ''}</span>
               </button>
+              {renaming?.id === e.project.id ? (
+                <form
+                  className="project-rename"
+                  onSubmit={(ev) => {
+                    ev.preventDefault()
+                    void rename(e, renaming.value)
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={renaming.value}
+                    maxLength={120}
+                    aria-label={t('projects.renameLabel')}
+                    onChange={(ev) => setRenaming({ id: e.project.id, value: ev.target.value })}
+                    onFocus={(ev) => ev.target.select()}
+                    onBlur={() => void rename(e, renaming.value)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Escape') {
+                        ev.preventDefault()
+                        setRenaming(null)
+                      }
+                    }}
+                  />
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  className="project-tool project-rename-btn"
+                  aria-label={t('projects.rename')}
+                  title={t('projects.renameHint')}
+                  disabled={busyId === e.project.id}
+                  onClick={() => setRenaming({ id: e.project.id, value: e.baseName })}
+                >
+                  <PencilIcon />
+                </button>
+              )}
               {driveLink(e) && (
                 <a
                   className={`project-link${copiedId === e.project.id ? ' copied' : ''}`}
@@ -170,6 +277,25 @@ function CheckIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/**
+ * Icône de crayon du bouton « Renommer ».
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

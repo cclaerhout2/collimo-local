@@ -322,6 +322,9 @@ export const en: Record<MessageKey, string> = {
   'projects.copyLink': 'Copy the collage’s Drive link',
   'projects.copyLinkHint': 'Click: copy the collage’s Drive link · Ctrl + click: open in Drive',
   'projects.linkCopied': 'Link copied',
+  'projects.rename': 'Rename the collage',
+  'projects.renameHint': 'Rename the collage (the image and its project file, in Drive)',
+  'projects.renameLabel': 'New collage name',
   'projects.loading': 'Loading collages…',
   'projects.invalid': 'This project file cannot be read ({name}).',
 

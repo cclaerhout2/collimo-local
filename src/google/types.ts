@@ -142,10 +142,20 @@ export interface AuthService {
   signOut(): void
 }
 
+/** Propriétés réservées à Collimo sur ses fichiers Drive (invisibles dans Drive), pour relier image et projet quel que soit leur nom. */
+export interface CollimoFileProps {
+  /** Rôle du fichier : image exportée ou fichier projet. */
+  collimo?: 'image' | 'project'
+  /** Pour une image : identifiant de son fichier projet ; pour un projet : identifiant de son image. */
+  pair?: string
+}
+
 /** Fichier Drive (collage enregistré, fichier envoyé). */
 export interface DriveFileInfo {
   id: string
   name: string
+  /** Propriétés Collimo, si le fichier en a. */
+  appProperties?: CollimoFileProps
   /** Date de dernière modification (ISO 8601). */
   modifiedTime?: string
   /** Lien d'ouverture dans Drive. */
@@ -203,8 +213,10 @@ export interface DriveService {
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   /** Contenu JSON d'un fichier, non vérifié. */
   readJson(id: string): Promise<unknown>
-  /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo). */
-  uploadFile(folderId: string, name: string, data: Blob, mimeType: string): Promise<DriveFileInfo>
+  /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo), avec ses propriétés Collimo éventuelles. */
+  uploadFile(folderId: string, name: string, data: Blob, mimeType: string, props?: CollimoFileProps): Promise<DriveFileInfo>
+  /** Renomme un fichier et/ou change ses propriétés Collimo. */
+  updateFileMeta(id: string, change: { name?: string; appProperties?: CollimoFileProps }): Promise<DriveFileInfo>
   /** Drive partagé par son identifiant, ou par son nom exact ; null s'il n'existe pas ou n'est pas visible. */
   findSharedDrive(ref: { id?: string; name?: string }): Promise<SharedDriveInfo | null>
   /** Fichier par son nom, à la racine d'un Drive partagé. */
