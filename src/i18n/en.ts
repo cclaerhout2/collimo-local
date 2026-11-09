@@ -248,6 +248,9 @@ export const en: Record<MessageKey, string> = {
   'projects.title': 'My collages',
   'projects.empty': 'No collage saved in this folder yet.',
   'projects.open': 'Reopen',
+  'projects.copyLink': 'Copy the collage’s Drive link',
+  'projects.copyLinkHint': 'Click: copy the collage’s Drive link · Ctrl + click: open in Drive',
+  'projects.linkCopied': 'Link copied',
   'projects.loading': 'Loading collages…',
   'projects.invalid': 'This project file cannot be read ({name}).',
 

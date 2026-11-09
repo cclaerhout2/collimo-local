@@ -254,6 +254,9 @@ export const fr = {
   'projects.title': 'Mes collages',
   'projects.empty': 'Aucun collage enregistré dans ce dossier pour l’instant.',
   'projects.open': 'Reprendre',
+  'projects.copyLink': 'Copier le lien Drive du collage',
+  'projects.copyLinkHint': 'Clic : copier le lien Drive du collage · Ctrl + clic : ouvrir dans Drive',
+  'projects.linkCopied': 'Lien copié',
   'projects.loading': 'Chargement des collages…',
   'projects.invalid': 'Ce fichier projet est illisible ({name}).',
 
