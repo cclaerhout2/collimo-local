@@ -70,7 +70,7 @@ export function CollageCanvas({ doc, layout, ratio, imageFor, overlayFor, canvas
       canvas.width = w
       canvas.height = h
     } else ctx.reset()
-    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44', raw }, overlayFor)
+    renderCollage(ctx, doc, layout, canvas.width, canvas.height, imageFor, { placeholder: '#3a3a44', raw, maskBadge: true }, overlayFor)
     if (externalRef) externalRef.current = canvas
   }, [doc, layout, imageFor, overlayFor, externalRef, version, raw, fit.width, fit.height])
 

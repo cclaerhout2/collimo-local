@@ -4,7 +4,7 @@ import type { Crop } from '../../collage/types'
 import { useI18n } from '../../i18n'
 
 /** Action proposée par le menu d'une photo. */
-export type PhotoAction = 'swap' | 'flip' | 'rotate' | 'crop' | 'adjust' | 'replace' | 'delete'
+export type PhotoAction = 'swap' | 'flip' | 'rotate' | 'crop' | 'adjust' | 'mask' | 'replace' | 'delete'
 
 /** Propriétés de {@link PhotoMenu}. */
 interface MenuProps {
@@ -30,6 +30,10 @@ export function PhotoMenu({ canDelete, swapPick, onAction, onDone }: MenuProps) 
     { id: 'rotate', icon: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7' },
     { id: 'crop', icon: 'M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14' },
     { id: 'adjust', icon: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M16 4v4M10 10v4M18 16v4' },
+    {
+      id: 'mask',
+      icon: 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10 10 0 0 1 12 5c5 0 9 4 10 7a13 13 0 0 1-3 4M6.6 6.6A13 13 0 0 0 2 12c1 3 5 7 10 7a10 10 0 0 0 4.4-1',
+    },
     { id: 'replace', icon: 'M4 7h10M4 7l3-3M4 7l3 3M20 17H10M20 17l-3-3M20 17l-3 3' },
     { id: 'delete', icon: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', disabled: !canDelete },
   ]

@@ -7,6 +7,7 @@ import { sizeForLongSide } from './geometry'
 import { drawOverlay, overlayBox } from './overlays'
 import { isIdentity, paramsForPhoto, vignetteFor } from './color'
 import { processPhoto } from './colorProcessor'
+import { applyMasks } from './masks'
 import { cellStyle, drawDecor, drawPhotoInCell, drawVignette, finishCell, underCell, type Drawable } from './render'
 import type { CollageDoc, Layout, Overlay, PlacedPhoto, TextOverlay } from './types'
 
@@ -191,16 +192,17 @@ export async function exportCollage(args: {
     underCell(ctx, cell, style)
     try {
       ctx.imageSmoothingQuality = 'high'
-      // Réglages et filtre à la résolution d'export, avec le même moteur que l'aperçu.
+      // Réglages et filtre à la résolution d'export, avec le même moteur que l'aperçu, puis zones masquées.
       const params = paramsForPhoto(doc, i)
-      if (isIdentity(params)) drawPhotoInCell(ctx, img, cell, photo.crop)
-      else {
-        const done = processPhoto(img.source as CanvasImageSource & TexImageSource, img.width, img.height, params)
-        try {
-          drawPhotoInCell(ctx, done, cell, photo.crop)
-        } finally {
-          done.close()
-        }
+      const colored = isIdentity(params)
+        ? null
+        : processPhoto(img.source as CanvasImageSource & TexImageSource, img.width, img.height, params)
+      const hidden = photo.masks?.length ? applyMasks(colored ?? img, photo.masks) : null
+      try {
+        drawPhotoInCell(ctx, hidden ?? colored ?? img, cell, photo.crop)
+      } finally {
+        hidden?.close()
+        colored?.close()
       }
       drawVignette(ctx, cell, vignetteFor(doc, i))
       finishCell(ctx, cell, style)

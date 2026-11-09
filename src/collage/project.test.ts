@@ -130,6 +130,15 @@ describe('filtres et réglages dans le projet', () => {
     expect(back.photos[0].adjust).toEqual({ contrast: -0.3 })
   })
 
+  it('relit les zones masquées d’une photo', () => {
+    const masks = [{ id: 'm1', x: 0.1, y: 0.2, w: 0.3, h: 0.25, mode: 'pixelate' as const, strength: 0.8 }]
+    const d = { ...doc, photos: [{ ...doc.photos[0], masks }] }
+    const back = parseProject(JSON.parse(serializeProject(d, new Date())))
+    expect(back.photos[0].masks).toEqual(masks)
+    const plain = parseProject(JSON.parse(serializeProject(doc, new Date())))
+    expect(plain.photos[0].masks).toBeUndefined()
+  })
+
   it('ignore un filtre inconnu et borne les réglages', () => {
     const raw = JSON.parse(serializeProject(doc, new Date()))
     raw.doc.filter = { id: 'inexistant', intensity: 1 }

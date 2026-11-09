@@ -6,6 +6,7 @@ import { layoutById } from './catalog'
 import { splitToRects } from './layoutDsl'
 import { RATIOS } from './ratios'
 import { filterById } from './color'
+import { parseMasks } from './masks'
 import { DEFAULT_EFFECTS } from './overlays'
 import {
   ADJUST_KEYS,
@@ -87,6 +88,7 @@ export function parseProject(raw: unknown): CollageDoc {
         flip: c.flip === true,
       },
       adjust: parseAdjust((p as { adjust?: unknown }).adjust),
+      masks: parseMasks((p as { masks?: unknown }).masks),
     }
   })
   const layout = typeof d.layoutId === 'string' ? layoutById(d.layoutId) : undefined

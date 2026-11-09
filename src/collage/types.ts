@@ -2,6 +2,7 @@
  * Types de données du collage : dispositions, cadrage et réglages des photos, bords,
  * textes et stickers, et document complet ({@link CollageDoc}), avec leurs valeurs par défaut.
  */
+import type { Mask } from './masks'
 
 /** Rectangle en coordonnées relatives (0 à 1) ou en pixels selon le contexte. */
 export interface Rect {
@@ -137,6 +138,8 @@ export interface PlacedPhoto {
   crop: Crop
   /** Réglages propres à cette photo. */
   adjust?: Partial<Adjustments>
+  /** Zones masquées (flou, mosaïque, aplat), en fractions de l'image d'origine. */
+  masks?: Mask[]
 }
 
 /** Réglages des bords, chacun de 0 à 1. */

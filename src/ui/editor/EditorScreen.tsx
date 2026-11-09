@@ -7,6 +7,9 @@ import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../c
 import type { ExportImage } from '../../collage/export'
 import { autoAdjust, isIdentity, paramsForPhoto, paramsKey } from '../../collage/color'
 import { processPhoto, type Processed } from '../../collage/colorProcessor'
+import { applyMasks, masksKey, type Mask } from '../../collage/masks'
+import { loadNextDefaults, MaskEditor, MaskPanel, saveNextDefaults } from './MaskEditor'
+import type { Drawable } from '../../collage/render'
 import { normalizeAngle, rotateTo, zoomAt } from '../../collage/gestures'
 import { createLimiter, fitWithin, loadImage, type LoadedImage } from '../../collage/images'
 import { ratioValue } from '../../collage/ratios'
@@ -120,6 +123,12 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const [selected, setSelected] = useState<number | null>(null)
   const [swapPick, setSwapPick] = useState(false)
   const [cropMode, setCropMode] = useState(false)
+  /** Édition des zones masquées de la photo sélectionnée. */
+  const [maskMode, setMaskMode] = useState(false)
+  const [maskSelected, setMaskSelected] = useState<string | null>(null)
+  const [maskNext, setMaskNext] = useState(loadNextDefaults)
+  const maskWrap = useRef<HTMLDivElement>(null)
+  const [maskBox, setMaskBox] = useState({ width: 0, height: 0 })
   const [notice, setNotice] = useState<UiError | null>(null)
   const history = useHistory<CollageDoc>(() =>
     layoutById(initialDoc.layoutId) ? initialDoc : { ...initialDoc, layoutId: defaultLayoutFor(initialDoc.photos.length).id },
@@ -134,6 +143,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
   const [adjustScope, setAdjustScope] = useState<'collage' | 'photo'>('photo')
   const [compare, setCompare] = useState(false)
   const processed = useRef(new Map<string, { key: string; out: Processed }>())
+  /** Photos masquées pour l'aperçu, par identifiant, avec la clé des réglages et des zones qui les ont produites. */
+  const masked = useRef(
+    new Map<string, { key: string; out: { close(): void; source: CanvasImageSource; width: number; height: number } }>(),
+  )
   const canvasEl = useRef<HTMLCanvasElement | null>(null)
   const overlays = useMemo(() => doc.overlays ?? [], [doc.overlays])
   const assets = useOverlayAssets(services, overlays, onError)
@@ -213,21 +226,34 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     }
   }, [])
 
-  /** Photo de la case i pour l'aperçu : réglages et filtre appliqués, résultat gardé en cache. */
+  /** Photo de la case i pour l'aperçu : réglages, filtre puis zones masquées appliqués, résultat gardé en cache. */
   const imageFor = useCallback(
     (i: number) => {
       const p = doc.photos[i]
       const base = p ? images.current.get(p.id) : undefined
       if (!p || !base || compare) return base
       const params = paramsForPhoto(doc, i)
-      if (isIdentity(params)) return base
-      const key = paramsKey(params)
-      const hit = processed.current.get(p.id)
+      let colored: Drawable = base
+      if (!isIdentity(params)) {
+        const key = paramsKey(params)
+        const hit = processed.current.get(p.id)
+        if (hit?.key === key) colored = hit.out
+        else {
+          hit?.out.close()
+          const size = fitWithin(base.width, base.height, PROCESSED_SIDE)
+          const out = processPhoto(base.source, size.width, size.height, params)
+          processed.current.set(p.id, { key, out })
+          colored = out
+        }
+      }
+      const mk = masksKey(p.masks)
+      if (!mk) return colored
+      const key = `${paramsKey(params)}#${mk}`
+      const hit = masked.current.get(p.id)
       if (hit?.key === key) return hit.out
       hit?.out.close()
-      const size = fitWithin(base.width, base.height, PROCESSED_SIDE)
-      const out = processPhoto(base.source, size.width, size.height, params)
-      processed.current.set(p.id, { key, out })
+      const out = applyMasks(colored, p.masks!)
+      masked.current.set(p.id, { key, out })
       return out
     },
     [doc, compare],
@@ -235,9 +261,12 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
 
   useEffect(() => {
     const map = processed.current
+    const maskedMap = masked.current
     return () => {
       map.forEach((v) => v.out.close())
       map.clear()
+      maskedMap.forEach((v) => v.out.close())
+      maskedMap.clear()
     }
   }, [])
 
@@ -319,9 +348,44 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     setSelectedOverlay(null)
     setSwapPick(false)
     setCropMode(false)
+    setMaskMode(false)
+    setMaskSelected(null)
     setPhotoAdjust(false)
     setEyedropper(null)
   }, [])
+
+  // Taille disponible pour l'éditeur de zones (mesurée tant qu'il est affiché).
+  useEffect(() => {
+    const el = maskWrap.current
+    if (!maskMode || !el) return
+    const observer = new ResizeObserver(([entry]) => setMaskBox({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [maskMode])
+
+  /**
+   * Remplace les zones masquées d'une photo.
+   * @param i - indice de la photo
+   * @param masks - nouvelles zones (vide = aucune)
+   */
+  function setMasks(i: number, masks: Mask[]) {
+    setDoc((d) => ({ ...d, photos: d.photos.map((p, k) => (k === i ? { ...p, masks: masks.length ? masks : undefined } : p)) }))
+  }
+
+  /**
+   * Change le mode ou l'intensité de la zone choisie, sinon des prochaines zones (mémorisé sur l'appareil).
+   * @param change - mode et/ou intensité
+   */
+  function setMaskSetting(change: Partial<Pick<Mask, 'mode' | 'strength'>>) {
+    const next = { ...maskNext, ...change }
+    setMaskNext(next)
+    saveNextDefaults(next)
+    if (selected === null || !maskSelected) return
+    setMasks(
+      selected,
+      (doc.photos[selected].masks ?? []).map((m) => (m.id === maskSelected ? { ...m, ...change } : m)),
+    )
+  }
 
   /** Sélectionne un texte ou un sticker (ou rien) ; désélectionne la photo. */
   const selectOverlay = useCallback((id: string | null) => {
@@ -477,7 +541,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
     else if (action === 'rotate' && s)
       setCrop(selected, rotateTo(photo.crop, s.img, s.box, normalizeAngle(Math.round(photo.crop.angle / 90) * 90 + 90)))
     else if (action === 'crop') setCropMode(true)
-    else if (action === 'adjust') {
+    else if (action === 'mask') {
+      setMaskSelected(null)
+      setMaskMode(true)
+    } else if (action === 'adjust') {
       setAdjustScope('photo')
       setPhotoAdjust(true)
     } else if (action === 'delete' && doc.photos.length > 1) {
@@ -585,42 +652,59 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
         className="editor-stage"
         onPointerDown={(e) => {
           // Toucher à côté du collage : désélection.
-          if (!(e.target as Element).closest('.canvas-frame, .shuffle, .compare')) select(null)
+          if (!(e.target as Element).closest('.canvas-frame, .shuffle, .compare, .mask-wrap')) select(null)
         }}
       >
-        <CollageCanvas
-          doc={doc}
-          layout={layout}
-          ratio={ratio}
-          imageFor={imageFor}
-          overlayFor={assets.overlayFor}
-          canvasRef={canvasEl}
-          version={version + assets.version * 1000}
-          raw={compare}
-          overlay={(size) => (
-            <InteractionLayer
-              width={size.width}
-              height={size.height}
-              doc={doc}
-              layout={layout}
-              selected={selected}
-              swapPick={swapPick}
-              imageSize={imageSize}
-              onSelect={select}
-              onCrop={setCrop}
-              onSwap={swap}
-              onSplit={(split) => setDoc((d) => ({ ...d, split }))}
-              selectedOverlay={selectedOverlay}
-              onSelectOverlay={selectOverlay}
-              onOverlay={updateOverlay}
-              onEditText={(id) => {
-                selectOverlay(id)
-                setFocusText((n) => n + 1)
-              }}
-              onEyedropper={eyedropper ? pickColorAt : undefined}
-            />
-          )}
-        />
+        {maskMode && selected !== null && doc.photos[selected] && images.current.get(doc.photos[selected].id) ? (
+          <div ref={maskWrap} className="mask-wrap">
+            {maskBox.width > 0 && (
+              <MaskEditor
+                image={images.current.get(doc.photos[selected].id)!}
+                masks={doc.photos[selected].masks ?? []}
+                onChange={(m) => setMasks(selected, m)}
+                width={maskBox.width}
+                height={maskBox.height}
+                selected={maskSelected}
+                onSelect={setMaskSelected}
+                next={maskNext}
+              />
+            )}
+          </div>
+        ) : (
+          <CollageCanvas
+            doc={doc}
+            layout={layout}
+            ratio={ratio}
+            imageFor={imageFor}
+            overlayFor={assets.overlayFor}
+            canvasRef={canvasEl}
+            version={version + assets.version * 1000}
+            raw={compare}
+            overlay={(size) => (
+              <InteractionLayer
+                width={size.width}
+                height={size.height}
+                doc={doc}
+                layout={layout}
+                selected={selected}
+                swapPick={swapPick}
+                imageSize={imageSize}
+                onSelect={select}
+                onCrop={setCrop}
+                onSwap={swap}
+                onSplit={(split) => setDoc((d) => ({ ...d, split }))}
+                selectedOverlay={selectedOverlay}
+                onSelectOverlay={selectOverlay}
+                onOverlay={updateOverlay}
+                onEditText={(id) => {
+                  selectOverlay(id)
+                  setFocusText((n) => n + 1)
+                }}
+                onEyedropper={eyedropper ? pickColorAt : undefined}
+              />
+            )}
+          />
+        )}
         {hasColor && (
           <button
             type="button"
@@ -707,6 +791,23 @@ export function EditorScreen({ services, location, initialDoc, onBack, onReconne
                 {t('photo.done')}
               </button>
             </div>
+          </div>
+        ) : selected !== null && doc.photos[selected] && maskMode ? (
+          <div className="panel panel-tall">
+            <MaskPanel
+              masks={doc.photos[selected].masks ?? []}
+              selected={(doc.photos[selected].masks ?? []).find((m) => m.id === maskSelected) ?? null}
+              next={maskNext}
+              onSetting={setMaskSetting}
+              onClear={() => {
+                setMasks(selected, [])
+                setMaskSelected(null)
+              }}
+              onDone={() => {
+                setMaskMode(false)
+                setMaskSelected(null)
+              }}
+            />
           </div>
         ) : selected !== null && doc.photos[selected] ? (
           cropMode ? (

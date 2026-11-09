@@ -39,7 +39,8 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 
 - toucher une photo pour la sélectionner ; glisser pour recadrer ; molette, pincement ou double-clic pour zoomer ; poignée ronde ou deux doigts pour tourner, avec aimantation ;
 - poignées sur les séparations des dispositions en découpe, pour agrandir une case aux dépens de sa voisine ;
-- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Remplacer, Supprimer, Réglages ;
+- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Réglages, Masquer, Remplacer, Supprimer ;
+- Masquer : la photo entière en grand, où l'on trace des rectangles sur ce qu'il faut cacher (écran, document, badge, visage) ; trois modes (Flou, Pixels, Plein) et une intensité par zone, zones déplaçables et redimensionnables ; les zones sont en coordonnées de l'image d'origine, donc elles suivent la photo quels que soient le cadrage, le zoom, la rotation ou le miroir, et leur intensité est relative à la taille de la zone, donc identique à l'aperçu et à l'export ; le masque est cuit dans l'image exportée, la photo d'origine dans Drive n'est pas touchée ; un œil barré sur la case signale les zones masquées ;
 - clavier : flèches, + et −, Échap.
 
 **Texte et stickers**
