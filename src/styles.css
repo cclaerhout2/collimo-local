@@ -1290,6 +1290,45 @@ span.slideshow-img {
   border-radius: 5px;
 }
 
+.split-cell {
+  position: relative;
+}
+
+.split-zoom {
+  width: 26px;
+  height: 26px;
+  left: 4px;
+  bottom: 4px;
+}
+
+.split-lightbox-bar {
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.split-where {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.split-targets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.split-targets .btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  opacity: 1;
+}
+
+.split-lightbox .slideshow-img {
+  height: calc(100dvh - 13rem);
+}
+
 .split-bar {
   position: fixed;
   left: 0;

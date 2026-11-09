@@ -3,12 +3,13 @@
  * collage en dessous. On glisse une photo vers une carte (souris), ou on la touche puis on touche
  * la carte (écran tactile). Répartition automatique, ajout et retrait de collages, puis création.
  */
-import { useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { MAX_PHOTOS, MIN_PHOTOS } from '../config'
 import type { Photo, Services } from '../google/types'
 import { useI18n } from '../i18n'
 import { autoSplit, groupsNeeded, movePhoto, splitBySize, splitIssues, unplaced, type Groups } from '../lib/split'
 import { Thumbnail } from './Thumbnail'
+import { FolderIcon } from './icons'
 
 /** Propriétés de l'écran de répartition. */
 interface Props {
@@ -38,6 +39,8 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
   /** Photo touchée, en attente d'une carte de destination (écran tactile ou clavier). */
   const [picked, setPicked] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
+  /** Photo affichée en grand, ou `null`. */
+  const [viewing, setViewing] = useState<string | null>(null)
 
   const left = unplaced(ids, groups)
   const issues = splitIssues(ids, groups, MIN_PHOTOS, MAX_PHOTOS)
@@ -85,15 +88,14 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
   /**
    * Vignette déplaçable d'une photo.
    * @param id - photo
-   * @param from - groupe d'origine, ou -1
    * @returns la vignette
    */
-  function tile(id: string, from: number) {
+  function tile(id: string) {
     const p = byId.get(id)
     if (!p) return null
     const isPicked = picked === id
     return (
-      <li key={id}>
+      <li key={id} className="split-cell">
         <button
           type="button"
           className={`split-photo${isPicked ? ' picked' : ''}`}
@@ -107,9 +109,18 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
             setPicked(null)
           }}
           onClick={() => tap(id)}
-          onDoubleClick={() => place(id, from === -1 ? 0 : -1)}
+          onDoubleClick={() => setViewing(id)}
         >
           <Thumbnail key={id} photo={p} services={services} />
+        </button>
+        <button
+          type="button"
+          className="tile-zoom split-zoom"
+          aria-label={t('gallery.zoom', { name: p.name })}
+          title={t('gallery.zoom', { name: p.name })}
+          onClick={() => setViewing(id)}
+        >
+          <ZoomIcon />
         </button>
       </li>
     )
@@ -172,7 +183,7 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
         {left.length === 0 ? (
           <p className="muted">{t('split.poolEmpty')}</p>
         ) : (
-          <ul className="split-grid">{left.map((id) => tile(id, -1))}</ul>
+          <ul className="split-grid">{left.map((id) => tile(id))}</ul>
         )}
       </section>
 
@@ -216,12 +227,24 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
               {g.length === 0 ? (
                 <p className="muted split-empty">{t('split.groupEmpty')}</p>
               ) : (
-                <ul className="split-grid">{g.map((id) => tile(id, i))}</ul>
+                <ul className="split-grid">{g.map((id) => tile(id))}</ul>
               )}
             </section>
           )
         })}
       </div>
+
+      {viewing && byId.has(viewing) && (
+        <SplitLightbox
+          services={services}
+          photos={photos}
+          id={viewing}
+          groups={groups}
+          onChange={setViewing}
+          onPlace={(to) => place(viewing, to)}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       <div className="split-bar">
         <span className="split-status">
@@ -252,5 +275,145 @@ export function SplitScreen({ services, photos, onCancel, onCreate }: Props) {
         </div>
       </div>
     </main>
+  )
+}
+
+/** Propriétés de la grande vue d'une photo à répartir. */
+interface LightboxProps {
+  services: Services
+  /** Toutes les photos, dans l'ordre de sélection (pour ← →). */
+  photos: Photo[]
+  /** Photo affichée. */
+  id: string
+  /** Groupes actuels, pour indiquer où est la photo et proposer les destinations. */
+  groups: Groups
+  /** Change de photo. */
+  onChange: (id: string) => void
+  /** Place la photo affichée dans un groupe (ou -1 : à placer). */
+  onPlace: (to: number) => void
+  /** Ferme la vue. */
+  onClose: () => void
+}
+
+/**
+ * Photo en grand, avec sa place actuelle et un bouton par collage pour l'y envoyer ; ← → pour
+ * passer aux photos voisines, Échap pour fermer, 1 à 9 pour placer dans le collage correspondant.
+ * @returns l'overlay
+ */
+function SplitLightbox({ services, photos, id, groups, onChange, onPlace, onClose }: LightboxProps) {
+  const { t } = useI18n()
+  const index = photos.findIndex((p) => p.id === id)
+  const photo = photos[index]
+  const where = groups.findIndex((g) => g.includes(id))
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    closeRef.current?.focus()
+    document.body.classList.add('no-scroll')
+    return () => document.body.classList.remove('no-scroll')
+  }, [])
+
+  useEffect(() => {
+    /**
+     * Raccourcis : ← → photo voisine, Échap fermer, chiffre = placer dans ce collage, 0 = à placer.
+     * @param e - touche pressée
+     */
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft' && index > 0) onChange(photos[index - 1].id)
+      else if (e.key === 'ArrowRight' && index < photos.length - 1) onChange(photos[index + 1].id)
+      else if (/^[0-9]$/.test(e.key)) {
+        const n = Number(e.key)
+        if (n === 0) onPlace(-1)
+        else if (n <= groups.length) onPlace(n - 1)
+        else return
+      } else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [index, photos, groups.length, onChange, onPlace, onClose])
+
+  if (!photo) return null
+  return (
+    <div className="slideshow split-lightbox" role="dialog" aria-modal="true" aria-label={photo.name}>
+      <div className="slideshow-top">
+        <span className="slideshow-position">
+          {t('slideshow.position', { index: index + 1, total: photos.length })}
+          <span className="slideshow-name">{photo.name}</span>
+        </span>
+        <span className="slideshow-hint">{t('split.lightboxHint')}</span>
+        <button
+          ref={closeRef}
+          type="button"
+          className="slideshow-close"
+          aria-label={t('slideshow.close')}
+          title={t('slideshow.close')}
+          onClick={onClose}
+        >
+          ×
+        </button>
+      </div>
+      <div className="slideshow-stage">
+        <button
+          type="button"
+          className="slideshow-nav prev"
+          aria-label={t('slideshow.prev')}
+          disabled={index === 0}
+          onClick={() => onChange(photos[index - 1].id)}
+        >
+          ‹
+        </button>
+        <figure className="slideshow-figure">
+          <Thumbnail key={photo.id} photo={photo} services={services} size={1600} className="slideshow-img" eager />
+        </figure>
+        <button
+          type="button"
+          className="slideshow-nav next"
+          aria-label={t('slideshow.next')}
+          disabled={index === photos.length - 1}
+          onClick={() => onChange(photos[index + 1].id)}
+        >
+          ›
+        </button>
+      </div>
+      <div className="slideshow-bar split-lightbox-bar">
+        <span className="split-where">{where === -1 ? t('split.whereUnplaced') : t('split.whereGroup', { n: where + 1 })}</span>
+        <span className="split-targets" role="group" aria-label={t('split.moveTo')}>
+          <button
+            type="button"
+            className={`btn btn-small${where === -1 ? ' active' : ''}`}
+            disabled={where === -1}
+            onClick={() => onPlace(-1)}
+          >
+            {t('split.pool')}
+          </button>
+          {groups.map((g, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`btn btn-small${where === i ? ' active' : ''}`}
+              disabled={where === i}
+              onClick={() => onPlace(i)}
+            >
+              <FolderIcon size={15} /> {t('split.group', { n: i + 1 })} <span className="muted">({g.length})</span>
+            </button>
+          ))}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Icône de loupe des vignettes.
+ * @returns l'icône SVG, masquée aux lecteurs d'écran
+ */
+function ZoomIcon() {
+  return (
+    <svg className="icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 16l4.5 4.5M11 8v6M8 11h6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   )
 }
