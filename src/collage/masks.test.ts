@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { blurFraction, DEFAULT_MASK, masksKey, MIN_MASK_SIZE, normalizeRect, parseMasks, pixelateBlocks, type Mask } from './masks'
+import {
+  blurFraction,
+  DEFAULT_MASK,
+  masksKey,
+  MIN_MASK_SIZE,
+  normalizeMaskAngle,
+  normalizeRect,
+  parseMasks,
+  pixelateBlocks,
+  rotatedBounds,
+  type Mask,
+} from './masks'
 
 const mask = (over: Partial<Mask> = {}): Mask => ({ id: 'a', x: 0.1, y: 0.2, w: 0.3, h: 0.4, mode: 'blur', strength: 0.6, ...over })
 
@@ -66,5 +77,47 @@ describe('masksKey', () => {
     expect(masksKey([mask({ mode: 'fill' })])).not.toBe(a)
     expect(masksKey([mask({ x: 0.11 })])).not.toBe(a)
     expect(masksKey([mask({ id: 'autre' })])).toBe(a)
+  })
+})
+
+describe('rotation', () => {
+  it('normalise l’angle dans ]-180, 180] au dixième', () => {
+    expect(normalizeMaskAngle(0)).toBe(0)
+    expect(normalizeMaskAngle(190)).toBe(-170)
+    expect(normalizeMaskAngle(-180)).toBe(180)
+    expect(normalizeMaskAngle(45.04)).toBe(45)
+    expect(normalizeMaskAngle(725)).toBe(5)
+  })
+
+  it('la boîte englobante d’un rectangle droit est lui-même, et grandit avec la rotation', () => {
+    const m = { x: 0.2, y: 0.3, w: 0.4, h: 0.2, angle: 0 }
+    const b = rotatedBounds(m)
+    expect([b.x, b.y, b.w, b.h].map((v) => Math.round(v * 1000) / 1000)).toEqual([0.2, 0.3, 0.4, 0.2])
+    const r = rotatedBounds({ ...m, angle: 90 })
+    expect(r.w).toBeCloseTo(0.2)
+    expect(r.h).toBeCloseTo(0.4)
+    expect(r.x + r.w / 2).toBeCloseTo(0.4)
+    expect(r.y + r.h / 2).toBeCloseTo(0.4)
+    const d = rotatedBounds({ ...m, angle: 45 })
+    expect(d.w).toBeGreaterThan(0.4)
+    expect(d.h).toBeGreaterThan(0.2)
+  })
+
+  it('tient compte du format de l’image pour la boîte englobante', () => {
+    // Image deux fois plus haute que large : un carré « en fractions » est en fait un rectangle 1 × 2 ;
+    // tourné de 90°, il devient 2 × 1, soit toute la largeur et un quart de la hauteur.
+    const r = rotatedBounds({ x: 0.25, y: 0.25, w: 0.5, h: 0.5, angle: 90 }, 2)
+    expect(r.w).toBeCloseTo(1)
+    expect(r.h).toBeCloseTo(0.25)
+  })
+
+  it('relit l’angle d’une zone et l’omet s’il est nul', () => {
+    const out = parseMasks([
+      { x: 0.1, y: 0.1, w: 0.2, h: 0.2, angle: 30 },
+      { x: 0.5, y: 0.5, w: 0.1, h: 0.1, angle: 0 },
+    ])!
+    expect(out[0].angle).toBe(30)
+    expect(out[1].angle).toBeUndefined()
+    expect(masksKey([mask({ angle: 10 })])).not.toBe(masksKey([mask()]))
   })
 })

@@ -24,6 +24,8 @@ export interface Mask {
   mode: MaskMode
   /** Intensité, de 0 (minimum encore efficace) à 1 (maximum). */
   strength: number
+  /** Rotation du rectangle autour de son centre, en degrés (0 = droit). */
+  angle?: number
 }
 
 /** Mode et intensité par défaut d'une nouvelle zone. */
@@ -90,9 +92,21 @@ export function parseMasks(raw: unknown): Mask[] | undefined {
     if (r.w < MIN_MASK_SIZE || r.h < MIN_MASK_SIZE) continue
     const mode: MaskMode = m.mode === 'pixelate' || m.mode === 'fill' ? m.mode : 'blur'
     const strength = typeof m.strength === 'number' && Number.isFinite(m.strength) ? clamp(m.strength, 0, 1) : DEFAULT_MASK.strength
-    out.push({ id: typeof m.id === 'string' && m.id ? m.id : newMaskId(), ...r, mode, strength })
+    const angle = typeof m.angle === 'number' && Number.isFinite(m.angle) ? normalizeMaskAngle(m.angle) : 0
+    out.push({ id: typeof m.id === 'string' && m.id ? m.id : newMaskId(), ...r, mode, strength, ...(angle ? { angle } : {}) })
   }
   return out.length ? out : undefined
+}
+
+/**
+ * Ramène un angle dans ]-180, 180], arrondi au dixième de degré.
+ * @param a - angle en degrés
+ * @returns l'angle normalisé
+ */
+export function normalizeMaskAngle(a: number): number {
+  let v = ((((a + 180) % 360) + 360) % 360) - 180
+  if (v === -180) v = 180
+  return Math.round(v * 10) / 10
 }
 
 /**
@@ -103,7 +117,10 @@ export function parseMasks(raw: unknown): Mask[] | undefined {
 export function masksKey(masks: Mask[] | undefined): string {
   if (!masks?.length) return ''
   return masks
-    .map((m) => `${m.mode}:${m.strength.toFixed(2)}:${m.x.toFixed(4)},${m.y.toFixed(4)},${m.w.toFixed(4)},${m.h.toFixed(4)}`)
+    .map(
+      (m) =>
+        `${m.mode}:${m.strength.toFixed(2)}:${m.x.toFixed(4)},${m.y.toFixed(4)},${m.w.toFixed(4)},${m.h.toFixed(4)},${(m.angle ?? 0).toFixed(1)}`,
+    )
     .join('|')
 }
 
@@ -178,11 +195,58 @@ interface PxRect {
  * @returns la zone en pixels entiers, d'au moins 1 × 1
  */
 function toPx(m: Mask, width: number, height: number): PxRect {
-  const x = Math.floor(m.x * width)
-  const y = Math.floor(m.y * height)
-  const w = Math.max(1, Math.ceil((m.x + m.w) * width) - x)
-  const h = Math.max(1, Math.ceil((m.y + m.h) * height) - y)
+  const b = m.angle ? rotatedBounds(m) : m
+  const x = Math.max(0, Math.floor(b.x * width))
+  const y = Math.max(0, Math.floor(b.y * height))
+  const w = Math.max(1, Math.min(width, Math.ceil((b.x + b.w) * width)) - x)
+  const h = Math.max(1, Math.min(height, Math.ceil((b.y + b.h) * height)) - y)
   return { x, y, w, h }
+}
+
+/**
+ * Boîte englobante (en fractions) d'un rectangle tourné autour de son centre. Comme les fractions
+ * ne sont pas isotropes (l'image n'est pas carrée), le calcul se fait en unités de l'image : la
+ * largeur vaut 1, la hauteur `aspect` ; sans `aspect`, on suppose l'image carrée (approximation
+ * suffisante pour la zone de calcul, le découpage exact se faisant au dessin).
+ * @param m - zone tournée
+ * @param aspect - hauteur / largeur de l'image
+ * @returns la boîte englobante, en fractions
+ */
+export function rotatedBounds(m: Pick<Mask, 'x' | 'y' | 'w' | 'h' | 'angle'>, aspect = 1): { x: number; y: number; w: number; h: number } {
+  const a = ((m.angle ?? 0) * Math.PI) / 180
+  const cos = Math.abs(Math.cos(a))
+  const sin = Math.abs(Math.sin(a))
+  // Demi-côtés en unités image (largeur 1, hauteur aspect).
+  const hw = (m.w * 1) / 2
+  const hh = (m.h * aspect) / 2
+  const bw = hw * cos + hh * sin
+  const bh = hw * sin + hh * cos
+  const cx = m.x + m.w / 2
+  const cy = m.y + m.h / 2
+  return { x: cx - bw, y: cy - bh / aspect, w: bw * 2, h: (bh * 2) / aspect }
+}
+
+/**
+ * Découpe le contexte au rectangle (tourné) d'une zone, en pixels de l'image.
+ * @param ctx - contexte
+ * @param m - zone
+ * @param width - largeur de l'image, en pixels
+ * @param height - hauteur de l'image, en pixels
+ */
+function clipToMask(ctx: Ctx2d, m: Mask, width: number, height: number) {
+  const cx = (m.x + m.w / 2) * width
+  const cy = (m.y + m.h / 2) * height
+  const w = m.w * width
+  const h = m.h * height
+  ctx.beginPath()
+  if (m.angle) {
+    ctx.translate(cx, cy)
+    ctx.rotate((m.angle * Math.PI) / 180)
+    ctx.rect(-w / 2, -h / 2, w, h)
+    ctx.rotate((-m.angle * Math.PI) / 180)
+    ctx.translate(-cx, -cy)
+  } else ctx.rect(m.x * width, m.y * height, w, h)
+  ctx.clip()
 }
 
 /**
@@ -212,6 +276,60 @@ function blurZone(ctx: Ctx2d, r: PxRect, strength: number) {
   ctx.restore()
   release(small.canvas)
   release(mid.canvas)
+}
+
+/**
+ * Flou d'une zone avec l'intensité d'une zone de référence (pour les rectangles tournés, dont la
+ * boîte englobante est plus grande que la zone).
+ * @param ctx - contexte
+ * @param r - zone à flouter (boîte englobante), en pixels
+ * @param ref - taille de la zone de référence, en pixels
+ * @param strength - intensité
+ */
+function blurZoneAs(ctx: Ctx2d, r: PxRect, ref: PxRect, strength: number) {
+  const f = blurFraction(strength)
+  // Même taille de « petit » canvas que pour la zone de référence : même flou perçu.
+  const sw = Math.max(2, ref.w * f)
+  const sh = Math.max(2, ref.h * f)
+  const small = canvas2d(sw * (r.w / ref.w), sh * (r.h / ref.h))
+  const mid = canvas2d(Math.max(2, r.w * Math.sqrt(f)), Math.max(2, r.h * Math.sqrt(f)))
+  for (const c of [small.ctx, mid.ctx]) {
+    c.imageSmoothingEnabled = true
+    c.imageSmoothingQuality = 'high'
+  }
+  mid.ctx.drawImage(ctx.canvas, r.x, r.y, r.w, r.h, 0, 0, mid.canvas.width, mid.canvas.height)
+  small.ctx.drawImage(mid.canvas, 0, 0, small.canvas.width, small.canvas.height)
+  mid.ctx.clearRect(0, 0, mid.canvas.width, mid.canvas.height)
+  mid.ctx.drawImage(small.canvas, 0, 0, mid.canvas.width, mid.canvas.height)
+  ctx.save()
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(mid.canvas, 0, 0, mid.canvas.width, mid.canvas.height, r.x, r.y, r.w, r.h)
+  ctx.restore()
+  release(small.canvas)
+  release(mid.canvas)
+}
+
+/**
+ * Mosaïque d'une zone avec la taille de blocs d'une zone de référence.
+ * @param ctx - contexte
+ * @param r - zone (boîte englobante), en pixels
+ * @param ref - taille de la zone de référence, en pixels
+ * @param strength - intensité
+ */
+function pixelateZoneAs(ctx: Ctx2d, r: PxRect, ref: PxRect, strength: number) {
+  const block = ref.w / pixelateBlocks(strength)
+  const across = Math.max(1, Math.round(r.w / block))
+  const down = Math.max(1, Math.round(r.h / block))
+  const small = canvas2d(across, down)
+  small.ctx.imageSmoothingEnabled = true
+  small.ctx.imageSmoothingQuality = 'high'
+  small.ctx.drawImage(ctx.canvas, r.x, r.y, r.w, r.h, 0, 0, across, down)
+  ctx.save()
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(small.canvas, 0, 0, across, down, r.x, r.y, r.w, r.h)
+  ctx.restore()
+  release(small.canvas)
 }
 
 /**
@@ -267,10 +385,30 @@ export function applyMasks(img: Drawable, masks: Mask[]): Masked {
   const { canvas, ctx } = canvas2d(img.width, img.height)
   ctx.drawImage(img.source, 0, 0, canvas.width, canvas.height)
   for (const m of masks) {
-    const r = toPx(m, canvas.width, canvas.height)
-    if (m.mode === 'pixelate') pixelateZone(ctx, r, m.strength)
-    else if (m.mode === 'fill') fillZone(ctx, r, m.strength)
-    else blurZone(ctx, r, m.strength)
+    const withAspect = m.angle ? { ...m, ...rotatedBounds(m, canvas.height / canvas.width), angle: 0 } : m
+    const r = toPx(withAspect, canvas.width, canvas.height)
+    if (!m.angle) {
+      if (m.mode === 'pixelate') pixelateZone(ctx, r, m.strength)
+      else if (m.mode === 'fill') fillZone(ctx, r, m.strength)
+      else blurZone(ctx, r, m.strength)
+      continue
+    }
+    // Zone tournée : l'effet est calculé sur la boîte englobante dans une copie, puis reporté
+    // à l'intérieur du rectangle tourné seulement. L'intensité reste relative à la zone elle-même.
+    const zone = { x: r.x, y: r.y, w: r.w, h: r.h }
+    const own = { x: Math.round(m.w * canvas.width), y: Math.round(m.h * canvas.height) }
+    const tmp = canvas2d(canvas.width, canvas.height)
+    tmp.ctx.drawImage(canvas, 0, 0)
+    // Pour une intensité comparable à une zone droite de même taille, le rayon est basé sur la zone, pas sur sa boîte.
+    const ref = { x: zone.x, y: zone.y, w: Math.max(1, own.x), h: Math.max(1, own.y) }
+    if (m.mode === 'pixelate') pixelateZoneAs(tmp.ctx, zone, ref, m.strength)
+    else if (m.mode === 'fill') fillZone(tmp.ctx, zone, m.strength)
+    else blurZoneAs(tmp.ctx, zone, ref, m.strength)
+    ctx.save()
+    clipToMask(ctx, m, canvas.width, canvas.height)
+    ctx.drawImage(tmp.canvas, zone.x, zone.y, zone.w, zone.h, zone.x, zone.y, zone.w, zone.h)
+    ctx.restore()
+    release(tmp.canvas)
   }
   return { source: canvas, width: canvas.width, height: canvas.height, close: () => release(canvas) }
 }

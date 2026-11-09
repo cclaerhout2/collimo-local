@@ -923,6 +923,13 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
               selected={(doc.photos[selected].masks ?? []).find((m) => m.id === maskSelected) ?? null}
               next={maskNext}
               onSetting={setMaskSetting}
+              onAngle={(angle) =>
+                maskSelected &&
+                setMasks(
+                  selected,
+                  (doc.photos[selected].masks ?? []).map((m) => (m.id === maskSelected ? { ...m, angle: angle || undefined } : m)),
+                )
+              }
               onClear={() => {
                 setMasks(selected, [])
                 setMaskSelected(null)
