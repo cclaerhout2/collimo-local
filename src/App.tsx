@@ -15,6 +15,7 @@ import { createServices } from './google/services'
 import type { DriveRef, FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
+import { clearDraft, draftHasUnsaved, loadDraft, saveDraft, type Draft } from './lib/draft'
 import { FOLDER_PARAM, parseFolderParam, type LinkTarget } from './lib/folderLink'
 import {
   addShortcut,
@@ -98,7 +99,7 @@ export function newCollage(photos: Photo[]): CollageDoc {
  * @returns l'application, avec l'écran correspondant à la phase en cours
  */
 export default function App() {
-  const { t, setLang } = useI18n()
+  const { t, lang, setLang } = useI18n()
   const services = useMemo(() => createServices(config), [])
   const missing = useMemo(() => missingConfig(config), [])
 
@@ -115,6 +116,11 @@ export default function App() {
   const [link, setLink] = useState<LinkTarget | 'invalid' | null>(readFolderParam)
   /** Série de collages issue d'une répartition : documents (mis à jour quand on en quitte un), position, enregistrés. */
   const [queue, setQueue] = useState<{ docs: CollageDoc[]; index: number; saved: boolean[] } | null>(null)
+  /** Brouillon trouvé à la connexion, proposé à la reprise tant qu'on n'a pas répondu. */
+  const [draft, setDraft] = useState<Draft | null>(null)
+  /** Dernier état connu du collage affiché dans l'éditeur, pour le brouillon. */
+  const editorDoc = useRef<CollageDoc | null>(null)
+  const draftTimer = useRef<number | undefined>(undefined)
   const [linkProblem, setLinkProblem] = useState(false)
   /** Réglages les plus récents, pour enchaîner les modifications sans attendre un nouveau rendu. */
   const settingsRef = useRef<UserSettings>(EMPTY_SETTINGS)
@@ -158,7 +164,7 @@ export default function App() {
    * @param quiet - `true` pour ne rien afficher si le dossier n'est plus accessible (réouverture à la connexion)
    */
   const openFolder = useCallback(
-    async (fp: FolderPath, quiet = false) => {
+    async (fp: FolderPath, quiet = false): Promise<OpenFolder | null> => {
       const request = ++openRequest.current
       setOpening(true)
       setError(null)
@@ -168,16 +174,19 @@ export default function App() {
           services.drive.getFolder(target.id),
           services.drive.findCollimoFolder(target.id),
         ])
-        if (request !== openRequest.current) return
+        if (request !== openRequest.current) return null
         const path = [...fp.path.slice(0, -1), { id: target.id, name: target.id === 'root' ? target.name : info.name }]
         const next: FolderPath = { drive: fp.drive, path }
-        setOpen({ ...next, canAddChildren: info.canAddChildren, collimoFolderId })
+        const opened: OpenFolder = { ...next, canAddChildren: info.canAddChildren, collimoFolderId }
+        setOpen(opened)
         setSelection([])
         updateSettings((s) => ({ ...s, current: next, recents: pushRecent(s.recents ?? [], next) }))
+        return opened
       } catch (e) {
-        if (request !== openRequest.current) return
+        if (request !== openRequest.current) return null
         if (!quiet) handleError(e)
         updateSettings((s) => ({ ...s, current: undefined }))
+        return null
       } finally {
         if (request === openRequest.current) setOpening(false)
       }
@@ -270,9 +279,13 @@ export default function App() {
       setSettings(migrated)
       if (saved.location) services.drive.saveSettings(migrated).catch(handleError)
       setPhase({ name: 'gallery' })
+      const found = loadDraft(me.email)
+      const hasDraft = !!found && draftHasUnsaved(found)
+      if (hasDraft) setDraft(found)
+      else if (found) clearDraft(me.email)
       if (link && link !== 'invalid') void openLink(link)
       else if (migrated.current) void openFolder(migrated.current, true)
-      else if (!migrated.shortcuts?.length) setAdding(true)
+      else if (!migrated.shortcuts?.length && !hasDraft) setAdding(true)
     } catch (e) {
       handleError(e)
       setPhase((p) => (p.name === 'loading' ? { name: 'signin' } : p))
@@ -293,6 +306,9 @@ export default function App() {
 
   /** Déconnecte l'utilisateur et oublie tout ce qui lui appartient (réglages, sélection, catalogue). */
   function signOut() {
+    if (user) clearDraft(user.email)
+    setDraft(null)
+    editorDoc.current = null
     services.auth.signOut()
     applyCatalogue(null)
     setUser(null)
@@ -334,6 +350,69 @@ export default function App() {
   }
 
   /**
+   * Écrit le brouillon du travail en cours (collage seul ou série), un peu après la dernière modification.
+   * @param current - collage affiché, dans son état actuel
+   * @param q - série en cours, ou `null` pour un collage seul
+   */
+  const writeDraft = useCallback(
+    (current: CollageDoc, q: { docs: CollageDoc[]; index: number; saved: boolean[] } | null) => {
+      if (!user || !open) return
+      window.clearTimeout(draftTimer.current)
+      // Tout est enregistré : plus rien à protéger.
+      if (q?.saved.every(Boolean)) {
+        clearDraft(user.email)
+        return
+      }
+      const docs = q ? q.docs.map((d, i) => (i === q.index ? current : d)) : [current]
+      const d: Draft = {
+        version: 1,
+        email: user.email,
+        updatedAt: new Date().toISOString(),
+        folder: { drive: open.drive, path: open.path },
+        docs,
+        index: q?.index ?? 0,
+        saved: q?.saved ?? [false],
+      }
+      draftTimer.current = window.setTimeout(() => saveDraft(d), 400)
+    },
+    [user, open],
+  )
+
+  /** Reçoit chaque état du collage affiché et met le brouillon à jour. */
+  const onEditorDocChange = useCallback(
+    (d: CollageDoc) => {
+      editorDoc.current = d
+      writeDraft(d, queue)
+    },
+    [writeDraft, queue],
+  )
+
+  /** Oublie le brouillon : travail enregistré, abandonné volontairement, ou terminé. */
+  function dropDraft() {
+    window.clearTimeout(draftTimer.current)
+    editorDoc.current = null
+    if (user) clearDraft(user.email)
+  }
+
+  /**
+   * Reprend le brouillon proposé : rouvre son dossier, puis le collage (ou la série) dans l'éditeur.
+   * @param d - brouillon
+   */
+  async function resumeDraft(d: Draft) {
+    setDraft(null)
+    const opened = await openFolder(d.folder, false)
+    if (!opened) return
+    try {
+      if (!opened.collimoFolderId)
+        setOpen({ ...opened, collimoFolderId: await services.drive.ensureCollimoFolder(currentFolder(opened).id) })
+      setQueue(d.docs.length > 1 ? { docs: d.docs, index: d.index, saved: d.saved } : null)
+      setPhase({ name: 'editor', doc: d.docs[d.index], key: Date.now() })
+    } catch (e) {
+      handleError(e)
+    }
+  }
+
+  /**
    * Crée un collage à partir de la sélection. Le sous-dossier Collimo du dossier ouvert, où vont
    * collages et projets, est créé à ce moment-là s'il n'existe pas encore.
    * @param photos - photos choisies, dans l'ordre de sélection
@@ -344,6 +423,7 @@ export default function App() {
       const collimoFolderId = open.collimoFolderId ?? (await services.drive.ensureCollimoFolder(currentFolder(open).id))
       setOpen({ ...open, collimoFolderId })
       setQueue(null)
+      setDraft(null)
       setPhase({ name: 'editor', doc: newCollage(photos), key: Date.now() })
     } catch (e) {
       handleError(e)
@@ -361,6 +441,7 @@ export default function App() {
       setOpen({ ...open, collimoFolderId })
       const docs = groups.map(newCollage)
       setQueue({ docs, index: 0, saved: docs.map(() => false) })
+      setDraft(null)
       setPhase({ name: 'editor', doc: docs[0], key: Date.now() })
     } catch (e) {
       handleError(e)
@@ -378,6 +459,7 @@ export default function App() {
     const index = Math.max(0, Math.min(docs.length - 1, target))
     setQueue({ ...queue, docs, index })
     setPhase({ name: 'editor', doc: docs[index], key: Date.now() })
+    writeDraft(docs[index], { ...queue, docs, index })
   }
 
   /**
@@ -407,6 +489,33 @@ export default function App() {
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
       {(configError ?? error) && <ErrorBanner error={(configError ?? error)!} onReconnect={() => void reconnect()} />}
       {link && link !== 'invalid' && phase.name === 'signin' && <div className="banner banner-info">{t('link.signinHint')}</div>}
+      {draft && user && phase.name === 'gallery' && (
+        <div className="banner banner-info draft-banner">
+          <span>
+            {t('draft.found', {
+              date: new Intl.DateTimeFormat(lang === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(
+                new Date(draft.updatedAt),
+              ),
+              count: draft.docs.length,
+            })}
+          </span>
+          <span className="draft-actions">
+            <button
+              type="button"
+              className="btn btn-ghost btn-small"
+              onClick={() => {
+                setDraft(null)
+                clearDraft(user.email)
+              }}
+            >
+              {t('draft.discard')}
+            </button>
+            <button type="button" className="btn btn-primary btn-small" onClick={() => void resumeDraft(draft)}>
+              {t('draft.resume')}
+            </button>
+          </span>
+        </div>
+      )}
       {link === 'invalid' && (
         <div className="banner banner-error" role="alert">
           <span>{t('link.invalid')}</span>
@@ -527,11 +636,21 @@ export default function App() {
                   saved: queue.saved[queue.index],
                   savedAll: queue.saved,
                   onGo: goInSeries,
-                  onSaved: () => setQueue((q) => (q ? { ...q, saved: q.saved.map((v, i) => (i === q.index ? true : v)) } : q)),
+                  onSaved: () => {
+                    const next = { ...queue, saved: queue.saved.map((v, i) => (i === queue.index ? true : v)) }
+                    setQueue(next)
+                    if (next.saved.every(Boolean)) dropDraft()
+                    else if (editorDoc.current) writeDraft(editorDoc.current, next)
+                  },
                 }
               : undefined
           }
+          onDocChange={onEditorDocChange}
+          onSaved={() => {
+            if (!queue) dropDraft()
+          }}
           onBack={() => {
+            dropDraft()
             setQueue(null)
             setPhase({ name: 'gallery' })
           }}

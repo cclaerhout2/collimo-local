@@ -81,6 +81,10 @@ interface Props {
   onBack: () => void
   /** Série de collages en cours (répartition) : position, et navigation entre collages. */
   queue?: EditorQueue
+  /** Appelé à chaque modification du collage (brouillon automatique). */
+  onDocChange?: (doc: CollageDoc) => void
+  /** Appelé quand le collage vient d'être enregistré dans Drive. */
+  onSaved?: () => void
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
   /** Signale une erreur de chargement (photo ou sticker illisible…). */
@@ -136,7 +140,7 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
  * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
  * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
  */
-export function EditorScreen({ services, location, initialDoc, onBack, queue, onReconnect, onError }: Props) {
+export function EditorScreen({ services, location, initialDoc, onBack, queue, onDocChange, onSaved, onReconnect, onError }: Props) {
   const { t, lang } = useI18n()
   /** Demande de passage au collage voisin alors que celui-ci n'est pas enregistré : confirmation affichée. */
   const [pendingMove, setPendingMove] = useState<-1 | 1 | null>(null)
@@ -156,6 +160,11 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
   )
   const doc = history.value
   const setDoc = history.set
+
+  // Brouillon : chaque état du collage est remonté à l'app, qui l'enregistre un peu plus tard.
+  useEffect(() => {
+    onDocChange?.({ ...doc, layoutId: layoutById(doc.layoutId) ? doc.layoutId : defaultLayoutFor(doc.photos.length).id })
+  }, [doc, onDocChange])
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
   const [eyedropper, setEyedropper] = useState<((color: string) => void) | null>(null)
   const [focusText, setFocusText] = useState(0)
@@ -1065,7 +1074,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
           loadOverlay={assets.loadOverlay}
           prepareText={assets.prepareText}
           onClose={() => setExporting(false)}
-          onSaved={() => queue?.onSaved()}
+          onSaved={() => {
+            queue?.onSaved()
+            onSaved?.()
+          }}
           onReconnect={onReconnect}
         />
       )}

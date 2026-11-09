@@ -1015,6 +1015,17 @@ span.slideshow-img {
   font: inherit;
 }
 
+/* Brouillon à reprendre */
+.draft-banner {
+  flex-wrap: wrap;
+}
+
+.draft-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
 /* Série de collages (répartition) */
 .queue-bar {
   display: flex;
