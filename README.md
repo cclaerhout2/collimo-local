@@ -70,6 +70,14 @@ Cahier des charges complet : document « [Collimo — Cahier des charges](https:
 - « Mes collages » : rouvrir un collage enregistré pour le retravailler ;
 - annuler / rétablir (boutons, Ctrl+Z, Ctrl+Maj+Z) pour toutes les actions.
 
+**Statistiques d'usage** (admins seulement, facultatif)
+
+- menu du compte › « Statistiques » : tant que rien n'est configuré, un assistant guide l'admin pour déployer le relais Google Apps Script (`tools/stats/Code.gs`, affiché déjà rempli avec l'ID client et le domaine), puis teste l'adresse et l'enregistre dans le catalogue de l'usine ; tous les utilisateurs l'utilisent à leur connexion suivante, sans republier le site ;
+- le relais tourne sous le compte de l'admin (« Exécuter en tant que : moi », « Qui a accès : tout le monde ») : il vérifie le jeton Google de chaque envoi (émis pour l'ID client de Collimo, compte d'un domaine autorisé), remplace l'adresse par un pseudonyme (HMAC avec un sel propre au relais), ajoute une ligne dans la Google Sheet « Collimo – Statistiques » qu'il crée dans le Drive de l'admin, et supprime les lignes de plus de 13 mois ;
+- événements : première connexion du jour, collage enregistré (photos, disposition, format, taille, zones masquées, textes, stickers, filtre, série, durée), échec d'enregistrement ; jamais de photo, de nom de fichier, de texte saisi ni d'adresse ;
+- tableau de bord sur 30 jours, 3 mois ou 12 mois : utilisateurs actifs, nouveaux utilisateurs, collages enregistrés, collages par actif, photos par collage, part des collages avec masquage, graphiques par semaine, dispositions les plus utilisées (et dispositions publiées de l'usine jamais utilisées) ; lu dans la Sheet (export CSV), que l'admin partage en lecture avec les autres admins ;
+- page « Confidentialité et données » (menu du compte, et lien sur l'écran de connexion) : ce que Collimo fait et ne fait pas, autorisations demandées, emplacement des données, état et contenu des statistiques.
+
 **Usine à dispositions** (admins seulement)
 
 - accès par le menu du compte, pour qui est « Gestionnaire de contenu » du Drive partagé « Collimo – Catalogue » ;
@@ -149,6 +157,8 @@ Ce que fait `install.bat`, à la main, avec Node.js, Git et `firebase-tools` ins
 | `drive.appdata` | mémoriser les raccourcis, le dernier dossier ouvert et la langue de chaque utilisateur |
 
 L'usine ne demande aucune autorisation de plus. L'admin qui crée le fichier du catalogue peut le modifier directement ; un autre admin doit, une seule fois, choisir ce fichier dans le sélecteur Google que Collimo lui ouvre : c'est ce choix qui autorise Collimo à le modifier pour lui.
+
+**Statistiques** : le relais Apps Script est hors du projet GCP partagé (il tourne sous le compte de l'admin) ; rien n'est ajouté à Firebase. Son adresse est publique, mais il refuse toute requête sans jeton valide émis pour Collimo, n'accepte que des compteurs (texte court, nombres bornés, sans formule) et ne renvoie jamais les statistiques.
 
 **Dans le navigateur** : le jeton Google reste en mémoire (jamais dans une adresse ni sur disque) ; le contenu lu dans Drive (projets, catalogue, stickers) est vérifié avant usage, les SVG sont filtrés (ni script ni lien externe).
 

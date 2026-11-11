@@ -2,6 +2,7 @@
  * Écran d'édition d'un collage : aperçu interactif, onglets de réglages (format, disposition, bordures,
  * fond, filtres, textes, stickers), menu de la photo sélectionnée, annuler / rétablir et export.
  */
+import type { TrackedEvent } from '../../lib/stats'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../collage/catalog'
 import type { ExportImage } from '../../collage/export'
@@ -85,6 +86,8 @@ interface Props {
   onDocChange?: (doc: CollageDoc) => void
   /** Appelé quand le collage vient d'être enregistré dans Drive. */
   onSaved?: () => void
+  /** Statistiques d'usage : compteurs des enregistrements. */
+  onTrack?: (event: TrackedEvent) => void
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
   /** Signale une erreur de chargement (photo ou sticker illisible…). */
@@ -140,7 +143,18 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
  * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
  * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
  */
-export function EditorScreen({ services, location, initialDoc, onBack, queue, onDocChange, onSaved, onReconnect, onError }: Props) {
+export function EditorScreen({
+  services,
+  location,
+  initialDoc,
+  onBack,
+  queue,
+  onDocChange,
+  onSaved,
+  onTrack,
+  onReconnect,
+  onError,
+}: Props) {
   const { t, lang } = useI18n()
   /** Demande de passage au collage voisin alors que celui-ci n'est pas enregistré : confirmation affichée. */
   const [pendingMove, setPendingMove] = useState<-1 | 1 | null>(null)
@@ -1086,6 +1100,8 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
             onSaved?.()
           }}
           onReconnect={onReconnect}
+          onTrack={onTrack}
+          series={queue?.total ?? 0}
         />
       )}
     </main>

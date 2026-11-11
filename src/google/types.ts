@@ -1,5 +1,6 @@
 /** Types partagés des services Google (connexion, Drive, sélecteur), réels ou simulés, et leurs erreurs. */
 import type { Lang } from '../i18n'
+import type { RelayInfo, StatsEvent } from '../lib/stats'
 
 /** Utilisateur connecté. */
 export interface SignedInUser {
@@ -213,6 +214,8 @@ export interface DriveService {
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   /** Contenu JSON d'un fichier, non vérifié. */
   readJson(id: string): Promise<unknown>
+  /** Contenu d'un document Google exporté en CSV (première feuille d'une Google Sheet). */
+  exportCsv(id: string): Promise<string>
   /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo), avec ses propriétés Collimo éventuelles. */
   uploadFile(folderId: string, name: string, data: Blob, mimeType: string, props?: CollimoFileProps): Promise<DriveFileInfo>
   /** Renomme un fichier, change ses propriétés Collimo et/ou le déplace (`addParents` / `removeParents`). */
@@ -245,9 +248,18 @@ export interface FolderPicker {
   pickFile(drive: DriveRef, lang: Lang, title: string, mimeType: string): Promise<{ id: string } | null>
 }
 
+/** Relais de statistiques (Apps Script de l'admin), appelé avec le jeton de l'utilisateur. */
+export interface StatsRelay {
+  /** Teste le relais et renvoie la Sheet qu'il remplit ; erreur `RelayError` sinon. */
+  ping(url: string): Promise<RelayInfo>
+  /** Envoie un événement, sans attendre ni signaler d'erreur. */
+  send(url: string, event: StatsEvent): void
+}
+
 /** Ensemble des services Google de l'app. */
 export interface Services {
   auth: AuthService
   drive: DriveService
   picker: FolderPicker
+  relay: StatsRelay
 }

@@ -3,6 +3,7 @@
  * Il ajoute des dispositions créées par les admins et peut masquer des dispositions intégrées.
  * Le fichier vient de Drive : tout est vérifié à la lecture, une disposition invalide est ignorée.
  */
+import { isRelayUrl } from '../../lib/stats'
 import { parsePath } from '../path'
 import { SHAPE_NAMES, type CellDef, type Decor, type EdgeCut, type EdgeKind, type ShapeName } from '../shapes'
 import type { LayoutDef, LayoutFamily } from '../types'
@@ -42,6 +43,38 @@ export interface CatalogueData {
   layouts: CustomLayout[]
   /** Dispositions intégrées masquées (les collages qui les utilisent restent lisibles). */
   hiddenBuiltins: string[]
+  /** Relais de statistiques activé par un admin : lu par tous les utilisateurs au démarrage. */
+  statsRelay?: StatsRelayConfig
+}
+
+/** Relais de statistiques enregistré dans le catalogue. */
+export interface StatsRelayConfig {
+  /** Adresse de l'application web Apps Script. */
+  url: string
+  /** Google Sheet remplie par le relais (lue par la page Statistiques). */
+  sheetId: string
+  sheetUrl: string
+  /** Version du relais au moment du test. */
+  version: number
+  /** Date d'activation (ISO 8601). */
+  enabledAt: string
+}
+
+/**
+ * Relit la configuration du relais de statistiques ; l'ignore si elle n'est pas valide.
+ * @param raw - valeur lue dans le fichier
+ * @returns la configuration, ou `undefined`
+ */
+function parseStatsRelay(raw: unknown): StatsRelayConfig | undefined {
+  if (!isObj(raw) || typeof raw.url !== 'string' || !isRelayUrl(raw.url) || typeof raw.sheetId !== 'string' || !raw.sheetId)
+    return undefined
+  return {
+    url: raw.url.trim(),
+    sheetId: raw.sheetId,
+    sheetUrl: typeof raw.sheetUrl === 'string' && /^https:\/\//.test(raw.sheetUrl) ? raw.sheetUrl : '',
+    version: typeof raw.version === 'number' ? raw.version : 0,
+    enabledAt: str(raw.enabledAt) ?? '',
+  }
 }
 
 /** Erreur levée quand le fichier de catalogue, ou une de ses parties, est illisible. */
@@ -248,7 +281,15 @@ export function parseCatalogue(raw: unknown): { data: CatalogueData; rejected: n
     ? [...new Set(raw.hiddenBuiltins.filter((x): x is string => typeof x === 'string' && /^p\d{2}-\d{2}$/.test(x)))]
     : []
   return {
-    data: { format: CATALOGUE_FORMAT, version: 1, updatedAt: str(raw.updatedAt), updatedBy: str(raw.updatedBy), layouts, hiddenBuiltins },
+    data: {
+      format: CATALOGUE_FORMAT,
+      version: 1,
+      updatedAt: str(raw.updatedAt),
+      updatedBy: str(raw.updatedBy),
+      layouts,
+      hiddenBuiltins,
+      statsRelay: parseStatsRelay(raw.statsRelay),
+    },
     rejected,
   }
 }
