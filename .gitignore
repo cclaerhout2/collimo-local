@@ -29,3 +29,6 @@ dist-electron
 release
 test-results
 dist-web
+
+# Claude Code local settings (may contain secrets)
+.claude/settings.local.json
