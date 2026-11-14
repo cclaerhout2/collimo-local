@@ -6,8 +6,13 @@
   --line: #3a3a44;
   --text: #f2f2f5;
   --muted: #a1a1ab;
-  --accent: #2dd4a7;
-  --accent-ink: #062b21;
+  /* Orange de l'icône Collimo (logos Marcel) ; texte orange un peu plus clair pour rester lisible sur fond sombre. */
+  --accent: #e4572e;
+  --accent-text: #f07a55;
+  --accent-ink: #1a0904;
+  --accent-hover: #ec6a44;
+  --accent-soft: #3a2019;
+  --accent-line: #7a3420;
   --danger: #f87171;
   --surface: #f5f5f7;
   --radius: 14px;
@@ -249,7 +254,7 @@ p {
 }
 
 .tagline {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -296,8 +301,8 @@ p {
 }
 
 .btn-primary:hover:not(:disabled) {
-  border-color: #5ee4c0;
-  background: #47dfb5;
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .btn-ghost {
@@ -426,7 +431,7 @@ p {
 
 .folder-tile .icon {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .folder-tile:hover {
@@ -491,8 +496,8 @@ p {
 }
 
 .location.active {
-  background: #1d2f2a;
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .location.recent {
@@ -538,7 +543,7 @@ p {
 }
 
 .location.active .location-tools {
-  background: #1d2f2a;
+  background: var(--accent-soft);
 }
 
 .location:hover .location-tools,
@@ -886,8 +891,8 @@ span.slideshow-img {
 
 .slideshow-select.selected {
   border-color: var(--accent);
-  background: #1d2f2a;
-  color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .slideshow-strip {
@@ -1088,9 +1093,9 @@ span.slideshow-img {
 }
 
 .queue-state.saved {
-  color: var(--accent);
-  background: #1d2f2a;
-  border-color: #2a5a4c;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 @media (max-width: 699px) {
@@ -1362,7 +1367,7 @@ span.slideshow-img {
 
 .split-targets .btn.active {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   opacity: 1;
 }
 
@@ -1635,7 +1640,7 @@ span.slideshow-img {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font: inherit;
   font-size: 0.88rem;
   text-decoration: underline;
@@ -1700,9 +1705,9 @@ span.slideshow-img {
 }
 
 .privacy-status.on {
-  border-color: #2a5a4c;
-  background: #1d2f2a;
-  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 /* Statistiques (admins) */
@@ -1819,7 +1824,7 @@ span.slideshow-img {
 }
 
 .stats-ok {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.9rem;
 }
 
@@ -1911,7 +1916,7 @@ span.slideshow-img {
 }
 
 .chart-bar.hover {
-  fill: #5ee4c0;
+  fill: var(--accent-hover);
 }
 
 .chart-hit {
@@ -1977,8 +1982,8 @@ span.slideshow-img {
 }
 
 .rank-tag.custom {
-  border-color: #2a5a4c;
-  color: var(--accent);
+  border-color: var(--accent-line);
+  color: var(--accent-text);
 }
 
 .rank-bar {
@@ -2144,7 +2149,7 @@ span.slideshow-img {
 
 .add-name .icon {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .add-actions {
@@ -2913,7 +2918,7 @@ button:focus-visible {
 }
 
 .progress {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -3003,7 +3008,7 @@ a.btn {
 }
 
 .drop-target {
-  fill: rgba(45, 212, 167, 0.18);
+  fill: rgba(228, 87, 46, 0.18);
   stroke: var(--accent);
   stroke-width: 3;
   stroke-dasharray: 8 5;
@@ -3075,7 +3080,7 @@ a.btn {
 
 .photo-action.active {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .photo-action.danger:not(:disabled) {
@@ -3305,7 +3310,7 @@ a.btn {
 
 .color-tool.active {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .color-custom {
@@ -3832,11 +3837,11 @@ a.btn {
   pointer-events: none;
 }
 .fc-edge {
-  stroke: rgba(45, 212, 167, 0.35);
+  stroke: rgba(228, 87, 46, 0.35);
   cursor: pointer;
 }
 .fc-edge:hover {
-  stroke: rgba(45, 212, 167, 0.7);
+  stroke: rgba(228, 87, 46, 0.7);
 }
 .fc-edge.selected {
   stroke: var(--accent);
@@ -3913,7 +3918,7 @@ a.btn {
   padding: 0.35rem 0.5rem;
 }
 .check-ok {
-  color: var(--accent);
+  color: var(--accent-text);
   margin: 0;
 }
 .issues {
