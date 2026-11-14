@@ -22,17 +22,16 @@ interface Props {
 }
 
 /**
- * Logo de Collimo : l'icône de la charte (dépôt « marcel », `logos/collimo.svg`), fond orange et trois
- * cases blanches, avec les coins arrondis des autres éléments de l'interface.
+ * Logo de Collimo, dessiné en SVG avec les couleurs du thème.
  * @returns le logo, masqué aux lecteurs d'écran
  */
 export function Logo() {
   return (
-    <svg className="logo" viewBox="0 0 256 256" aria-hidden="true">
-      <rect width="256" height="256" rx="56" fill="var(--accent)" />
-      <rect x="56" y="56" width="64" height="144" rx="12" fill="#fff" />
-      <rect x="136" y="56" width="64" height="64" rx="12" fill="#fff" />
-      <rect x="136" y="136" width="64" height="64" rx="12" fill="#fff" opacity=".6" />
+    <svg className="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="var(--ink)" />
+      <rect x="6" y="6" width="11" height="20" rx="3" fill="var(--accent)" />
+      <rect x="19" y="6" width="7" height="9" rx="3" fill="var(--surface)" />
+      <rect x="19" y="17" width="7" height="9" rx="3" fill="var(--surface)" />
     </svg>
   )
 }

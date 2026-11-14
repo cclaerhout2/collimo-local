@@ -13,7 +13,7 @@ type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 export const DEFAULT_EFFECTS: TextEffects = {
   stroke: { on: false, color: '#000000', width: 0.35 },
   shadow: { on: false, color: '#000000', blur: 0.4, distance: 0.3 },
-  glow: { on: false, color: '#e4572e', blur: 0.5 },
+  glow: { on: false, color: '#2dd4a7', blur: 0.5 },
   label: { on: false, color: '#ffffff', padding: 0.35, radius: 0.3 },
 }
 
@@ -121,7 +121,7 @@ export const TEXT_PRESETS: TextPreset[] = [
     id: 'neon',
     font: { family: 'Righteous', weight: 400 },
     color: '#ffffff',
-    effects: { glow: { on: true, color: '#e4572e', blur: 0.7 } },
+    effects: { glow: { on: true, color: '#2dd4a7', blur: 0.7 } },
   },
   {
     id: 'script',
@@ -138,8 +138,8 @@ export const TEXT_PRESETS: TextPreset[] = [
   {
     id: 'tag',
     font: { family: 'Montserrat', weight: 700 },
-    color: '#1a0904',
-    effects: { label: { on: true, color: '#e4572e', padding: 0.45, radius: 1 } },
+    color: '#062b21',
+    effects: { label: { on: true, color: '#2dd4a7', padding: 0.45, radius: 1 } },
   },
   {
     id: 'marker',

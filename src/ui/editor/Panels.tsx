@@ -141,7 +141,7 @@ export function BordersPanel({
           </label>
           {(value.outline ?? 0) > 0 && (
             <div className="outline-colors" role="radiogroup" aria-label={t('borders.outlineColor')}>
-              {['#ffffff', '#111111', '#e4572e', '#facc15', '#ef4444', '#3b82f6'].map((c) => (
+              {['#ffffff', '#111111', '#2dd4a7', '#facc15', '#ef4444', '#3b82f6'].map((c) => (
                 <button
                   key={c}
                   type="button"
@@ -175,7 +175,7 @@ const SWATCHES = [
   '#bfdbfe',
   '#bbf7d0',
   '#ddd6fe',
-  '#e4572e',
+  '#2dd4a7',
 ]
 
 /**
