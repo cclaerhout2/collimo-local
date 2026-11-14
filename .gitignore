@@ -29,3 +29,6 @@ dist-ssr
 # Configuration locale (install.bat) : jamais sur GitHub
 .env.production
 .firebaserc
+
+# Claude Code local settings (may contain secrets)
+.claude/settings.local.json
