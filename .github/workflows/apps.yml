@@ -254,8 +254,7 @@ jobs:
             node tools/e2e-android.mjs || (adb logcat -d | grep -iE "collimo|chromium|AndroidRuntime|FATAL|crash|lowmemory|am_kill|WebView" | tail -150; exit 1)
             adb install -r release/Collimo-*-android.apk
             adb shell am start -W -n fr.collimo.app/fr.collimo.app.MainActivity
-            sleep 15
-            adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb pull /sdcard/ui.xml test-results/android-finale.xml
+            for i in $(seq 18); do sleep 5; adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb pull /sdcard/ui.xml test-results/android-finale.xml > /dev/null && grep -Eq "Choisir un dossier|Choose a folder" test-results/android-finale.xml && break; done
             grep -Eq "Choisir un dossier|Choose a folder" test-results/android-finale.xml
             adb exec-out screencap -p > test-results/android-finale.png
       - name: Captures d'écran des tests (en cas d'échec)
