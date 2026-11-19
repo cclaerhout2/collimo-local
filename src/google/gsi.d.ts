@@ -33,7 +33,7 @@ declare namespace google.accounts.oauth2 {
 declare namespace google.picker {
   const ViewId: { FOLDERS: string; DOCS_IMAGES: string; DOCS: string }
   const Action: { PICKED: string; CANCEL: string }
-  const Feature: { SUPPORT_DRIVES: string }
+  const Feature: { SUPPORT_DRIVES: string; MULTISELECT_ENABLED: string }
   interface PickedDoc {
     id: string
     name: string
@@ -59,6 +59,7 @@ declare namespace google.picker {
     setLocale(locale: string): PickerBuilder
     setTitle(title: string): PickerBuilder
     enableFeature(feature: string): PickerBuilder
+    setMaxItems(max: number): PickerBuilder
     setCallback(cb: (data: ResponseObject) => void): PickerBuilder
     build(): { setVisible(v: boolean): void }
   }

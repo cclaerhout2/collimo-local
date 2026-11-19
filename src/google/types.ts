@@ -244,6 +244,8 @@ export interface FolderPicker {
   pickFolder(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string; name: string } | null>
   /** Ouvre le sélecteur de photos sur le Drive donné ; null si l'utilisateur annule. */
   pickImage(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string } | null>
+  /** Sélecteur de plusieurs photos (au plus `max`) ; null si l'utilisateur annule. */
+  pickImages(drive: DriveRef, lang: Lang, title: string, max: number): Promise<{ id: string }[] | null>
   /** Sélecteur sur un fichier précis (donne à Collimo le droit de le modifier) ; null si annulé. */
   pickFile(drive: DriveRef, lang: Lang, title: string, mimeType: string): Promise<{ id: string } | null>
 }

@@ -3981,3 +3981,89 @@ a.btn {
     padding: 0.4rem 0.6rem;
   }
 }
+
+/* Éditeur : ajout de photos au collage en cours */
+.add-photos-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+@media (max-width: 480px) {
+  .add-photos-button span {
+    display: none;
+  }
+}
+
+.add-photos-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.add-photos-head h2 {
+  margin-bottom: 0;
+}
+
+.add-photos .pill {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.add-photos-sources {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.add-photos-folder {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.add-photos-grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .add-photos-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+}
+
+.add-photos-grid .badge {
+  top: 4px;
+  right: 4px;
+  min-width: 22px;
+  height: 22px;
+  font-size: 0.78rem;
+}
+
+.add-photos-grid .tile-note {
+  left: 4px;
+  bottom: 4px;
+}
+
+.tile.in-collage {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.add-photos-hint {
+  margin-bottom: 0.5rem;
+}

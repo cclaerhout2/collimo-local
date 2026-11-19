@@ -435,6 +435,14 @@ export function createMockServices(): Services {
         const p = f?.photos.filter((x) => x.supported).at(-1)
         return delay(p ? { id: p.id } : null, 300)
       },
+      async pickImages(drive, _lang, _title, max) {
+        // Démo : les deux dernières photos du dernier dossier de ce Drive qui en a.
+        const f = Object.values(folders)
+          .filter((x) => x.driveId === drive.id && x.photos.length > 0)
+          .at(-1)
+        const picked = (f?.photos.filter((x) => x.supported) ?? []).slice(-2).slice(0, max)
+        return delay(picked.length ? picked.map((p) => ({ id: p.id })) : null, 300)
+      },
       async pickFolder(drive) {
         // Le vrai sélecteur Google est une fenêtre ; ici on choisit le premier dossier du Drive.
         const match = Object.values(folders).find((f) => f.driveId === drive.id && f.parent !== null)

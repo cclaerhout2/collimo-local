@@ -16,13 +16,15 @@ import { createLimiter, fitWithin, loadImage, type LoadedImage } from '../../col
 import { ratioValue } from '../../collage/ratios'
 import { duplicateOverlay, newIcon, newImage, newText, type TextPreset } from '../../collage/overlays'
 import { DEFAULT_CROP, type Adjustments, type CollageDoc, type Crop, type Layout, type Overlay } from '../../collage/types'
-import type { Location, Services } from '../../google/types'
+import { MAX_PHOTOS } from '../../config'
+import type { Location, Photo, Services } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
 import { ErrorBanner } from '../ErrorBanner'
 import { CollageCanvas } from './CollageCanvas'
 import { ExportSheet } from './ExportSheet'
 import { InteractionLayer } from './InteractionLayer'
+import { AddPhotosSheet } from './AddPhotosSheet'
 import { AdjustPanel, FilterList } from './FiltersPanel'
 import { BackgroundPanel, BordersPanel, LayoutPanel, RatioPanel } from './Panels'
 import { CropPanel, PhotoMenu, type PhotoAction } from './PhotoMenu'
@@ -137,6 +139,32 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
 }
 
 /**
+ * Ajoute des photos à la fin d'un collage, avec la disposition de la même famille pour le nouveau nombre de photos.
+ * Les photos déjà présentes gardent leur cadrage, leurs masques et leurs réglages ; les doublons sont ignorés.
+ * @param doc - collage actuel
+ * @param family - famille de la disposition actuelle
+ * @param added - photos à ajouter, dans l'ordre
+ * @param max - nombre maximal de photos d'un collage
+ * @returns le collage avec les photos ajoutées (inchangé s'il n'y a rien à ajouter)
+ */
+export function withAddedPhotos(doc: CollageDoc, family: Layout['family'], added: readonly Photo[], max = MAX_PHOTOS): CollageDoc {
+  const present = new Set(doc.photos.map((p) => p.id))
+  const fresh: Photo[] = []
+  for (const p of added) {
+    if (fresh.length >= max - doc.photos.length) break
+    if (!p.supported || present.has(p.id)) continue
+    present.add(p.id)
+    fresh.push(p)
+  }
+  if (!fresh.length) return doc
+  const photos = [
+    ...doc.photos,
+    ...fresh.map((p) => ({ id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } })),
+  ]
+  return { ...doc, photos, layoutId: nearestLayout(photos.length, family).id, split: undefined }
+}
+
+/**
  * Écran d'édition d'un collage.
  *
  * Les photos sont chargées réduites (trois à la fois) pour l'aperçu ; l'export relit les originaux
@@ -217,6 +245,7 @@ export function EditorScreen({
     }
   }
   const [exporting, setExporting] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [version, setVersion] = useState(0)
   const images = useRef(new Map<string, LoadedImage>())
   const pending = useRef(new Set<string>())
@@ -731,6 +760,31 @@ export function EditorScreen({
                 ? t('editor.selectHint')
                 : ''}
         </span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-small add-photos-button"
+          onClick={() => {
+            select(null)
+            setAdding(true)
+          }}
+          disabled={doc.photos.length >= MAX_PHOTOS}
+          title={doc.photos.length >= MAX_PHOTOS ? t('editor.addPhotosFull', { max: MAX_PHOTOS }) : t('editor.addPhotosTitle')}
+          aria-label={t('editor.addPhotosTitle')}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>{t('editor.addPhotos')}</span>
+        </button>
         <div className="history-buttons">
           <button
             type="button"
@@ -1084,6 +1138,19 @@ export function EditorScreen({
         )}
       </div>
 
+      {adding && (
+        <AddPhotosSheet
+          services={services}
+          location={location}
+          presentIds={doc.photos.map((p) => p.id)}
+          room={MAX_PHOTOS - doc.photos.length}
+          onClose={() => setAdding(false)}
+          onAdd={(added) => {
+            setAdding(false)
+            setDoc((d) => withAddedPhotos(d, layout.family, added))
+          }}
+        />
+      )}
       {exporting && (
         <ExportSheet
           drive={services.drive}
