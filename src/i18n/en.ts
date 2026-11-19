@@ -318,6 +318,8 @@ export const en: Record<MessageKey, string> = {
   'editor.addPhotosTitle': 'Add photos to the collage',
   'editor.addPhotosFull': 'The collage already has {max} photos, the maximum.',
   'addPhotos.title': 'Add photos',
+  'addPhotos.replaceTitle': 'Replace the photo',
+  'addPhotos.replaceHint': 'Tap the photo that will take its place.',
   'addPhotos.count': '{count} / {max}',
   'addPhotos.thisFolder': 'Folder “{name}”',
   'addPhotos.otherFolder': 'Other Drive folder…',

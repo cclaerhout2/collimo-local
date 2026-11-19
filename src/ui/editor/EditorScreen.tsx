@@ -246,6 +246,8 @@ export function EditorScreen({
   }
   const [exporting, setExporting] = useState(false)
   const [adding, setAdding] = useState(false)
+  /** Case dont la photo est en cours de remplacement (panneau de choix ouvert). */
+  const [replacing, setReplacing] = useState<number | null>(null)
   const [version, setVersion] = useState(0)
   const images = useRef(new Map<string, LoadedImage>())
   const pending = useRef(new Set<string>())
@@ -601,10 +603,10 @@ export function EditorScreen({
    *
    * « Pivoter » arrondit l'angle au quart de tour puis ajoute 90° ; « Supprimer » choisit une disposition
    * pour une photo de moins.
+   * « Remplacer » ouvre le panneau de choix sur le dossier des photos.
    * @param action - action choisie
-   * @returns une promesse résolue une fois l'action faite (« Remplacer » attend le sélecteur Drive)
    */
-  async function onAction(action: PhotoAction) {
+  function onAction(action: PhotoAction) {
     if (selected === null) return
     const photo = doc.photos[selected]
     const s = selectedSizes()
@@ -624,26 +626,7 @@ export function EditorScreen({
       const next = nearestLayout(doc.photos.length - 1, layout.family)
       setDoc((d) => ({ ...d, photos: d.photos.filter((_, k) => k !== selected), layoutId: next.id, split: undefined }))
       select(null)
-    } else if (action === 'replace') {
-      try {
-        const picked = await services.picker.pickImage(location.drive, lang, t('photo.replaceTitle'))
-        if (!picked) return
-        const p = await services.drive.getPhoto(picked.id)
-        if (!p.supported) {
-          setNotice({ key: 'photo.unsupported', vars: { type: p.mimeType.replace('image/', '').toUpperCase() } })
-          return
-        }
-        const index = selected
-        setDoc((d) => ({
-          ...d,
-          photos: d.photos.map((x, k) =>
-            k === index ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } } : x,
-          ),
-        }))
-      } catch (e) {
-        setNotice(toUiError(e))
-      }
-    }
+    } else if (action === 'replace') setReplacing(selected)
   }
 
   void version // relit l'état des chargements à chaque photo arrivée
@@ -1027,12 +1010,7 @@ export function EditorScreen({
             </div>
           ) : (
             <div className="panel">
-              <PhotoMenu
-                canDelete={doc.photos.length > 1}
-                swapPick={swapPick}
-                onAction={(a) => void onAction(a)}
-                onDone={() => select(null)}
-              />
+              <PhotoMenu canDelete={doc.photos.length > 1} swapPick={swapPick} onAction={onAction} onDone={() => select(null)} />
             </div>
           )
         ) : (
@@ -1148,6 +1126,29 @@ export function EditorScreen({
           onAdd={(added) => {
             setAdding(false)
             setDoc((d) => withAddedPhotos(d, layout.family, added))
+          }}
+        />
+      )}
+      {replacing !== null && (
+        <AddPhotosSheet
+          mode="replace"
+          services={services}
+          location={location}
+          presentIds={doc.photos.map((p) => p.id)}
+          room={1}
+          onClose={() => setReplacing(null)}
+          onAdd={([p]) => {
+            const index = replacing
+            setReplacing(null)
+            if (!p) return
+            setDoc((d) => ({
+              ...d,
+              photos: d.photos.map((x, k) =>
+                k === index
+                  ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } }
+                  : x,
+              ),
+            }))
           }}
         />
       )}

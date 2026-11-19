@@ -331,6 +331,8 @@ export const fr = {
   'editor.addPhotosTitle': 'Ajouter des photos au collage',
   'editor.addPhotosFull': 'Le collage a déjà {max} photos, le maximum.',
   'addPhotos.title': 'Ajouter des photos',
+  'addPhotos.replaceTitle': 'Remplacer la photo',
+  'addPhotos.replaceHint': 'Touchez la photo qui prendra sa place.',
   'addPhotos.count': '{count} / {max}',
   'addPhotos.thisFolder': 'Dossier « {name} »',
   'addPhotos.otherFolder': 'Autre dossier Drive…',

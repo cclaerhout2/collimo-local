@@ -1,6 +1,7 @@
 /**
- * Panneau « Ajouter des photos » de l'éditeur : photos du dossier ouvert, ou d'un autre dossier
- * choisi avec le sélecteur de Google Drive, sans quitter le collage en cours.
+ * Panneau de choix de photos de l'éditeur, pour ajouter des photos au collage ou en remplacer une :
+ * photos du dossier ouvert, ou d'un autre dossier choisi avec le sélecteur de Google Drive,
+ * sans quitter le collage en cours.
  */
 import { useEffect, useState } from 'react'
 import type { Location, Photo, Services } from '../../google/types'
@@ -11,6 +12,8 @@ import { Thumbnail } from '../Thumbnail'
 
 /** Propriétés de {@link AddPhotosSheet}. */
 interface Props {
+  /** Ajouter des photos (choix multiple), ou remplacer la photo sélectionnée (une photo, choisie d'un toucher). */
+  mode?: 'add' | 'replace'
   /** Services Google (Drive et sélecteur). */
   services: Services
   /** Dossier ouvert : ses photos sont proposées en premier. */
@@ -19,7 +22,7 @@ interface Props {
   presentIds: readonly string[]
   /** Nombre de photos qu'on peut encore ajouter. */
   room: number
-  /** Ajoute les photos choisies ; l'éditeur ferme alors le panneau. */
+  /** Ajoute les photos choisies (ou la photo de remplacement) ; l'éditeur ferme alors le panneau. */
   onAdd: (photos: Photo[]) => void
   /** Ferme le panneau sans rien ajouter. */
   onClose: () => void
@@ -38,10 +41,11 @@ export function togglePick(picked: readonly string[], id: string, room: number):
 }
 
 /**
- * Panneau d'ajout de photos au collage.
+ * Panneau d'ajout de photos au collage, ou de remplacement d'une photo.
  * @returns le panneau
  */
-export function AddPhotosSheet({ services, location, presentIds, room, onAdd, onClose }: Props) {
+export function AddPhotosSheet({ mode = 'add', services, location, presentIds, room, onAdd, onClose }: Props) {
+  const replacing = mode === 'replace'
   const { t, lang } = useI18n()
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
@@ -90,7 +94,9 @@ export function AddPhotosSheet({ services, location, presentIds, room, onAdd, on
   async function pickElsewhere() {
     setProblem(null)
     try {
-      const chosen = await services.picker.pickImages(location.drive, lang, t('addPhotos.pickerTitle', { max: room }), room)
+      const chosen = replacing
+        ? await services.picker.pickImage(location.drive, lang, t('photo.replaceTitle')).then((c) => (c ? [c] : null))
+        : await services.picker.pickImages(location.drive, lang, t('addPhotos.pickerTitle', { max: room }), room)
       if (!chosen?.length) return
       setBusy(true)
       const list = await Promise.all(chosen.map((c) => services.drive.getPhoto(c.id)))
@@ -112,7 +118,7 @@ export function AddPhotosSheet({ services, location, presentIds, room, onAdd, on
     }
   }
 
-  const full = picked.length >= room
+  const full = !replacing && picked.length >= room
 
   return (
     <div className="sheet-backdrop" role="presentation" onClick={busy ? undefined : onClose}>
@@ -124,8 +130,12 @@ export function AddPhotosSheet({ services, location, presentIds, room, onAdd, on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="add-photos-head">
-          <h2 id="add-photos-title">{t('addPhotos.title')}</h2>
-          <span className="pill">{t('addPhotos.count', { count: presentIds.length + picked.length, max: presentIds.length + room })}</span>
+          <h2 id="add-photos-title">{t(replacing ? 'addPhotos.replaceTitle' : 'addPhotos.title')}</h2>
+          {!replacing && (
+            <span className="pill">
+              {t('addPhotos.count', { count: presentIds.length + picked.length, max: presentIds.length + room })}
+            </span>
+          )}
         </div>
         <div className="add-photos-sources">
           <span className="add-photos-folder">{t('addPhotos.thisFolder', { name: location.folder.name })}</span>
@@ -156,7 +166,11 @@ export function AddPhotosSheet({ services, location, presentIds, room, onAdd, on
                           ? p.name
                           : t('gallery.unsupported', { type: p.mimeType.replace('image/', '').toUpperCase() })
                     }
-                    onClick={() => !inCollage && p.supported && setPicked((v) => togglePick(v, p.id, room))}
+                    onClick={() => {
+                      if (inCollage || !p.supported) return
+                      if (replacing) onAdd([p])
+                      else setPicked((v) => togglePick(v, p.id, room))
+                    }}
                   >
                     <Thumbnail key={p.id} photo={p} services={services} />
                     {order !== -1 && <span className="badge">{order + 1}</span>}
@@ -169,15 +183,18 @@ export function AddPhotosSheet({ services, location, presentIds, room, onAdd, on
         )}
 
         {full && room > 0 && <p className="muted add-photos-hint">{t('addPhotos.full')}</p>}
-        {room === 0 && <p className="muted add-photos-hint">{t('addPhotos.noRoom')}</p>}
+        {replacing && photos && photos.length > 0 && <p className="muted add-photos-hint">{t('addPhotos.replaceHint')}</p>}
+        {!replacing && room === 0 && <p className="muted add-photos-hint">{t('addPhotos.noRoom')}</p>}
         {problem && <ErrorBanner error={problem} />}
         <div className="actions">
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
             {t('addPhotos.cancel')}
           </button>
-          <button type="button" className="btn btn-primary" onClick={addPicked} disabled={busy || picked.length === 0}>
-            {picked.length ? t('addPhotos.add', { count: picked.length }) : t('addPhotos.addNone')}
-          </button>
+          {!replacing && (
+            <button type="button" className="btn btn-primary" onClick={addPicked} disabled={busy || picked.length === 0}>
+              {picked.length ? t('addPhotos.add', { count: picked.length }) : t('addPhotos.addNone')}
+            </button>
+          )}
         </div>
       </div>
     </div>
