@@ -272,6 +272,10 @@ export function createWebBridge(store: AlbumStore = indexedDbStore(), pick = cho
       await importFiles(ALBUM, files)
       return folder(ALBUM)
     },
+    async pickFiles() {
+      const files = (await pick(IMAGE_ACCEPT, true)).filter((f) => mimeOf(f.name, f.type).startsWith('image/'))
+      return (await importFiles(IMPORTS, files)).map(describe)
+    },
     async pickFile({ filter }: { title: string; filter: PickFilter }) {
       const [file] = await pick(filter === 'json' ? 'application/json,.json' : IMAGE_ACCEPT, false)
       if (!file) return null

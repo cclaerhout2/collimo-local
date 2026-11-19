@@ -5,6 +5,7 @@ import { createGoogleAuth } from './auth'
 import { createDriveClient } from './drive'
 import { createMockServices } from './mock'
 import { createGooglePicker } from './picker'
+import { pingRelay, sendEvent } from '../lib/stats'
 import type { Services } from './types'
 
 /**
@@ -18,5 +19,22 @@ export function createServices(config: AppConfig): Services {
   if (config.mock) return createMockServices()
   const auth = createGoogleAuth(config)
   const getToken = () => auth.getToken()
-  return { kind: 'google', auth, drive: createDriveClient(getToken), picker: createGooglePicker(config, getToken) }
+  return {
+    kind: 'google',
+    auth,
+    drive: createDriveClient(getToken),
+    picker: createGooglePicker(config, getToken),
+    relay: {
+      ping: (url) => pingRelay(url, getToken()),
+      send(url, event) {
+        let token: string
+        try {
+          token = getToken()
+        } catch {
+          return // Session expirée : l'événement est perdu, sans gêner l'utilisateur.
+        }
+        sendEvent(url, token, event)
+      },
+    },
+  }
 }

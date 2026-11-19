@@ -16,6 +16,7 @@ export const CHANNELS = {
   userInfo: 'collimo:user-info',
   pickFolder: 'collimo:pick-folder',
   pickFile: 'collimo:pick-file',
+  pickFiles: 'collimo:pick-files',
   folderInfo: 'collimo:folder-info',
   listImages: 'collimo:list-images',
   listFiles: 'collimo:list-files',
@@ -85,6 +86,8 @@ export interface DesktopBridge {
   pickFolder(opts: { title: string; defaultPath?: string }): Promise<LocalFolder | null>
   /** Sélecteur de fichier de Windows ; null si l'utilisateur annule. */
   pickFile(opts: { title: string; defaultPath?: string; filter: PickFilter }): Promise<LocalFile | null>
+  /** Sélecteur de plusieurs images ; liste vide si l'utilisateur annule (absent : une seule à la fois, par `pickFile`). */
+  pickFiles?(opts: { title: string; defaultPath?: string }): Promise<LocalFile[]>
   /** Un dossier ; erreur s'il n'existe pas ou n'est pas autorisé. */
   folderInfo(path: string): Promise<LocalFolder>
   /** Images directement dans un dossier, dans l'ordre naturel des noms. */

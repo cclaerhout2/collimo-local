@@ -16,6 +16,7 @@ import { createServices } from './google/services'
 import type { DriveRef, FolderPath, Location, OpenFolder, Photo, Shortcut, SignedInUser, UserSettings } from './google/types'
 import { useI18n, type Lang } from './i18n'
 import { allowedDomains, isAllowedEmail, toUiError, type UiError } from './lib/errors'
+import { currentDevice, shouldSendSignin, type TrackedEvent } from './lib/stats'
 import { clearDraft, draftHasUnsaved, loadDraft, saveDraft, type Draft } from './lib/draft'
 import { FOLDER_PARAM, parseFolderParam, type LinkTarget } from './lib/folderLink'
 import {
@@ -31,6 +32,8 @@ import {
 import { AddLocationDialog } from './ui/AddLocationDialog'
 import { EditorScreen } from './ui/editor/EditorScreen'
 import { SplitScreen } from './ui/SplitScreen'
+import { PrivacyScreen } from './ui/PrivacyScreen'
+import { StatsScreen } from './ui/StatsScreen'
 
 /** L'usine (admins seulement) n'est chargée qu'à l'ouverture. */
 const FactoryScreen = lazy(() => import('./ui/factory/FactoryScreen').then((m) => ({ default: m.FactoryScreen })))
@@ -50,6 +53,8 @@ type Phase =
   | { name: 'editor'; doc: CollageDoc; key: number }
   | { name: 'split'; photos: Photo[] }
   | { name: 'factory' }
+  | { name: 'stats' }
+  | { name: 'privacy'; back: 'signin' | 'gallery' }
 
 /**
  * Lit le dossier demandé dans l'adresse (`?folder=…`).
@@ -144,6 +149,25 @@ export default function App() {
     setCatalogue(c)
     setCustomCatalogue(c?.data ?? null)
   }, [])
+
+  /** Adresse du relais de statistiques, si un admin l'a activé. */
+  const relayUrl = desktop ? undefined : catalogue?.data.statsRelay?.url
+
+  /**
+   * Envoie un événement de statistiques, si le relais est activé (sans jamais gêner l'utilisateur).
+   * @param event - événement, sans l'appareil
+   */
+  const track = useCallback(
+    (event: TrackedEvent) => {
+      if (relayUrl) services.relay.send(relayUrl, { ...event, device: currentDevice() })
+    },
+    [relayUrl, services],
+  )
+
+  // Connexion du jour, une fois par compte et par appareil, dès que le relais est connu.
+  useEffect(() => {
+    if (user && relayUrl && shouldSendSignin(user.email)) track({ event: 'signin' })
+  }, [user, relayUrl, track])
 
   /**
    * Affiche une erreur quelconque dans le bandeau, traduite en message pour l'utilisateur.
@@ -589,6 +613,8 @@ export default function App() {
         onLangChange={changeLang}
         onOpenFactory={catalogue?.isAdmin && open && phase.name === 'gallery' ? () => setPhase({ name: 'factory' }) : undefined}
         onChooseCatalogue={desktop && !album && user && phase.name === 'gallery' ? () => void chooseCatalogue() : undefined}
+        onOpenStats={catalogue?.isAdmin && !desktop && phase.name === 'gallery' ? () => setPhase({ name: 'stats' }) : undefined}
+        onOpenPrivacy={user && !desktop && phase.name === 'gallery' ? () => setPhase({ name: 'privacy', back: 'gallery' }) : undefined}
         onSignOut={user && !desktop ? signOut : undefined}
       />
       {config.mock && <div className="banner banner-info">{t('mock.banner')}</div>}
@@ -631,7 +657,13 @@ export default function App() {
       )}
 
       {phase.name === 'signin' && (
-        <SignInScreen busy={busy} disabled={!!configError} onSignIn={() => void signIn()} googleMark={!desktop} />
+        <SignInScreen
+          busy={busy}
+          disabled={!!configError}
+          onSignIn={() => void signIn()}
+          onPrivacy={desktop ? undefined : () => setPhase({ name: 'privacy', back: 'signin' })}
+          googleMark={!desktop}
+        />
       )}
 
       {phase.name === 'loading' && (
@@ -723,6 +755,24 @@ export default function App() {
         </Suspense>
       )}
 
+      {phase.name === 'stats' && catalogue && user && (
+        <StatsScreen
+          services={services}
+          catalogue={catalogue}
+          userEmail={user.email}
+          onCatalogueChange={applyCatalogue}
+          onBack={() => setPhase({ name: 'gallery' })}
+          onError={handleError}
+        />
+      )}
+
+      {phase.name === 'privacy' && (
+        <PrivacyScreen
+          stats={!user ? 'unknown' : catalogue?.data.statsRelay ? 'on' : 'off'}
+          onBack={() => setPhase(phase.back === 'signin' ? { name: 'signin' } : { name: 'gallery' })}
+        />
+      )}
+
       {phase.name === 'split' && (
         <SplitScreen
           services={services}
@@ -756,6 +806,7 @@ export default function App() {
               : undefined
           }
           onDocChange={onEditorDocChange}
+          onTrack={track}
           onSaved={() => {
             if (!queue) dropDraft()
           }}

@@ -312,6 +312,8 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
     drive: {
       currentUser: () => call(() => bridge.userInfo()),
       listSharedDrives: async () => [],
+      // Pas de Google Sheet sur l'appareil (statistiques d'usage : version Google Drive seulement).
+      exportCsv: () => Promise.reject(new Error('Indisponible sur l’appareil')),
       async getFolder(id) {
         const f = await call(() => bridge.folderInfo(id))
         return { id: f.path, name: f.name, driveId: null, canAddChildren: f.writable }
@@ -391,6 +393,11 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
         toJsonFile(await call(() => bridge.writeNewFile(parentId, name, jsonBytes(data))), urls),
       updateJsonFile: async (id, data) => toJsonFile(await call(() => bridge.replaceFile(id, jsonBytes(data))), urls),
     },
+    // Pas de statistiques d'usage : rien ne quitte l'appareil.
+    relay: {
+      ping: () => Promise.reject(new Error('Indisponible sur l’appareil')),
+      send: () => {},
+    },
     picker: {
       async pickFolder(_drive, _lang, title) {
         const f = await call(() => bridge.pickFolder({ title }))
@@ -399,6 +406,14 @@ export function createDesktopServices(bridge: DesktopBridge): Services {
       async pickImage(_drive, _lang, title) {
         const f = await call(() => bridge.pickFile({ title, filter: 'image' }))
         return f ? { id: f.path } : null
+      },
+      async pickImages(_drive, _lang, title, max) {
+        if (!bridge.pickFiles) {
+          const f = await call(() => bridge.pickFile({ title, filter: 'image' }))
+          return f ? [{ id: f.path }] : null
+        }
+        const files = await call(() => bridge.pickFiles!({ title }))
+        return files.length ? files.slice(0, max).map((f) => ({ id: f.path })) : null
       },
       async pickFile(_drive, _lang, title) {
         const f = await call(() => bridge.pickFile({ title, filter: 'json' }))

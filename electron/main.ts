@@ -6,7 +6,8 @@
  * Variables d'environnement, pour le développement et les tests automatiques :
  * - `COLLIMO_DEV_URL` : charge la page depuis le serveur de développement Vite (jamais dans l'app installée) ;
  * - `COLLIMO_USER_DATA` : dossier des données de l'app (réglages, catalogue) ;
- * - `COLLIMO_TEST_PICK_FOLDER`, `COLLIMO_TEST_PICK_FILE` : réponses des sélecteurs, sans fenêtre.
+ * - `COLLIMO_TEST_PICK_FOLDER`, `COLLIMO_TEST_PICK_FILE`, `COLLIMO_TEST_PICK_FILES` (chemins séparés par le
+ *   séparateur du PATH) : réponses des sélecteurs, sans fenêtre.
  */
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, session, shell, type IpcMainInvokeEvent } from 'electron'
 import { appendFileSync, readFileSync, rmSync, statSync, promises as fs } from 'node:fs'
@@ -31,6 +32,9 @@ import {
   writeJsonFile,
   writeNewFile,
 } from './files'
+
+/** Extensions proposées par les sélecteurs d'images. */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'heic', 'heif']
 
 /** Journal du démarrage et des erreurs inattendues, pour le diagnostic sur un PC (dossier temporaire de l'utilisateur). */
 const ERROR_LOG = path.join(os.tmpdir(), 'collimo-erreurs.log')
@@ -216,13 +220,31 @@ function registerIpc(): void {
     return info
   })
 
+  handle(CHANNELS.pickFiles, async (e, opts: { title: string; defaultPath?: string }): Promise<LocalFile[]> => {
+    let files = process.env.COLLIMO_TEST_PICK_FILES?.split(path.delimiter).filter(Boolean)
+    if (!files) {
+      const r = await dialog.showOpenDialog(ownerOf(e)!, {
+        title: opts.title,
+        message: opts.title,
+        defaultPath: opts.defaultPath ?? app.getPath('pictures'),
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Images', extensions: IMAGE_EXTENSIONS }],
+      })
+      if (r.canceled) return []
+      files = r.filePaths
+    }
+    const infos: LocalFile[] = []
+    for (const file of files) {
+      infos.push(await fileInfo(file))
+      await allow(file)
+    }
+    return infos
+  })
+
   handle(CHANNELS.pickFile, async (e, opts: { title: string; defaultPath?: string; filter: PickFilter }): Promise<LocalFile | null> => {
     let file = process.env.COLLIMO_TEST_PICK_FILE
     if (!file) {
-      const filters =
-        opts.filter === 'json'
-          ? [{ name: 'JSON', extensions: ['json'] }]
-          : [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'heic', 'heif'] }]
+      const filters = opts.filter === 'json' ? [{ name: 'JSON', extensions: ['json'] }] : [{ name: 'Images', extensions: IMAGE_EXTENSIONS }]
       const r = await dialog.showOpenDialog(ownerOf(e)!, {
         title: opts.title,
         message: opts.title,

@@ -45,23 +45,37 @@ export function createGooglePicker(config: AppConfig, getToken: () => string): F
    * @returns l'élément choisi, ou `null` si l'utilisateur annule
    */
   async function open(drive: DriveRef, lang: Lang, title: string, makeView: () => google.picker.DocsView) {
+    const picked = await openMany(drive, lang, title, makeView, 1)
+    return picked?.[0] ?? null
+  }
+
+  /**
+   * Ouvre le Picker et attend le choix de l'utilisateur, avec un ou plusieurs éléments.
+   * @param drive - Drive où ouvrir le sélecteur (Mon Drive si pas d'identifiant)
+   * @param lang - langue de l'interface du Picker
+   * @param title - titre de la fenêtre
+   * @param makeView - crée la vue Picker, une fois le module chargé
+   * @param max - nombre maximal d'éléments à choisir (1 = choix simple)
+   * @returns les éléments choisis, ou `null` si l'utilisateur annule
+   */
+  async function openMany(drive: DriveRef, lang: Lang, title: string, makeView: () => google.picker.DocsView, max: number) {
     await loadPicker()
     const view = makeView()
     const token = getToken()
     if (drive.id) view.setEnableDrives(true).setParent(drive.id)
     else view.setParent('root')
-    return new Promise<{ id: string; name: string } | null>((resolve) => {
-      new google.picker.PickerBuilder()
-        .addView(view)
-        .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+    return new Promise<{ id: string; name: string }[] | null>((resolve) => {
+      let builder = new google.picker.PickerBuilder().addView(view).enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+      if (max > 1) builder = builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED).setMaxItems(max)
+      builder
         .setOAuthToken(token)
         .setDeveloperKey(config.apiKey)
         .setAppId(config.appId)
         .setLocale(lang)
         .setTitle(title)
         .setCallback((data) => {
-          if (data.action === google.picker.Action.PICKED && data.docs?.[0]) {
-            resolve({ id: data.docs[0].id, name: data.docs[0].name })
+          if (data.action === google.picker.Action.PICKED && data.docs?.length) {
+            resolve(data.docs.slice(0, max).map((d) => ({ id: d.id, name: d.name })))
           } else if (data.action === google.picker.Action.CANCEL) {
             resolve(null)
           }
@@ -83,5 +97,7 @@ export function createGooglePicker(config: AppConfig, getToken: () => string): F
       open(drive, lang, title, () => new google.picker.DocsView(google.picker.ViewId.DOCS).setIncludeFolders(false).setMimeTypes(mimeType)),
     pickImage: (drive, lang, title) =>
       open(drive, lang, title, () => new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true)),
+    pickImages: (drive, lang, title, max) =>
+      openMany(drive, lang, title, () => new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES).setIncludeFolders(true), max),
   }
 }

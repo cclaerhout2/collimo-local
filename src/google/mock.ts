@@ -3,6 +3,7 @@
  * Aucune donnée réelle : les « photos » sont des images générées.
  */
 import { COLLIMO_FOLDER_NAME } from '../config'
+import { RELAY_VERSION, RelayError, type StatsEvent } from '../lib/stats'
 import { DriveApiError, FOLDER_MIME } from './drive'
 import type { DriveFileInfo, DriveJsonFile, DriveRef, FolderInfo, Photo, Services, UserSettings } from './types'
 
@@ -132,6 +133,84 @@ async function fakeOriginal(id: string): Promise<Blob> {
   return canvas.convertToBlob({ type: 'image/png' })
 }
 
+/** Identifiant de la Sheet de statistiques simulée. */
+const MOCK_SHEET_ID = 'mock-stats'
+/** En-tête de la Sheet de statistiques (mêmes colonnes que le relais). */
+const STATS_HEAD =
+  'date,utilisateur,evenement,appareil,photos,disposition,source_disposition,format,taille,ratio,zones_masquees,textes,stickers,filtre,serie,duree_ms,erreur'
+
+/**
+ * Ligne CSV d'un événement simulé.
+ * @param date - date de l'événement
+ * @param user - pseudonyme
+ * @param e - événement
+ * @returns la ligne
+ */
+function statsRow(date: Date, user: string, e: StatsEvent): string {
+  return [
+    date.toISOString(),
+    user,
+    e.event,
+    e.device,
+    e.photos ?? '',
+    e.layout ?? '',
+    e.layoutSource ?? '',
+    e.format ?? '',
+    e.size ?? '',
+    e.ratio ?? '',
+    e.masks ?? '',
+    e.texts ?? '',
+    e.stickers ?? '',
+    e.filter ?? '',
+    e.series ?? '',
+    e.durationMs ?? '',
+    e.error ?? '',
+  ].join(',')
+}
+
+/**
+ * Historique de démonstration : 90 jours d'activité inventée, toujours la même (tirage déterministe).
+ * @returns les lignes CSV
+ */
+function demoStats(): string[] {
+  let seed = 7
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647
+    return seed / 2147483647
+  }
+  const layouts = ['p02-01', 'p03-01', 'p04-02', 'p06-01', 'p08-03', 'p12-01', 'u-demo00001']
+  const out: string[] = []
+  const now = Date.now()
+  for (let d = 90; d >= 1; d--) {
+    const users = 3 + Math.floor(rnd() * (6 + (90 - d) / 10))
+    for (let u = 0; u < users; u++) {
+      const user = `demo${String(Math.floor(rnd() * 40)).padStart(4, '0')}`
+      const t = new Date(now - d * 86400000 + Math.floor(rnd() * 8) * 3600000)
+      out.push(statsRow(t, user, { event: 'signin', device: rnd() < 0.25 ? 'mobile' : 'desktop' }))
+      const n = Math.floor(rnd() * 3)
+      for (let k = 0; k < n; k++) {
+        const photos = 2 + Math.floor(rnd() * rnd() * 14)
+        const layout = layouts[Math.floor(rnd() * layouts.length)]
+        out.push(
+          statsRow(new Date(t.getTime() + (k + 1) * 600000), user, {
+            event: rnd() < 0.04 ? 'export_error' : 'collage',
+            device: 'desktop',
+            photos,
+            layout,
+            layoutSource: layout.startsWith('u-') ? 'custom' : 'builtin',
+            format: 'jpeg',
+            size: 'hd',
+            ratio: '1:1',
+            masks: rnd() < 0.3 ? 1 + Math.floor(rnd() * 3) : 0,
+            durationMs: 800 + Math.floor(rnd() * 3000),
+          }),
+        )
+      }
+    }
+  }
+  return out
+}
+
 /**
  * Drive partagé du catalogue simulé. `?catalogue=lecteur` dans l'adresse : simple lecteur (pas d'usine) ;
  * `?catalogue=autoriser` : catalogue existant, créé par un autre admin (il faut autoriser Collimo dessus).
@@ -171,6 +250,10 @@ export function createMockServices(): Services {
   const files = new Map<string, DriveFileInfo & { parent: string; data: Blob }>()
   /** Dossiers de photos dont le sous-dossier « Collimo » a déjà été créé. */
   const collimoFolders = new Set<string>()
+  /** Relais de statistiques testé dans cette session de démo. */
+  let relayOn = false
+  /** Événements envoyés au relais simulé. */
+  const statsRows: string[] = []
   /** Sous-dossiers créés par l'app (clé : `parent/nom`). */
   const subfolders = new Set<string>()
 
@@ -293,6 +376,10 @@ export function createMockServices(): Services {
         f.modifiedTime = new Date().toISOString()
         return delay(publicJson(f), 300)
       },
+      async exportCsv(id) {
+        if (id !== MOCK_SHEET_ID) throw new DriveApiError(404, 'file not found')
+        return delay([STATS_HEAD, ...demoStats(), ...statsRows].join('\n'), 300)
+      },
       async readJson(id) {
         const j = json.get(id)
         if (j) return delay(JSON.parse(j.data), 200)
@@ -325,6 +412,18 @@ export function createMockServices(): Services {
         return delay(info, 200)
       },
     },
+    relay: {
+      async ping(url) {
+        await delay(null, 400)
+        if (!url.includes('/s/')) throw new RelayError('network')
+        relayOn = true
+        return { version: RELAY_VERSION, sheetId: MOCK_SHEET_ID, sheetUrl: '#demo-sheet' }
+      },
+      send(_url, event) {
+        if (!relayOn) return
+        statsRows.push(statsRow(new Date(), 'demo0001', event))
+      },
+    },
     picker: {
       async pickFile(drive) {
         // Démo : le sélecteur « choisit » le catalogue, ce qui autorise Collimo à le modifier.
@@ -337,6 +436,14 @@ export function createMockServices(): Services {
         const f = Object.values(folders).find((x) => x.driveId === drive.id && x.photos.length > 0)
         const p = f?.photos.filter((x) => x.supported).at(-1)
         return delay(p ? { id: p.id } : null, 300)
+      },
+      async pickImages(drive, _lang, _title, max) {
+        // Démo : les deux dernières photos du dernier dossier de ce Drive qui en a.
+        const f = Object.values(folders)
+          .filter((x) => x.driveId === drive.id && x.photos.length > 0)
+          .at(-1)
+        const picked = (f?.photos.filter((x) => x.supported) ?? []).slice(-2).slice(0, max)
+        return delay(picked.length ? picked.map((p) => ({ id: p.id })) : null, 300)
       },
       async pickFolder(drive) {
         // Le vrai sélecteur Google est une fenêtre ; ici on choisit le premier dossier du Drive.

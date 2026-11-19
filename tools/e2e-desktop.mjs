@@ -62,6 +62,7 @@ const env = {
   COLLIMO_USER_DATA: userData,
   COLLIMO_TEST_PICK_FOLDER: photos,
   COLLIMO_TEST_PICK_FILE: path.join(photos, 'IMG_10.png'),
+  COLLIMO_TEST_PICK_FILES: path.join(photos, 'IMG_5.png'),
 }
 let { app, page } = await launch(env)
 try {
@@ -202,6 +203,30 @@ try {
   assert.equal((await readdir(path.join(photos, 'Collimo'))).filter((f) => f.endsWith('.jpg')).length, 2)
   assert.equal((await readdir(path.join(photos, 'Collimo', 'Projets'))).length, 2)
   await page.getByRole('button', { name: 'Fermer' }).click()
+
+  step('éditeur : ajout de photos du dossier (déjà présentes estompées), puis d’un autre dossier')
+  await page.locator('.add-photos-button').click()
+  const sheet = page.getByRole('dialog', { name: 'Ajouter des photos' })
+  const sheetTiles = sheet.locator('button.tile')
+  await sheetTiles.first().waitFor()
+  assert.equal(await sheetTiles.count(), 8)
+  assert.equal(await sheet.locator('button.tile.in-collage').count(), 3, 'les 3 photos du collage sont estompées')
+  await sheet.getByText('3 / 20').waitFor()
+  await sheetTiles.nth(2).click()
+  await sheetTiles.nth(3).click()
+  await sheet.getByText('5 / 20').waitFor()
+  await page.screenshot({ path: path.join(OUT, '4b-ajout-photos.png') })
+  await sheet.getByRole('button', { name: 'Ajouter 2 photo(s)' }).click()
+  await sheet.waitFor({ state: 'detached' })
+  await page.locator('.add-photos-button').click()
+  await sheet.getByText('5 / 20').waitFor()
+  await sheet.getByRole('button', { name: 'Autre dossier…' }).click()
+  await sheet.waitFor({ state: 'detached' })
+  await page.locator('.add-photos-button').click()
+  await sheet.getByText('6 / 20').waitFor()
+  await sheetTiles.first().waitFor()
+  assert.equal(await sheet.locator('button.tile.in-collage').count(), 6)
+  await sheet.getByRole('button', { name: 'Annuler' }).click()
 
   step('« Mes collages » : renommage (image et projet ensemble), puis réouverture d’un collage')
   await page.getByRole('button', { name: 'Photos' }).first().click()

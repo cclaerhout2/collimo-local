@@ -2,6 +2,7 @@
  * Écran d'édition d'un collage : aperçu interactif, onglets de réglages (format, disposition, bordures,
  * fond, filtres, textes, stickers), menu de la photo sélectionnée, annuler / rétablir et export.
  */
+import type { TrackedEvent } from '../../lib/stats'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { defaultLayoutFor, layoutById, layoutsFor, resolveLayout } from '../../collage/catalog'
 import type { ExportImage } from '../../collage/export'
@@ -15,13 +16,15 @@ import { createLimiter, fitWithin, loadImage, type LoadedImage } from '../../col
 import { ratioValue } from '../../collage/ratios'
 import { duplicateOverlay, newIcon, newImage, newText, type TextPreset } from '../../collage/overlays'
 import { DEFAULT_CROP, type Adjustments, type CollageDoc, type Crop, type Layout, type Overlay } from '../../collage/types'
-import type { Location, Services } from '../../google/types'
+import { MAX_PHOTOS } from '../../config'
+import type { Location, Photo, Services } from '../../google/types'
 import { useI18n } from '../../i18n'
 import { toUiError, type UiError } from '../../lib/errors'
 import { ErrorBanner } from '../ErrorBanner'
 import { CollageCanvas } from './CollageCanvas'
 import { ExportSheet } from './ExportSheet'
 import { InteractionLayer } from './InteractionLayer'
+import { AddPhotosSheet } from './AddPhotosSheet'
 import { AdjustPanel, FilterList } from './FiltersPanel'
 import { BackgroundPanel, BordersPanel, LayoutPanel, RatioPanel } from './Panels'
 import { CropPanel, PhotoMenu, type PhotoAction } from './PhotoMenu'
@@ -85,6 +88,8 @@ interface Props {
   onDocChange?: (doc: CollageDoc) => void
   /** Appelé quand le collage vient d'être enregistré dans Drive. */
   onSaved?: () => void
+  /** Statistiques d'usage : compteurs des enregistrements. */
+  onTrack?: (event: TrackedEvent) => void
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
   /** Signale une erreur de chargement (photo ou sticker illisible…). */
@@ -134,13 +139,50 @@ export function nearestLayout(photoCount: number, family: Layout['family']): Lay
 }
 
 /**
+ * Ajoute des photos à la fin d'un collage, avec la disposition de la même famille pour le nouveau nombre de photos.
+ * Les photos déjà présentes gardent leur cadrage, leurs masques et leurs réglages ; les doublons sont ignorés.
+ * @param doc - collage actuel
+ * @param family - famille de la disposition actuelle
+ * @param added - photos à ajouter, dans l'ordre
+ * @param max - nombre maximal de photos d'un collage
+ * @returns le collage avec les photos ajoutées (inchangé s'il n'y a rien à ajouter)
+ */
+export function withAddedPhotos(doc: CollageDoc, family: Layout['family'], added: readonly Photo[], max = MAX_PHOTOS): CollageDoc {
+  const present = new Set(doc.photos.map((p) => p.id))
+  const fresh: Photo[] = []
+  for (const p of added) {
+    if (fresh.length >= max - doc.photos.length) break
+    if (!p.supported || present.has(p.id)) continue
+    present.add(p.id)
+    fresh.push(p)
+  }
+  if (!fresh.length) return doc
+  const photos = [
+    ...doc.photos,
+    ...fresh.map((p) => ({ id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } })),
+  ]
+  return { ...doc, photos, layoutId: nearestLayout(photos.length, family).id, split: undefined }
+}
+
+/**
  * Écran d'édition d'un collage.
  *
  * Les photos sont chargées réduites (trois à la fois) pour l'aperçu ; l'export relit les originaux
  * à la taille utile. Toute modification du collage passe par l'historique, pour annuler / rétablir.
  * @returns la barre du haut, l'aperçu interactif, le panneau d'outils et, au besoin, la feuille d'export
  */
-export function EditorScreen({ services, location, initialDoc, onBack, queue, onDocChange, onSaved, onReconnect, onError }: Props) {
+export function EditorScreen({
+  services,
+  location,
+  initialDoc,
+  onBack,
+  queue,
+  onDocChange,
+  onSaved,
+  onTrack,
+  onReconnect,
+  onError,
+}: Props) {
   const { t, lang } = useI18n()
   /** Demande de passage au collage voisin alors que celui-ci n'est pas enregistré : confirmation affichée. */
   const [pendingMove, setPendingMove] = useState<-1 | 1 | null>(null)
@@ -203,6 +245,9 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
     }
   }
   const [exporting, setExporting] = useState(false)
+  const [adding, setAdding] = useState(false)
+  /** Case dont la photo est en cours de remplacement (panneau de choix ouvert). */
+  const [replacing, setReplacing] = useState<number | null>(null)
   const [version, setVersion] = useState(0)
   const images = useRef(new Map<string, LoadedImage>())
   const pending = useRef(new Set<string>())
@@ -558,10 +603,10 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
    *
    * « Pivoter » arrondit l'angle au quart de tour puis ajoute 90° ; « Supprimer » choisit une disposition
    * pour une photo de moins.
+   * « Remplacer » ouvre le panneau de choix sur le dossier des photos.
    * @param action - action choisie
-   * @returns une promesse résolue une fois l'action faite (« Remplacer » attend le sélecteur Drive)
    */
-  async function onAction(action: PhotoAction) {
+  function onAction(action: PhotoAction) {
     if (selected === null) return
     const photo = doc.photos[selected]
     const s = selectedSizes()
@@ -581,26 +626,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
       const next = nearestLayout(doc.photos.length - 1, layout.family)
       setDoc((d) => ({ ...d, photos: d.photos.filter((_, k) => k !== selected), layoutId: next.id, split: undefined }))
       select(null)
-    } else if (action === 'replace') {
-      try {
-        const picked = await services.picker.pickImage(location.drive, lang, t('photo.replaceTitle'))
-        if (!picked) return
-        const p = await services.drive.getPhoto(picked.id)
-        if (!p.supported) {
-          setNotice({ key: 'photo.unsupported', vars: { type: p.mimeType.replace('image/', '').toUpperCase() } })
-          return
-        }
-        const index = selected
-        setDoc((d) => ({
-          ...d,
-          photos: d.photos.map((x, k) =>
-            k === index ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } } : x,
-          ),
-        }))
-      } catch (e) {
-        setNotice(toUiError(e))
-      }
-    }
+    } else if (action === 'replace') setReplacing(selected)
   }
 
   void version // relit l'état des chargements à chaque photo arrivée
@@ -717,6 +743,31 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
                 ? t('editor.selectHint')
                 : ''}
         </span>
+        <button
+          type="button"
+          className="btn btn-ghost btn-small add-photos-button"
+          onClick={() => {
+            select(null)
+            setAdding(true)
+          }}
+          disabled={doc.photos.length >= MAX_PHOTOS}
+          title={doc.photos.length >= MAX_PHOTOS ? t('editor.addPhotosFull', { max: MAX_PHOTOS }) : t('editor.addPhotosTitle')}
+          aria-label={t('editor.addPhotosTitle')}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>{t('editor.addPhotos')}</span>
+        </button>
         <div className="history-buttons">
           <button
             type="button"
@@ -959,12 +1010,7 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
             </div>
           ) : (
             <div className="panel">
-              <PhotoMenu
-                canDelete={doc.photos.length > 1}
-                swapPick={swapPick}
-                onAction={(a) => void onAction(a)}
-                onDone={() => select(null)}
-              />
+              <PhotoMenu canDelete={doc.photos.length > 1} swapPick={swapPick} onAction={onAction} onDone={() => select(null)} />
             </div>
           )
         ) : (
@@ -1070,6 +1116,42 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
         )}
       </div>
 
+      {adding && (
+        <AddPhotosSheet
+          services={services}
+          location={location}
+          presentIds={doc.photos.map((p) => p.id)}
+          room={MAX_PHOTOS - doc.photos.length}
+          onClose={() => setAdding(false)}
+          onAdd={(added) => {
+            setAdding(false)
+            setDoc((d) => withAddedPhotos(d, layout.family, added))
+          }}
+        />
+      )}
+      {replacing !== null && (
+        <AddPhotosSheet
+          mode="replace"
+          services={services}
+          location={location}
+          presentIds={doc.photos.map((p) => p.id)}
+          room={1}
+          onClose={() => setReplacing(null)}
+          onAdd={([p]) => {
+            const index = replacing
+            setReplacing(null)
+            if (!p) return
+            setDoc((d) => ({
+              ...d,
+              photos: d.photos.map((x, k) =>
+                k === index
+                  ? { id: p.id, name: p.name, mimeType: p.mimeType, width: p.width, height: p.height, crop: { ...DEFAULT_CROP } }
+                  : x,
+              ),
+            }))
+          }}
+        />
+      )}
       {exporting && (
         <ExportSheet
           drive={services.drive}
@@ -1086,6 +1168,8 @@ export function EditorScreen({ services, location, initialDoc, onBack, queue, on
             onSaved?.()
           }}
           onReconnect={onReconnect}
+          onTrack={onTrack}
+          series={queue?.total ?? 0}
         />
       )}
     </main>

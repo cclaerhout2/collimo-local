@@ -39,10 +39,12 @@ export const desktopTexts: Record<'fr' | 'en', Partial<Record<MessageKey, string
     'factory.history': 'Afficher le fichier',
     'factory.grant.text': 'Collimo ne peut pas modifier « {file} ». Vérifiez vos droits sur ce fichier, puis réessayez.',
     'error.expired': 'Le dossier n’est plus accessible.',
+    'addPhotos.otherFolder': 'Autre dossier…',
   },
   en: {
     'signin.title': 'Welcome to Collimo',
     'signin.text': 'Create collages from the photos on your computer.',
+    'addPhotos.otherFolder': 'Other folder…',
     'signin.button': 'Get started',
     'signin.privacy': 'Your photos stay on your computer. Collimo only reads the folders you choose and only writes its own files.',
     'signin.loading': 'Opening…',
@@ -106,6 +108,8 @@ export const albumTexts: Record<'fr' | 'en', Partial<Record<MessageKey, string>>
     'signin.privacy':
       'Vos photos restent sur votre appareil. Collimo ne lit que les photos que vous choisissez ; rien n’est envoyé sur internet.',
     'locations.add': 'Ajouter des photos',
+    'addPhotos.thisFolder': 'Album',
+    'addPhotos.otherFolder': 'Depuis la photothèque…',
     'locations.emptyTitle': 'Ajoutez vos premières photos',
     'locations.emptyText':
       'Les photos choisies dans votre photothèque sont copiées dans l’album de Collimo, sur cet appareil ; vos collages y sont rangés aussi. Le bouton Partager les enregistre dans Photos ou les envoie.',
@@ -123,6 +127,8 @@ export const albumTexts: Record<'fr' | 'en', Partial<Record<MessageKey, string>>
     'signin.text': 'Create collages from the photos on your device.',
     'signin.privacy': 'Your photos stay on your device. Collimo only reads the photos you choose; nothing is sent over the internet.',
     'locations.add': 'Add photos',
+    'addPhotos.thisFolder': 'Album',
+    'addPhotos.otherFolder': 'From the photo library…',
     'locations.emptyTitle': 'Add your first photos',
     'locations.emptyText':
       'The photos chosen from your library are copied into Collimo’s album, on this device; your collages are stored there too. The Share button saves them to Photos or sends them.',

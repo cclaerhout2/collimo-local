@@ -546,6 +546,11 @@ export function createDriveClient(
       return call<unknown>(url(`/files/${encodeURIComponent(id)}`, { alt: 'media', supportsAllDrives: 'true' }))
     },
 
+    async exportCsv(id) {
+      const blob = await call<Blob>(url(`/files/${encodeURIComponent(id)}/export`, { mimeType: 'text/csv' }), {}, 'blob')
+      return blob.text()
+    },
+
     async updateFileMeta(id, change, move) {
       return call<DriveFileInfo>(
         url(`/files/${encodeURIComponent(id)}`, {

@@ -123,7 +123,8 @@ Supprimer ce dossier remet Collimo à zéro ; les collages, eux, restent dans le
 
 - toucher une photo pour la sélectionner ; glisser pour recadrer ; molette, pincement ou double-clic pour zoomer ; poignée ronde ou deux doigts pour tourner, avec aimantation ;
 - poignées sur les séparations des dispositions en découpe, pour agrandir une case aux dépens de sa voisine ;
-- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Réglages, Masquer, Remplacer, Supprimer ;
+- bouton **+ Ajouter** de l'éditeur : ajoute des photos au collage en cours, choisies dans le dossier ouvert (celles déjà dans le collage sont estompées) ou dans un autre dossier (iPhone et version web : l'album ou la photothèque) ; la disposition passe à celle de la même famille pour le nouveau nombre de photos, cadrages, masques et réglages sont conservés (20 photos au plus) ;
+- menu : Échanger (bouton ou appui long puis glisser), Inverser, Rotation, Recadrer, Réglages, Masquer, Remplacer (par une photo du dossier ouvert, ou d'un autre dossier), Supprimer ;
 - Masquer : la photo entière en grand, où l'on trace des rectangles sur ce qu'il faut cacher (écran, document, badge, visage) ; trois modes (Flou, Pixels, Plein), une intensité et une rotation par zone, zones déplaçables et redimensionnables ; zoom et déplacement de la vue ; les zones suivent la photo quels que soient le cadrage, le zoom ou la rotation ; le masque est cuit dans l'image exportée, la photo d'origine n'est pas touchée ;
 - clavier : flèches, + et −, Échap.
 

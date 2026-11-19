@@ -15,6 +15,10 @@ interface Props {
   onOpenFactory?: () => void
   /** Change le dossier du catalogue de l'usine (application Windows). */
   onChooseCatalogue?: () => void
+  /** Ouvre les statistiques (admins seulement). */
+  onOpenStats?: () => void
+  /** Ouvre la page « Confidentialité et données ». */
+  onOpenPrivacy?: () => void
   /** Déconnecte l'utilisateur. */
   onSignOut?: () => void
 }
@@ -38,7 +42,7 @@ export function Logo() {
  * Barre du haut, présente sur tous les écrans.
  * @returns l'en-tête
  */
-export function Header({ user, onLangChange, onOpenFactory, onChooseCatalogue, onSignOut }: Props) {
+export function Header({ user, onLangChange, onOpenFactory, onChooseCatalogue, onOpenStats, onOpenPrivacy, onSignOut }: Props) {
   const { t, lang } = useI18n()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -127,6 +131,30 @@ export function Header({ user, onLangChange, onOpenFactory, onChooseCatalogue, o
                     }}
                   >
                     {t('menu.catalogueFolder')}
+                  </button>
+                )}
+                {onOpenStats && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false)
+                      onOpenStats()
+                    }}
+                  >
+                    {t('menu.stats')}
+                  </button>
+                )}
+                {onOpenPrivacy && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false)
+                      onOpenPrivacy()
+                    }}
+                  >
+                    {t('menu.privacy')}
                   </button>
                 )}
                 {onSignOut && (

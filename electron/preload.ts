@@ -21,6 +21,7 @@ const bridge: DesktopBridge = {
   userInfo: invoke(CHANNELS.userInfo),
   pickFolder: invoke(CHANNELS.pickFolder),
   pickFile: invoke(CHANNELS.pickFile),
+  pickFiles: invoke(CHANNELS.pickFiles),
   folderInfo: invoke(CHANNELS.folderInfo),
   listImages: invoke(CHANNELS.listImages),
   listFiles: invoke(CHANNELS.listFiles),

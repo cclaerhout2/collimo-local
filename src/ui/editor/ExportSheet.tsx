@@ -1,4 +1,5 @@
 /** Feuille d'export : choix du format, de la taille et de la qualité, puis enregistrement du collage dans Drive. */
+import { collageEvent, type TrackedEvent } from '../../lib/stats'
 import { useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_JPEG_QUALITY,
@@ -41,6 +42,10 @@ interface Props {
   onSaved: (saved: SavedCollage) => void
   /** Relance la connexion Google quand une erreur l'exige. */
   onReconnect: () => void
+  /** Statistiques d'usage : compteurs de l'enregistrement (réussi ou échoué). */
+  onTrack?: (event: TrackedEvent) => void
+  /** Taille de la série en cours (0 pour un collage seul), pour les statistiques. */
+  series?: number
 }
 
 /** Étape de l'export : réglages, dessin (photos traitées / total), envoi, puis terminé avec l'aperçu du fichier. */
@@ -69,6 +74,8 @@ export function ExportSheet({
   onClose,
   onSaved,
   onReconnect,
+  onTrack,
+  series = 0,
 }: Props) {
   const { t } = useI18n()
   const apple = useMemo(() => isAppleMobile(), [])
@@ -102,6 +109,7 @@ export function ExportSheet({
   async function save() {
     if (!checked) return
     setError(null)
+    const started = performance.now()
     try {
       const saved = await saveCollage({
         drive,
@@ -120,9 +128,12 @@ export function ExportSheet({
       })
       setStatus({ name: 'done', saved, url: URL.createObjectURL(saved.blob) })
       onSaved(saved)
+      onTrack?.(collageEvent(doc, { format, size: preset, series, durationMs: performance.now() - started }))
     } catch (e) {
       setStatus({ name: 'idle' })
-      setError(toUiError(e))
+      const ui = toUiError(e)
+      setError(ui)
+      onTrack?.({ event: 'export_error', photos: doc.photos.length, error: ui.key })
     }
   }
 

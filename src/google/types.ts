@@ -1,5 +1,6 @@
 /** Types partagés des services Google (connexion, Drive, sélecteur), réels ou simulés, et leurs erreurs. */
 import type { Lang } from '../i18n'
+import type { RelayInfo, StatsEvent } from '../lib/stats'
 
 /** Utilisateur connecté. */
 export interface SignedInUser {
@@ -217,6 +218,8 @@ export interface DriveService {
   listFolderFiles(folderId: string, namePrefix?: string): Promise<DriveFileInfo[]>
   /** Contenu JSON d'un fichier, non vérifié. */
   readJson(id: string): Promise<unknown>
+  /** Contenu d'un document Google exporté en CSV (première feuille d'une Google Sheet). */
+  exportCsv(id: string): Promise<string>
   /** Envoie un nouveau fichier dans un dossier (envoi « reprenable », sans limite de 5 Mo), avec ses propriétés Collimo éventuelles. */
   uploadFile(folderId: string, name: string, data: Blob, mimeType: string, props?: CollimoFileProps): Promise<DriveFileInfo>
   /** Renomme un fichier, change ses propriétés Collimo et/ou le déplace (`addParents` / `removeParents`). */
@@ -245,8 +248,18 @@ export interface FolderPicker {
   pickFolder(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string; name: string } | null>
   /** Ouvre le sélecteur de photos sur le Drive donné ; null si l'utilisateur annule. */
   pickImage(drive: DriveRef, lang: Lang, title: string): Promise<{ id: string } | null>
+  /** Sélecteur de plusieurs photos (au plus `max`) ; null si l'utilisateur annule. */
+  pickImages(drive: DriveRef, lang: Lang, title: string, max: number): Promise<{ id: string }[] | null>
   /** Sélecteur sur un fichier précis (donne à Collimo le droit de le modifier) ; null si annulé. */
   pickFile(drive: DriveRef, lang: Lang, title: string, mimeType: string): Promise<{ id: string } | null>
+}
+
+/** Relais de statistiques (Apps Script de l'admin), appelé avec le jeton de l'utilisateur. */
+export interface StatsRelay {
+  /** Teste le relais et renvoie la Sheet qu'il remplit ; erreur `RelayError` sinon. */
+  ping(url: string): Promise<RelayInfo>
+  /** Envoie un événement, sans attendre ni signaler d'erreur. */
+  send(url: string, event: StatsEvent): void
 }
 
 /** Ensemble des services de l'app : Google Drive, Drive simulé, ou fichiers du PC (application Windows). */
@@ -256,4 +269,5 @@ export interface Services {
   auth: AuthService
   drive: DriveService
   picker: FolderPicker
+  relay: StatsRelay
 }
