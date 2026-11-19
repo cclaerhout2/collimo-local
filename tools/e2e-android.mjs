@@ -190,7 +190,20 @@ try {
   await page.getByRole('button', { name: 'Exporter' }).waitFor()
   await page.waitForTimeout(2000)
   await page.screenshot({ path: path.join(OUT, 'android-3-editeur.png') })
-  await tap(page.getByRole('button', { name: 'Exporter' }))
+  // Sur l'émulateur, l'éditeur peut encore charger les photos (HEIC) : on retouche Exporter si la feuille tarde.
+  for (let i = 0; i < 3; i++) {
+    await tap(page.getByRole('button', { name: 'Exporter' }))
+    if (
+      await page
+        .getByRole('checkbox')
+        .waitFor({ timeout: 20_000 })
+        .then(
+          () => true,
+          () => false,
+        )
+    )
+      break
+  }
   await tap(page.getByRole('checkbox'))
   await tap(page.getByRole('button', { name: 'Enregistrer', exact: true }))
   await page.getByText(/Collage enregistré : Collimo_/).waitFor({ timeout: 120_000 })
