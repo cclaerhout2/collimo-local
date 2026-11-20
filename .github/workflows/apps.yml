@@ -1,7 +1,7 @@
-# Collimo local : ordinateur (Windows, Linux, macOS), Android, iPhone et version web locale. Sur de vraies
-# machines, un émulateur Android et un simulateur d'iPhone : tests automatiques, construction des paquets,
-# test de bout en bout de l'application construite, puis de l'application installée comme le ferait un
-# utilisateur. La version web est testée dans WebKit (moteur de Safari) et Chromium, au format téléphone.
+# Collimo local : ordinateur (Windows, Linux) et version web locale. Sur de vraies machines : tests
+# automatiques, construction des paquets, test de bout en bout de l'application construite, puis de
+# l'application installée comme le ferait un utilisateur. (Les builds macOS, Android et iPhone ont été
+# retirés pour économiser les minutes GitHub Actions.) La version web est testée dans WebKit (moteur de Safari) et Chromium, au format téléphone.
 # Les paquets sont téléchargeables dans l'onglet « Actions », rubrique « Artifacts ».
 # Sur main, une nouvelle version de package.json (vX.Y.Z) est publiée en « Release » GitHub : chaque
 # machine y dépose ses paquets dans un brouillon, rendu public quand tout est au vert. Une version déjà
@@ -156,180 +156,6 @@ jobs:
         if: needs.prepare.outputs.publish == 'true'
         run: gh release upload "${{ needs.prepare.outputs.tag }}" release/Collimo-*.AppImage release/Collimo-*.deb --clobber
 
-  mac:
-    name: macOS
-    needs: prepare
-    runs-on: macos-latest
-    timeout-minutes: 50
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Modules
-        run: npm ci --no-audit --no-fund
-      - name: Tests automatiques
-        run: npm test
-      - name: Construction (.dmg et .zip, Apple Silicon et Intel)
-        run: npm run desktop:pack:mac
-      - name: Signature ad hoc vérifiée
-        run: |
-          codesign --verify --deep --strict --verbose=2 release/mac-arm64/Collimo.app
-          lipo -archs release/mac-arm64/Collimo.app/Contents/MacOS/Collimo
-          lipo -archs release/mac/Collimo.app/Contents/MacOS/Collimo
-      - name: Test de bout en bout (application non installée)
-        run: node tools/e2e-desktop.mjs --exe release/mac-arm64/Collimo.app/Contents/MacOS/Collimo
-      - name: Installation depuis le .dmg, puis test de l'application installée
-        run: |
-          DMG="$(ls release/Collimo-*-mac-arm64.dmg)"
-          hdiutil attach "$DMG" -nobrowse -mountpoint /tmp/collimo-dmg
-          test -L /tmp/collimo-dmg/Applications
-          cp -R /tmp/collimo-dmg/Collimo.app /Applications/
-          hdiutil detach /tmp/collimo-dmg
-          node tools/e2e-desktop.mjs --exe /Applications/Collimo.app/Contents/MacOS/Collimo
-      - name: Captures d'écran des tests (en cas d'échec)
-        if: failure()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 3
-          name: captures-mac
-          path: test-results/
-          if-no-files-found: ignore
-      - name: Paquets dans la version
-        if: needs.prepare.outputs.publish == 'true'
-        run: gh release upload "${{ needs.prepare.outputs.tag }}" release/Collimo-*.dmg release/Collimo-*-mac-*.zip --clobber
-
-  android:
-    name: Android
-    needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - name: Modules
-        run: npm ci --no-audit --no-fund
-      - name: Tests automatiques
-        run: npm test
-      - name: Construction des APK (version finale et version de test)
-        run: |
-          npm run android:sync
-          cd android
-          ./gradlew --no-daemon assembleRelease assembleDebug
-          cd ..
-          v="$(node -p "require('./package.json').version")"
-          mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk "release/Collimo-$v-android.apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "release/Collimo-$v-android-test.apk"
-          ls -la release
-      - name: Place disque pour l'émulateur, et accélération matérielle
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/lib/android/sdk/ndk
-          df -h /
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Test de bout en bout sur l'émulateur (Pixel 6, Android 14), puis démarrage de la version finale
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          target: default
-          profile: pixel_6
-          disable-animations: true
-          disk-size: 4096M
-          emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            adb install -r release/Collimo-*-android-test.apk
-            node tools/e2e-android.mjs || (adb logcat -d | grep -iE "collimo|chromium|AndroidRuntime|FATAL|crash|lowmemory|am_kill|WebView" | tail -150; exit 1)
-            adb install -r release/Collimo-*-android.apk
-            adb shell am start -W -n fr.collimo.app/fr.collimo.app.MainActivity
-            for i in $(seq 18); do sleep 5; adb shell uiautomator dump /sdcard/ui.xml > /dev/null && adb pull /sdcard/ui.xml test-results/android-finale.xml > /dev/null && grep -Eq "Choisir un dossier|Choose a folder" test-results/android-finale.xml && break; done
-            grep -Eq "Choisir un dossier|Choose a folder" test-results/android-finale.xml
-            adb exec-out screencap -p > test-results/android-finale.png
-      - name: Captures d'écran des tests (en cas d'échec)
-        if: failure()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 3
-          name: captures-android
-          path: test-results/
-          if-no-files-found: ignore
-      - name: Paquets dans la version
-        if: needs.prepare.outputs.publish == 'true'
-        run: gh release upload "${{ needs.prepare.outputs.tag }}" release/Collimo-*-android.apk --clobber
-
-  ios:
-    name: iPhone
-    needs: prepare
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Modules
-        run: npm ci --no-audit --no-fund
-      - name: Construction de l'IPA (non signée, pour SideStore, AltStore ou Sideloadly)
-        run: |
-          npm run ios:sync
-          v="$(node -p "require('./package.json').version")"
-          code="$(node -p "const [a,b,c]=require('./package.json').version.split('.').map(Number);a*10000+b*100+c")"
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
-            -destination 'generic/platform=iOS' -derivedDataPath build/ios \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            MARKETING_VERSION="$v" CURRENT_PROJECT_VERSION="$code" -quiet build
-          mkdir -p release Payload
-          cp -R build/ios/Build/Products/Release-iphoneos/App.app Payload/
-          zip -qry "release/Collimo-$v-ios.ipa" Payload
-          ls -la release
-      - name: Auto-test sur le simulateur d'iPhone (photos, miniatures, collage enregistré, réglages)
-        run: |
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO -quiet build
-          DEVICE="$(xcrun simctl list devices available -j | node -e "const d=JSON.parse(require('fs').readFileSync(0)).devices;const all=Object.entries(d).filter(([k])=>k.includes('iOS')).flatMap(([,v])=>v);console.log((all.find(x=>/^iPhone 1[5-7]( |$)/.test(x.name))||all.find(x=>x.name.startsWith('iPhone'))).udid)")"
-          echo "Simulateur : $DEVICE"
-          xcrun simctl boot "$DEVICE" || true
-          xcrun simctl bootstatus "$DEVICE" -b
-          xcrun simctl install "$DEVICE" build/sim/Build/Products/Debug-iphonesimulator/App.app
-          DATA="$(xcrun simctl get_app_container "$DEVICE" fr.collimo.app data)"
-          node tools/test-photos.mjs "$DATA/Documents/TestPhotos"
-          mkdir -p test-results
-          xcrun simctl launch --console-pty "$DEVICE" fr.collimo.app -collimoSelfTest "$DATA/Documents/TestPhotos" > test-results/ios.log 2>&1 &
-          RESULT="$DATA/Documents/TestPhotos/selftest-result.json"
-          for i in $(seq 1 120); do [ -f "$RESULT" ] && break; sleep 2; done
-          xcrun simctl io "$DEVICE" screenshot test-results/ios-simulateur.png || true
-          grep -a "COLLIMO" test-results/ios.log || tail -40 test-results/ios.log
-          xcrun simctl spawn "$DEVICE" log show --last 10m --style compact --predicate 'eventMessage CONTAINS "COLLIMO" OR eventMessage CONTAINS "Collimo"' | tail -40 || true
-          cat "$RESULT"
-          grep -q '"ok": true' "$RESULT"
-          ls "$DATA/Documents/TestPhotos/Collimo"
-      - name: Captures et journal (en cas d'échec)
-        if: failure()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 3
-          name: captures-ios
-          path: test-results/
-          if-no-files-found: ignore
-      - name: Paquets dans la version
-        if: needs.prepare.outputs.publish == 'true'
-        run: gh release upload "${{ needs.prepare.outputs.tag }}" release/Collimo-*-ios.ipa --clobber
-
   web:
     name: Version web (iPhone, navigateur)
     needs: prepare
@@ -392,7 +218,7 @@ jobs:
 
   release:
     name: Publication de la version
-    needs: [prepare, windows, linux, mac, android, ios, web]
+    needs: [prepare, windows, linux, web]
     if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
